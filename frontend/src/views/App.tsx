@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useId, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useId, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { ArrowDownRight, ArrowRight, Braces, ChartNoAxesCombined, ChevronRight, Database as DatabaseIcon, GitFork, KeyRound,
   PanelRight, Plug, RefreshCw, Search, Table2 } from 'lucide-react'
 import { sql } from '../controllers/api'
@@ -20,8 +20,11 @@ import { Records } from './Records'
 import { Empty, Failure, Loading } from './States'
 import { Structure } from './Structure'
 import { StatusBar } from './StatusBar'
+import { AssistantDock, readProvider } from './AssistantDock'
+import type { SystemDiagram } from '../models/systemDiagram'
 const SqlEditor = lazy(() => import('./SqlEditor').then((module) => ({ default: module.SqlEditor })))
 const DatabaseDashboard = lazy(() => import('./DatabaseDashboard'))
+const SystemDiagramStudio = lazy(() => import('./SystemDiagramStudio').then((module) => ({ default: module.SystemDiagramStudio })))
 
 function Details({ children }: { children: ReactNode }) {
   return <aside className="details"><div className="panel-title"><PanelRight size={15} /><h2>Detalhes</h2></div>
@@ -176,7 +179,9 @@ function DatabaseWorkspace({ scope, connection, onTable }: { scope: Scope; conne
   </>
 }
 
-function ConnectedStudio({ connection, disconnect }: { connection: Connection; disconnect: () => Promise<void> }) {
+function ConnectedStudio({ connection, disconnect, openDiagrams, onScreen }: {
+  connection: Connection; disconnect: () => Promise<void>; openDiagrams: () => void; onScreen: (screen: string) => void
+}) {
   const [disconnecting, setDisconnecting] = useState(false)
   async function closeConnection() {
     if (disconnecting) return
@@ -186,6 +191,11 @@ function ConnectedStudio({ connection, disconnect }: { connection: Connection; d
   const [database, setDatabase] = useState<Database | null>(null)
   const [table, setTable] = useState<Table | null>(null)
   const [workspaceView, setWorkspaceView] = useState<'objects' | 'sql' | 'dashboard'>('objects')
+  useEffect(() => {
+    const page = workspaceView === 'sql' ? 'Editor SQL' : workspaceView === 'dashboard' ? 'Dashboards' :
+      table ? 'Explorador de tabela' : database ? 'Diagrama do banco' : 'Lista de bancos'
+    onScreen(page + ' · ' + engines[connection.engine].name)
+  }, [connection.engine, database, table, workspaceView, onScreen])
   const [refreshKey, setRefreshKey] = useState(0)
   const explorer = useExplorer(connection, database, table, (db) => {
     setDatabase(db)
@@ -193,7 +203,7 @@ function ConnectedStudio({ connection, disconnect }: { connection: Connection; d
     setWorkspaceView('objects')
   }, (db, entry) => { setDatabase(db); setTable(entry); setWorkspaceView('objects') })
   return <>
-    <Header connection={connection} database={database} onDatabase={explorer.chooseDatabase} onDisconnect={closeConnection} disconnecting={disconnecting}
+    <Header onDiagrams={openDiagrams} connection={connection} database={database} onDatabase={explorer.chooseDatabase} onDisconnect={closeConnection} disconnecting={disconnecting}
       tools={database && <>
         {connection.engine === 'sqlServer' && <button className="button" aria-pressed={workspaceView === 'dashboard'}
           onClick={() => setWorkspaceView(workspaceView === 'dashboard' ? 'objects' : 'dashboard')}>
@@ -228,7 +238,28 @@ export function App() {
   const [selectedEngine, setSelectedEngine] = useState<Engine | null>(null)
   const [loading, setLoading] = useState(false)
 
+  const [diagrams, setDiagrams] = useState(false)
+  const [openedDiagrams, setOpenedDiagrams] = useState(false)
+  const [assistantOpen, setAssistantOpen] = useState(false)
+  const [provider, setProvider] = useState(readProvider)
+  const [databaseScreen, setDatabaseScreen] = useState('Bancos de dados')
+  const [currentDiagram, setCurrentDiagram] = useState<SystemDiagram | null>(null)
+  const [assistantDiagram, setAssistantDiagram] = useState<{ diagram: SystemDiagram; revisionOf: SystemDiagram | null } | null>(null)
+  const screen = diagrams ? 'Diagramas de sistema' : connection ? databaseScreen :
+    step === 'intro' ? 'Tela inicial' : step === 'picker' ? 'Seleção de banco' : 'Conexão · ' + engines[step].name
   const openPicker = () => setStep('picker')
+
+  function openDiagrams() {
+    setOpenedDiagrams(true)
+    setDiagrams(true)
+  }
+
+  function applyAssistantDiagram(diagram: SystemDiagram, revisionOf: SystemDiagram | null) {
+    if (currentDiagram && currentDiagram !== revisionOf && !window.confirm('Abrir o diagrama do assistente e substituir o diagrama atual no editor?')) return false
+    setAssistantDiagram({ diagram, revisionOf })
+    openDiagrams()
+    return true
+  }
 
   function chooseEngine(engine: Engine) {
     setSelectedEngine(engine)
@@ -247,12 +278,12 @@ export function App() {
     }
   }
 
-  if (connection) return isNoSql(connection.engine) ?
-    <NoSqlStudio key={connection.session} connection={connection} disconnect={disconnect} /> :
-    <ConnectedStudio key={connection.session} connection={connection} disconnect={disconnect} />
-
   return <>
-    <Header onConnect={openPicker} connecting={loading} />
+    <div className="app-screen" hidden={diagrams}>
+      {connection ? (isNoSql(connection.engine) ?
+        <NoSqlStudio key={connection.session} connection={connection} disconnect={disconnect} openDiagrams={openDiagrams} onScreen={setDatabaseScreen} /> :
+        <ConnectedStudio key={connection.session} connection={connection} disconnect={disconnect} openDiagrams={openDiagrams} onScreen={setDatabaseScreen} />) : <>
+    <Header onConnect={openPicker} connecting={loading} onDiagrams={openDiagrams} />
     <StudioLayout items={[]} connected={false}>
       <main className="workspace welcome">
         {step === 'intro' && <div className="welcome-content welcome-intro">
@@ -272,5 +303,13 @@ export function App() {
       <SelectedEngine engine={selectedEngine} />
     </StudioLayout>
     <StatusBar />
+    </>}
+    </div>
+    {openedDiagrams && <div className="app-screen" hidden={!diagrams}>
+      <Suspense fallback={<Loading />}><SystemDiagramStudio exit={() => setDiagrams(false)} provider={provider}
+        assistantDiagram={assistantDiagram} onDiagram={setCurrentDiagram} openAssistant={() => setAssistantOpen(true)} /></Suspense>
+    </div>}
+    <AssistantDock open={assistantOpen} setOpen={setAssistantOpen} provider={provider} setProvider={setProvider}
+      screen={screen} diagram={diagrams ? currentDiagram : null} onDiagram={applyAssistantDiagram} />
   </>
 }

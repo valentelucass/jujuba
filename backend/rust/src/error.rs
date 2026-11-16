@@ -1,17 +1,27 @@
 use serde::Serialize;
-use std::{future::Future, time::Duration};
+use std::{borrow::Cow, future::Future, time::Duration};
 
 pub type Result<T> = std::result::Result<T, AppError>;
 
 #[derive(Debug, Serialize)]
 pub struct AppError {
     pub kind: &'static str,
-    pub message: &'static str,
+    pub message: Cow<'static, str>,
 }
 
 impl AppError {
     pub const fn new(kind: &'static str, message: &'static str) -> Self {
-        Self { kind, message }
+        Self {
+            kind,
+            message: Cow::Borrowed(message),
+        }
+    }
+
+    pub fn with_message(kind: &'static str, message: String) -> Self {
+        Self {
+            kind,
+            message: Cow::Owned(message),
+        }
     }
 
     pub const fn authentication() -> Self {

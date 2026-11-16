@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-diagram-save"
+description = "Enables the diagram_save command without any pre-configured scope."
+commands.allow = ["diagram_save"]
+
+[[permission]]
+identifier = "deny-diagram-save"
+description = "Denies the diagram_save command without any pre-configured scope."
+commands.deny = ["diagram_save"]

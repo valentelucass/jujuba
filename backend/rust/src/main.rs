@@ -13,6 +13,7 @@ mod other_db;
 mod records;
 mod relationships;
 mod sql_server;
+mod system_diagram;
 
 use tauri::Manager;
 
@@ -29,6 +30,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(connection::Connections::default())
+        .manage(system_diagram::SelectedWorkspace::default())
         .invoke_handler(tauri::generate_handler![
             commands::connect,
             commands::choose_sqlite_file,
@@ -53,6 +55,14 @@ fn main() {
             commands::dashboard_live,
             commands::query_read,
             commands::update_cell,
+            system_diagram::diagram_agent,
+            system_diagram::diagram_choose_workspace,
+            system_diagram::assistant_converse,
+            system_diagram::diagram_open,
+            system_diagram::diagram_save,
+            system_diagram::diagram_markdown,
+            system_diagram::diagram_scaffold,
+            system_diagram::diagram_write_code,
         ])
         .run(tauri::generate_context!())
         .expect("iniciar o JujubaSQL");

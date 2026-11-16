@@ -24,6 +24,14 @@ fn main() {
             "dashboard_live",
             "query_read",
             "update_cell",
+            "diagram_agent",
+            "diagram_choose_workspace",
+            "assistant_converse",
+            "diagram_open",
+            "diagram_save",
+            "diagram_markdown",
+            "diagram_scaffold",
+            "diagram_write_code",
         ]),
     ))
     .expect("preparar permissões e recursos do JujubaSQL");

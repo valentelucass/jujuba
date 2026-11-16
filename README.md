@@ -25,6 +25,20 @@ Na tela inicial, clique em **Nova conexão** e escolha o tipo de banco no centro
 
 O login deve conseguir abrir o catálogo `master` para descobrir os bancos. Em cada banco, o SQL Server define quais objetos e registros o login pode consultar. A permissão `VIEW DEFINITION` nos objetos relevantes pode permitir classificar mais relações.
 
+## Planejar um sistema com IA
+
+O ícone do assistente no canto inferior direito abre o mesmo chat em todas as telas. Descreva o fluxo ou anexe até quatro documentos de texto, como Markdown, TXT, JSON ou CSV. O assistente reconhece a tela atual e pode propor um fluxograma de sistema. Use **Abrir diagrama no editor** para revisar. Em **Diagramas**, crie etapas pelo painel direito, conecte-as e arraste os cartões. O arquivo `.jujuba.json` guarda o fluxo e as posições. Você também pode exportar Markdown com Mermaid.
+
+Para usar a conta de um assistente, instale o cliente oficial no Windows e entre nele primeiro. Em seguida, selecione-o no chat e clique em **Conexão → Verificar assistente**.
+
+- **ChatGPT** usa o Codex instalado no computador. Na primeira vez, execute `codex login` e escolha entrar com o ChatGPT. [Autenticação do Codex](https://learn.chatgpt.com/docs/auth)
+- **Claude** usa o Claude Code instalado no computador. Abra `claude` e siga a instrução de login. [Instalação e login do Claude Code](https://code.claude.com/docs/en/quickstart)
+- **Gemini** usa o Gemini CLI instalado no computador. Abra `gemini` e escolha entrar com o Google para autenticar o cliente. [Autenticação do Gemini CLI](https://geminicli.com/docs/get-started/authentication/)
+
+Em **Código**, o assistente usa o fluxograma salvo para criar uma primeira implementação. Revise a prévia e escolha onde salvar os arquivos. No chat, clique no ícone de pasta para escolher um projeto e peça ajuda para entender ou editar seus arquivos. Ao enviar da tela **Diagramas**, o fluxo aberto acompanha o pedido. Os clientes usam a sessão configurada no Windows e enviam o pedido e o contexto de trabalho ao serviço escolhido.
+
+Use o ícone do sol ou da lua na barra superior para trocar entre fundo branco e preto. O aplicativo lembra a sua escolha.
+
 ## Desenvolver e compilar
 
 Requisitos no Windows x64:

@@ -1,0 +1,184 @@
+import { FolderOpen, LoaderCircle, Paperclip, Send, Sparkles, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { appError, systemDiagram } from '../controllers/api'
+import type { AiProvider, ChatMessage, ReferenceDocument, SystemDiagram } from '../models/systemDiagram'
+
+const assistants = {
+  codex: { label: 'ChatGPT · Codex', login: 'Entre com sua conta do ChatGPT no Codex.' },
+  claude: { label: 'Claude · Claude Code', login: 'Entre com sua conta no Claude Code.' },
+  gemini: { label: 'Gemini · Gemini CLI', login: 'No Gemini CLI, escolha entrar com o Google.' },
+} satisfies Record<AiProvider, { label: string; login: string }>
+
+const preference = 'jujuba.assistant.provider'
+const accepted = ['.txt', '.md', '.json', '.yaml', '.yml', '.csv', '.xml', '.mmd', '.mermaid']
+const attachmentLimit = 64_000
+
+type Turn = ChatMessage & { diagram?: SystemDiagram; revisionOf?: SystemDiagram | null }
+
+export function readProvider(): AiProvider {
+  try {
+    const value = localStorage.getItem(preference)
+    if (value === 'claude' || value === 'gemini') return value
+  } catch { /* The assistant can still be selected in this session. */ }
+  return 'codex'
+}
+
+export function AssistantDock({ open, setOpen, provider, setProvider, screen, diagram, onDiagram }: {
+  open: boolean
+  setOpen: (open: boolean) => void
+  provider: AiProvider
+  setProvider: (provider: AiProvider) => void
+  screen: string
+  diagram: SystemDiagram | null
+  onDiagram: (diagram: SystemDiagram, revisionOf: SystemDiagram | null) => boolean
+}) {
+  const [workspace, setWorkspace] = useState('')
+  const [attachments, setAttachments] = useState<ReferenceDocument[]>([])
+  const [chat, setChat] = useState<Turn[]>([])
+  const [draft, setDraft] = useState('')
+  const [busy, setBusy] = useState('')
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [verifyOpen, setVerifyOpen] = useState(false)
+  const lock = useRef(false)
+  const composer = useRef<HTMLTextAreaElement>(null)
+  const launcher = useRef<HTMLButtonElement>(null)
+  const end = useRef<HTMLLIElement>(null)
+
+  useEffect(() => { if (open) composer.current?.focus() }, [open])
+  useEffect(() => { if (open) end.current?.scrollIntoView({ block: 'nearest' }) }, [chat, busy, open])
+
+  function close() {
+    setOpen(false)
+    launcher.current?.focus()
+  }
+
+  function chooseProvider(next: AiProvider) {
+    setProvider(next)
+    setNotice('')
+    setError('')
+    try { localStorage.setItem(preference, next) } catch { /* The current choice remains active. */ }
+  }
+
+  async function perform(label: string, work: () => Promise<void>) {
+    if (lock.current) return
+    lock.current = true
+    setBusy(label)
+    setError('')
+    setNotice('')
+    try { await work() }
+    catch (failure) { setError(appError(failure).message) }
+    finally { lock.current = false; setBusy('') }
+  }
+
+  function chooseFolder() {
+    void perform('Selecionando pasta…', async () => {
+      const path = await systemDiagram.chooseWorkspace()
+      if (path && path !== workspace) {
+        setWorkspace(path)
+        setChat([])
+      }
+    })
+  }
+
+  function check() {
+    void perform('Verificando assistente…', async () => {
+      await systemDiagram.checkAgent(provider)
+      setNotice(provider === 'codex' ? 'Codex instalado e autenticado.' : 'Assistente instalado. Confira se você está conectado à sua conta.')
+    })
+  }
+
+  function attach(files: File[]) {
+    if (!files.length) return
+    void perform('Lendo documentação…', async () => {
+      const size = new TextEncoder().encode(attachments.map(({ text }) => text).join('')).byteLength
+      if (attachments.length + files.length > 4 || size + files.reduce((total, file) => total + file.size, 0) > attachmentLimit) {
+        throw { kind: 'input', message: 'Anexe até quatro documentos, com 64 KB no total.' }
+      }
+      const next = await Promise.all(files.map(async (file) => {
+        if (!accepted.some((suffix) => file.name.toLowerCase().endsWith(suffix))) {
+          throw { kind: 'input', message: 'Use documentos de texto, como TXT, Markdown, JSON ou CSV.' }
+        }
+        const content = await file.arrayBuffer()
+        try { return { name: file.name, text: new TextDecoder('utf-8', { fatal: true }).decode(content) } }
+        catch { throw { kind: 'input', message: 'Salve o documento como texto UTF-8 para anexá-lo.' } }
+      }))
+      setAttachments([...attachments, ...next])
+    })
+  }
+
+  function send() {
+    const prompt = draft.trim()
+    if (!prompt) return
+    void perform('Assistente trabalhando…', async () => {
+      const history = chat.slice(-12).map(({ role, content }) => ({ role, content: content.slice(0, 2500) }))
+      const result = await systemDiagram.converse(provider, { prompt, screen, history, diagram, documents: attachments })
+      setChat([...chat, { role: 'user', content: prompt }, {
+        role: 'assistant', content: result.reply, diagram: result.diagram ?? undefined, revisionOf: diagram,
+      }])
+      setDraft('')
+    })
+  }
+
+  return <>
+    {open && <section id="assistant-dock" className="assistant-dock" aria-label="Assistente de IA"
+      onKeyDown={(event) => { if (event.key === 'Escape' && !event.defaultPrevented) close() }}>
+      <header className="assistant-heading">
+        <div><h2><Sparkles size={17} />Assistente de IA</h2><small>{screen}</small></div>
+        <button className="icon-button" onClick={close} aria-label="Fechar assistente"><X size={17} /></button>
+      </header>
+      <div className="assistant-config">
+        <label className="sr-only" htmlFor="assistant-provider">Assistente</label>
+        <select id="assistant-provider" value={provider} disabled={!!busy} onChange={(event) => chooseProvider(event.target.value as AiProvider)}>
+          {Object.entries(assistants).map(([key, assistant]) => <option key={key} value={key}>{assistant.label}</option>)}
+        </select>
+        <button className="icon-button" onClick={chooseFolder} disabled={!!busy}
+          title="Escolher pasta do projeto" aria-label="Escolher pasta do projeto"><FolderOpen size={17} /></button>
+        <button className="button assistant-connection" aria-expanded={verifyOpen} onClick={() => setVerifyOpen(!verifyOpen)}>Conexão</button>
+      </div>
+      {workspace && <small className="assistant-workspace" title={workspace}>{workspace}</small>}
+      {verifyOpen && <div className="assistant-verification">
+        <p>{assistants[provider].login} O assistente usa o contexto das mensagens e os documentos anexados.</p>
+        {workspace && <p>Ao pedir alterações de código, o assistente pode ler e editar a pasta escolhida.</p>}
+        <button className="button" disabled={!!busy} onClick={check}>Verificar assistente</button>
+      </div>}
+      <ol className="project-chat-history" aria-label="Conversa" aria-live="polite">
+        {chat.length === 0 && <li className="assistant-empty">Peça um fluxograma, anexe documentação ou escolha uma pasta para trabalhar no código.</li>}
+        {chat.map((turn, index) => <li key={index} className={turn.role}>
+          <strong>{turn.role === 'user' ? 'Você' : assistants[provider].label}</strong>
+          <p>{turn.content}</p>
+          {turn.diagram && <button className="button design-accent" onClick={() => {
+            if (turn.diagram && onDiagram(turn.diagram, turn.revisionOf ?? null)) close()
+          }}>Abrir diagrama no editor</button>}
+        </li>)}
+        <li className="assistant-scroll-anchor" aria-hidden="true" ref={end} />
+      </ol>
+      {(busy || error || notice) && <div className={'assistant-status' + (error ? ' is-error' : '')} role={error ? 'alert' : 'status'}>
+        {busy && <LoaderCircle size={15} className="spin" />}{error || busy || notice}
+      </div>}
+      <form className="assistant-composer" onSubmit={(event) => { event.preventDefault(); send() }}>
+        {attachments.length > 0 && <ul className="assistant-files" aria-label="Documentos anexados">
+          {attachments.map(({ name }, index) => <li key={index}>
+            <span title={name}>{name}</span>
+            <button type="button" disabled={!!busy} onClick={() => setAttachments(attachments.filter((_, i) => i !== index))}
+              aria-label={'Remover ' + name}><X size={12} /></button>
+          </li>)}
+        </ul>}
+        <textarea ref={composer} rows={3} aria-label="Mensagem para o assistente" placeholder="Ex. Construa o diagrama do cadastro"
+          value={draft} maxLength={4000} disabled={!!busy} onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); send() } }} />
+        <div className="assistant-compose-actions">
+          <label className="button assistant-attach" title="Anexar documentos de texto">
+            <Paperclip size={15} />Anexar
+            <input type="file" accept={accepted.join(',')} aria-label="Anexar documentos" multiple disabled={!!busy}
+              onChange={(event) => { attach(Array.from(event.currentTarget.files ?? [])); event.currentTarget.value = '' }} />
+          </label>
+          <button className="button primary" disabled={!draft.trim() || !!busy}><Send size={15} />Enviar</button>
+        </div>
+      </form>
+    </section>}
+    <button ref={launcher} className="assistant-launch" aria-label={open ? 'Fechar assistente' : 'Abrir assistente de IA'}
+      title={open ? 'Fechar assistente' : 'Abrir assistente de IA'} aria-expanded={open} aria-controls={open ? 'assistant-dock' : undefined}
+      onClick={() => open ? close() : setOpen(true)}>{open ? <X size={20} /> : <Sparkles size={22} />}</button>
+  </>
+}

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-assistant-converse"
+description = "Enables the assistant_converse command without any pre-configured scope."
+commands.allow = ["assistant_converse"]
+
+[[permission]]
+identifier = "deny-assistant-converse"
+description = "Denies the assistant_converse command without any pre-configured scope."
+commands.deny = ["assistant_converse"]

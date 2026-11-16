@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-diagram-choose-workspace"
+description = "Enables the diagram_choose_workspace command without any pre-configured scope."
+commands.allow = ["diagram_choose_workspace"]
+
+[[permission]]
+identifier = "deny-diagram-choose-workspace"
+description = "Denies the diagram_choose_workspace command without any pre-configured scope."
+commands.deny = ["diagram_choose_workspace"]

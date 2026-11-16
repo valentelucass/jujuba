@@ -6,6 +6,7 @@ import { GitFork, Maximize, Minus, Plus, Table2 } from 'lucide-react'
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type PointerEvent } from 'react'
 import type { Relationship, Remote, Table } from '../models/sql'
 import { Failure, Loading } from './States'
+import { useTheme } from './Theme'
 
 const portSpacing = 28
 const stemLength = 56
@@ -119,7 +120,7 @@ function ForeignKeyEdge({ id, source, target, sourceX, sourceY, targetX, targetY
 
   return <>
     <BaseEdge id={id} path={path} markerEnd={`url(#${arrowId}-${highlighted ? 'pink' : 'green'})`}
-      style={{ stroke: highlighted ? 'var(--berry)' : '#679970', strokeWidth: highlighted ? 2.3 : 1.5, opacity: dimmed ? .4 : 1 }} />
+      style={{ stroke: highlighted ? 'var(--berry)' : 'var(--mint)', strokeWidth: highlighted ? 2.3 : 1.5, opacity: dimmed ? .4 : 1 }} />
     {endpointBadge(relation.sourcePerTarget, sourceX + sourceDirection * 31, sourceY - 11, 'Origens por destino')}
     {endpointBadge(relation.targetPerSource, targetX + targetDirection * 31, targetY - 11, 'Destinos por origem')}
     <EdgeLabelRenderer>
@@ -266,6 +267,7 @@ function DiagramControls() {
 const noTables: Table[] = []
 
 export function Graph({ table, tables = noTables, relations, selected, onSelect, onTable }: GraphProps) {
+  const { theme } = useTheme()
   const layout = useMemo(() => makeLayout(table, relations, tables), [table, relations, tables])
   const [activeTable, setActiveTable] = useState<number | null>(null)
   const [hoveredEdge, setHoveredEdge] = useState<string | null>(null)
@@ -309,12 +311,12 @@ export function Graph({ table, tables = noTables, relations, selected, onSelect,
       <svg className="diagram-markers" width="0" height="0" aria-hidden="true">
         <defs>
           <marker id={`${arrowId}-green`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9"
-            markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#679970" /></marker>
+            markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="var(--mint)" /></marker>
           <marker id={`${arrowId}-pink`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="11" markerHeight="11"
             markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="var(--berry)" /></marker>
         </defs>
       </svg>
-      <ReactFlow colorMode="dark" defaultNodes={nodes} defaultEdges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
+      <ReactFlow colorMode={theme} defaultNodes={nodes} defaultEdges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
         fitView fitViewOptions={{ padding: .28, maxZoom: nodes.length === 1 ? .8 : 1.15 }} minZoom={.12} maxZoom={2.2}
         nodesDraggable panOnDrag nodesConnectable={false} deleteKeyCode={null}
         onPaneClick={() => selectTable(null)}
@@ -323,7 +325,7 @@ export function Graph({ table, tables = noTables, relations, selected, onSelect,
         onEdgeMouseEnter={(_, edge) => { if (edge.data?.compact) hoverEdge(edge.id) }}
         onEdgeMouseLeave={(_, edge) => { if (edge.data?.compact) hoverEdge(null) }}
         onEdgeClick={(_, edge) => { if (edge.data) onSelect(edge.data.relation) }}>
-        <Background color="#345341" gap={20} size={1} />
+        <Background color="var(--dot)" gap={20} size={1} />
         <DiagramControls />
         {!table && <TableFinder tables={tables} />}
       </ReactFlow>

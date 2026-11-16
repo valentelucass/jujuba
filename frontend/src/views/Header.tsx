@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Check, ChevronDown, Database, Plug, Power, Search } from 'lucide-react'
+import { Check, ChevronDown, Database, GitBranch, Moon, Plug, Power, Search, Sun } from 'lucide-react'
 import jujuba from '../assets/jujuba.png'
 import type { Connection, Database as DatabaseName } from '../models/sql'
 import { UpdateButton } from './DesktopUpdates'
+import { useTheme } from './Theme'
 
-export function Header({ connection, database, onConnect, onDisconnect, onDatabase, tools, disconnecting, connecting }: {
+export function Header({ connection, database, onConnect, onDisconnect, onDatabase, tools, disconnecting, connecting, onDiagrams, diagramActive }: {
+  onDiagrams?: () => void
+  diagramActive?: boolean
   tools?: ReactNode
   disconnecting?: boolean
   connecting?: boolean
@@ -14,6 +17,7 @@ export function Header({ connection, database, onConnect, onDisconnect, onDataba
   onDisconnect?: () => void
   onDatabase?: (db: DatabaseName) => void
 }) {
+  const { theme, setTheme } = useTheme()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const dropdown = useRef<HTMLDivElement>(null)
@@ -38,6 +42,7 @@ export function Header({ connection, database, onConnect, onDisconnect, onDataba
   return <header className="topbar">
     <div className="wordmark"><span className="brand-mark" aria-hidden="true"><img src={jujuba} alt="" /></span><strong>Jujuba<span>SQL</span></strong></div>
     <div className="header-divider" />
+    {diagramActive ? <button className="button" onClick={onDiagrams}><Database size={15} />Bancos de dados</button> : <>
     {connection ? <button className="button header-connect" onClick={onDisconnect} disabled={disconnecting} title="Desconectar">
       <Power size={15} /><span>Desconectar</span></button> :
       <button className="button primary header-connect" onClick={onConnect} disabled={connecting}><Plug size={15} /><span>Conectar</span></button>}
@@ -60,9 +65,17 @@ export function Header({ connection, database, onConnect, onDisconnect, onDataba
         </div>
       </div>}
     </div>
+    </>}
+    {onDiagrams && <button className="button system-tab" aria-pressed={!!diagramActive}
+      onClick={diagramActive ? undefined : onDiagrams}><GitBranch size={15} />Diagramas</button>}
     {tools}
     <div className="header-spacer" />
+    <button className="icon-button theme-toggle" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+      aria-label={theme === 'dark' ? 'Usar fundo branco' : 'Usar fundo preto'}
+      title={theme === 'dark' ? 'Usar fundo branco' : 'Usar fundo preto'}>
+      {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+    </button>
     <UpdateButton />
-    <span className={`connection-status${connection ? ' online' : ''}`}><i />{connection ? 'Conectado' : 'Desconectado'}</span>
+    {!diagramActive && <span className={`connection-status${connection ? ' online' : ''}`}><i />{connection ? 'Conectado' : 'Desconectado'}</span>}
   </header>
 }

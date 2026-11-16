@@ -1,4 +1,4 @@
-import { useCallback, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Braces, ChevronLeft, ChevronRight, Database, KeyRound, PanelRight, RefreshCw, Search } from 'lucide-react'
 import { noSql } from '../controllers/api'
 import type { TreeItem } from '../controllers/useExplorer'
@@ -11,11 +11,17 @@ import { Empty, Failure, Loading } from './States'
 import { StatusBar } from './StatusBar'
 import { StudioLayout } from './StudioLayout'
 
-export function NoSqlStudio({ connection, disconnect }: { connection: Connection; disconnect: () => Promise<void> }) {
+export function NoSqlStudio({ connection, disconnect, openDiagrams, onScreen }: {
+  connection: Connection; disconnect: () => Promise<void>; openDiagrams: () => void; onScreen: (screen: string) => void
+}) {
   const mongo = connection.engine === 'mongodb'
   const engine = engines[connection.engine]
   const [database, setDatabase] = useState<string | null>(connection.databases.find((name) => !['admin', 'config', 'local'].includes(name)) ?? connection.databases[0] ?? null)
   const [collection, setCollection] = useState<string | null>(null)
+  useEffect(() => {
+    onScreen(connection.engine === 'redis' ? 'Explorador de chaves · Redis' :
+      collection ? 'Documentos · MongoDB' : 'Coleções · MongoDB')
+  }, [connection.engine, collection, onScreen])
   const [disconnecting, setDisconnecting] = useState(false)
   const [refresh, setRefresh] = useState(0)
   const session = connection.session
@@ -51,7 +57,7 @@ export function NoSqlStudio({ connection, disconnect }: { connection: Connection
   })
 
   return <>
-    <Header connection={connection} database={database} onDisconnect={close} disconnecting={disconnecting} onDatabase={selectDatabase} />
+    <Header onDiagrams={openDiagrams} connection={connection} database={database} onDisconnect={close} disconnecting={disconnecting} onDatabase={selectDatabase} />
     <StudioLayout items={items} connected>
       <main className="workspace nosql-workspace">
         <div className="object-heading">

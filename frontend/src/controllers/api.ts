@@ -1,4 +1,5 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
+import type { AiProvider, AssistantReply, AssistantRequest, DiagramProject, GeneratedProject, OpenedDiagram, SystemDiagram } from '../models/systemDiagram'
 import type { NoSqlEngine } from '../models/engines'
 import type { DocumentsPage, RedisEntry, RedisKeys } from '../models/noSql'
 import type { DatabaseFile, DashboardOverview, DashboardPerformance, LiveActivity, TableStorage } from '../models/dashboard'
@@ -44,6 +45,19 @@ export const noSql = {
     call<DocumentsPage>('mongo_documents', { scope, collection, filter, page }),
   keys: (scope: Scope, cursor: string, pattern: string) => call<RedisKeys>('redis_keys', { scope, cursor, pattern }),
   entry: (scope: Scope, id: string) => call<RedisEntry>('redis_entry', { scope, id }),
+}
+
+export const systemDiagram = {
+  checkAgent: (provider: AiProvider) => call<void>('diagram_agent', { provider }),
+  chooseWorkspace: () => call<string | null>('diagram_choose_workspace'),
+  converse: (provider: AiProvider, request: AssistantRequest) => call<AssistantReply>('assistant_converse', { provider, request }),
+  open: () => call<OpenedDiagram | null>('diagram_open'),
+  save: (diagram: SystemDiagram, project: DiagramProject | null) =>
+    call<DiagramProject | null>('diagram_save', { diagram, project }),
+  markdown: (diagram: SystemDiagram) => call<string | null>('diagram_markdown', { diagram }),
+  scaffold: (provider: AiProvider, project: DiagramProject, requirements: string) =>
+    call<GeneratedProject>('diagram_scaffold', { provider, project, requirements }),
+  writeCode: (code: GeneratedProject) => call<string | null>('diagram_write_code', { code }),
 }
 
 export function appError(error: unknown): AppError {

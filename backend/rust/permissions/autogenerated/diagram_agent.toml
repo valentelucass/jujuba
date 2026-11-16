@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-diagram-agent"
+description = "Enables the diagram_agent command without any pre-configured scope."
+commands.allow = ["diagram_agent"]
+
+[[permission]]
+identifier = "deny-diagram-agent"
+description = "Denies the diagram_agent command without any pre-configured scope."
+commands.deny = ["diagram_agent"]

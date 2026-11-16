@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-diagram-scaffold"
+description = "Enables the diagram_scaffold command without any pre-configured scope."
+commands.allow = ["diagram_scaffold"]
+
+[[permission]]
+identifier = "deny-diagram-scaffold"
+description = "Denies the diagram_scaffold command without any pre-configured scope."
+commands.deny = ["diagram_scaffold"]
