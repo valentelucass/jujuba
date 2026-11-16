@@ -9,6 +9,7 @@ import { useRemote } from '../controllers/useRemote'
 import type { DashboardOverview, DashboardPerformance, LiveActivity, TableStorage } from '../models/dashboard'
 import type { AppError, Scope } from '../models/sql'
 import { Empty, Failure, Loading } from './States'
+import { useTheme } from './Theme'
 
 use([BarChart, LineChart, GridComponent, TooltipComponent, CanvasRenderer])
 
@@ -26,10 +27,11 @@ type ChartOption = ComposeOption<BarSeriesOption | LineSeriesOption | GridCompon
 
 function Chart({ label, option }: { label: string; option: ChartOption }) {
   const container = useRef<HTMLDivElement>(null)
+  const { theme } = useTheme()
   useEffect(() => {
     const element = container.current
     if (!element) return
-    const chart = init(element, 'dark')
+    const chart = init(element, theme === 'dark' ? 'dark' : undefined)
     chart.setOption({
       backgroundColor: 'transparent',
       tooltip: { trigger: 'axis', renderMode: 'richText', confine: true },
@@ -38,7 +40,7 @@ function Chart({ label, option }: { label: string; option: ChartOption }) {
     const observer = new ResizeObserver(() => chart.resize())
     observer.observe(element)
     return () => { observer.disconnect(); chart.dispose() }
-  }, [option])
+  }, [option, theme])
   return <div ref={container} className="dashboard-chart" role="img" aria-label={label} />
 }
 

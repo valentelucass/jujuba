@@ -1,3 +1,5 @@
+import { isTauri } from '@tauri-apps/api/core'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import { createContext, useContext, useLayoutEffect, useState, type ReactNode } from 'react'
 
 type Theme = 'dark' | 'light'
@@ -12,6 +14,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme
+    if (isTauri()) void getCurrentWindow().setTheme(theme).catch(() => {})
     try { localStorage.setItem(preference, theme) } catch { /* The theme still applies for this session. */ }
   }, [theme])
 

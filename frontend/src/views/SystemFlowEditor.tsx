@@ -1,4 +1,5 @@
-import { CircleCheck, GitBranch, Link2, Trash2, Workflow } from 'lucide-react'
+import { Link2, Trash2 } from 'lucide-react'
+import { FlowStageIcon } from './FlowStageIcon'
 import { useState, type FormEvent } from 'react'
 import { nodeKinds, type NodeKind, type SystemDiagram, type SystemEdge, type SystemNode } from '../models/systemDiagram'
 
@@ -11,13 +12,14 @@ export function SystemFlowEditor({ diagram, selected, select, update, addEdge, d
   disabled: boolean
 }) {
   const node = diagram.nodes.find((entry) => entry.id === selected)
+  const hasStart = diagram.nodes.some((entry) => entry.kind === 'start')
 
   function patchNode(change: Partial<SystemNode>) {
     if (!node) return
     update({ ...diagram, nodes: diagram.nodes.map((entry) => entry.id === node.id ? { ...entry, ...change } : entry) })
   }
 
-  function createStep(kind: 'action' | 'decision' | 'end') {
+  function createStep(kind: NodeKind) {
     const id = 'step-' + crypto.randomUUID().slice(0, 12)
     update({ ...diagram, nodes: [...diagram.nodes, { id, label: nodeKinds[kind], detail: '', kind }] })
     select(id)
@@ -31,6 +33,13 @@ export function SystemFlowEditor({ diagram, selected, select, update, addEdge, d
   }
 
   return <fieldset className="system-form" disabled={disabled}>
+    <h2>Formas</h2>
+    <div className="flow-palette" role="group" aria-label="Adicionar forma">
+      {(Object.entries(nodeKinds) as [NodeKind, string][]).map(([kind, label]) =>
+        <button key={kind} type="button" className={'button flow-tool flow-tool-' + kind}
+          disabled={diagram.nodes.length >= 24 || (kind === 'start' && hasStart)}
+          onClick={() => createStep(kind)}><FlowStageIcon kind={kind} />{label}</button>)}
+    </div>
     <details>
       <summary>Informações do sistema</summary>
       <label>Título<input value={diagram.title} maxLength={120} onChange={(event) => update({ ...diagram, title: event.target.value })} /></label>
@@ -39,25 +48,21 @@ export function SystemFlowEditor({ diagram, selected, select, update, addEdge, d
       <LineList title="Requisitos" values={diagram.requirements} change={(requirements) => update({ ...diagram, requirements })} />
       <LineList title="Questões em aberto" values={diagram.openQuestions} change={(openQuestions) => update({ ...diagram, openQuestions })} />
     </details>
-    <label>Etapa<select value={selected ?? ''} onChange={(event) => select(event.target.value || null)}>
+    <label>Editar etapa<select disabled={!diagram.nodes.length} value={selected ?? ''} onChange={(event) => select(event.target.value || null)}>
       <option value="">Selecione uma etapa</option>
       {diagram.nodes.map((entry) => <option key={entry.id} value={entry.id}>{entry.label || 'Sem nome'}</option>)}
     </select></label>
-    <div className="flow-palette" role="group" aria-label="Adicionar etapa">
-      <button type="button" className="button" disabled={diagram.nodes.length >= 24} onClick={() => createStep('action')}><Workflow size={14} />Ação</button>
-      <button type="button" className="button" disabled={diagram.nodes.length >= 24} onClick={() => createStep('decision')}><GitBranch size={14} />Decisão</button>
-      <button type="button" className="button" disabled={diagram.nodes.length >= 24} onClick={() => createStep('end')}><CircleCheck size={14} />Fim</button>
-    </div>
     {node && <div className="stage-fields">
       <label>Nome<input value={node.label} maxLength={140} onChange={(event) => patchNode({ label: event.target.value })} /></label>
       <label>Tipo<select value={node.kind} onChange={(event) => patchNode({ kind: event.target.value as NodeKind })}>
-        {Object.entries(nodeKinds).map(([kind, name]) => <option key={kind} value={kind}>{name}</option>)}
+        {Object.entries(nodeKinds).map(([kind, name]) => <option key={kind} value={kind}
+          disabled={kind === 'start' && hasStart && node.kind !== 'start'}>{name}</option>)}
       </select></label>
       <label>Regra ou comportamento<textarea value={node.detail} maxLength={900} rows={3}
         onChange={(event) => patchNode({ detail: event.target.value })} /></label>
       <button type="button" className="button system-remove" onClick={removeStep}><Trash2 size={14} />Remover etapa</button>
     </div>}
-    <details open={node ? undefined : true}>
+    <details open={diagram.nodes.length >= 2 && !node ? true : undefined}>
       <summary>Conexões</summary>
       <ConnectionEditor key={selected ?? ''} diagram={diagram} selected={selected} add={addEdge} />
       <div className="system-edge-list">
@@ -107,10 +112,10 @@ function ConnectionEditor({ diagram, selected, add }: { diagram: SystemDiagram; 
   }
 
   return <form className="system-form system-connections" onSubmit={submit}>
-    <label>Origem<select value={source} onChange={(event) => setFrom(event.target.value)}>
+    <label>Origem<select disabled={!origins.length} value={source} onChange={(event) => setFrom(event.target.value)}>
       {origins.map((node) => <option key={node.id} value={node.id}>{node.label}</option>)}
     </select></label>
-    <label>Destino<select value={target} onChange={(event) => setTo(event.target.value)}>
+    <label>Destino<select disabled={!children.length} value={target} onChange={(event) => setTo(event.target.value)}>
       {children.map((node) => <option key={node.id} value={node.id}>{node.label}</option>)}
     </select></label>
     <label>Nome da saída<input value={label} maxLength={120} placeholder="Ex. Sim"

@@ -1,8 +1,8 @@
-import { Braces, FileDown, FilePlus2, FolderOpen, GitBranch, LoaderCircle, Save, Sparkles } from 'lucide-react'
+import { Braces, FileDown, FilePlus2, FolderOpen, GitBranch, LayoutGrid, LoaderCircle, Redo2, Save, Sparkles, Undo2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { appError, systemDiagram } from '../controllers/api'
 import {
-  blankDiagram, type AiProvider, type DiagramProject, type GeneratedProject, type StagePosition,
+  emptyDiagram, type AiProvider, type DiagramProject, type GeneratedProject, type StagePosition,
   type SystemDiagram, type SystemEdge,
 } from '../models/systemDiagram'
 import { Header } from './Header'
@@ -10,14 +10,14 @@ import { StatusBar } from './StatusBar'
 import { SystemFlowCanvas } from './SystemFlowCanvas'
 import { SystemFlowEditor } from './SystemFlowEditor'
 
-export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagram, openAssistant }: {
+export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagram }: {
   exit: () => void
   provider: AiProvider
   assistantDiagram: { diagram: SystemDiagram; revisionOf: SystemDiagram | null } | null
   onDiagram: (diagram: SystemDiagram | null) => void
-  openAssistant: () => void
 }) {
   const [diagram, setDiagram] = useState<SystemDiagram | null>(null)
+  const [history, setHistory] = useState<{ past: (SystemDiagram | null)[]; future: (SystemDiagram | null)[] }>({ past: [], future: [] })
   const [project, setProject] = useState<DiagramProject | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
@@ -52,13 +52,35 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
 
   function edit(next: SystemDiagram) {
     if (locking.current) return
+    setHistory(({ past }) => ({ past: [...past.slice(-39), diagram], future: [] }))
+    showEdit(next)
+  }
+
+  function showEdit(next: SystemDiagram | null) {
     setDiagram(next)
     setDirty(true)
     setCode(null)
     setNotice('')
   }
 
+  function restore(direction: 'past' | 'future') {
+    if (locking.current || !history[direction].length) return
+    const { past, future } = history
+    const next = history[direction].at(-1) ?? null
+    setHistory(direction === 'past' ? { past: past.slice(0, -1), future: [...future, diagram] } :
+      { past: [...past, diagram], future: future.slice(0, -1) })
+    if (!next?.nodes.some((node) => node.id === selected)) setSelected(null)
+    showEdit(next)
+  }
+
+  function organize() {
+    if (!diagram) return
+    edit({ ...diagram, nodes: diagram.nodes.map((node) => ({ ...node, position: undefined })) })
+    setFitKey((value) => value + 1)
+  }
+
   function replace(next: SystemDiagram, source: DiagramProject | null, modified: boolean) {
+    setHistory({ past: [], future: [] })
     setDiagram(next)
     setProject(source)
     setSelected(null)
@@ -87,7 +109,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
     if (!confirmDiscard()) return
     setError('')
     setNotice('')
-    replace(blankDiagram(), null, true)
+    replace(emptyDiagram, null, false)
   }
 
   async function open() {
@@ -160,15 +182,24 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
       <div className="system-design-body">
         <SystemFlowCanvas key={fitKey} diagram={diagram} selected={selected}
           choose={(id) => { setSelected(id); if (id) setTab('flow') }} connect={addEdge}
-          move={moveStep} disabled={!!busy} openAssistant={openAssistant} />
+          move={moveStep} disabled={!!busy} />
         <aside className="system-design-panel system-inspector">
           <div className="system-panel-tabs" aria-label="Detalhes do diagrama">
             <button className="button" aria-pressed={tab === 'flow'} onClick={() => setTab('flow')}><GitBranch size={14} />Fluxo</button>
             <button className="button" aria-pressed={tab === 'code'} onClick={() => setTab('code')}><Braces size={14} />Código</button>
           </div>
-          {tab === 'flow' ? (diagram ? <SystemFlowEditor key={fitKey} diagram={diagram} selected={selected}
-            select={setSelected} update={edit} addEdge={addEdge} disabled={!!busy} /> :
-            <p className="system-hint">Crie ou abra um diagrama para editar etapas e conexões.</p>) :
+          {tab === 'flow' ? <>
+            <div className="flow-edit-actions" aria-label="Edição do diagrama">
+              <button className="icon-button" disabled={!!busy || !history.past.length}
+                aria-label="Desfazer" title="Desfazer" onClick={() => restore('past')}><Undo2 size={16} /></button>
+              <button className="icon-button" disabled={!!busy || !history.future.length}
+                aria-label="Refazer" title="Refazer" onClick={() => restore('future')}><Redo2 size={16} /></button>
+              <button className="button" disabled={!!busy || !diagram?.nodes.some((node) => node.position)}
+                onClick={organize}><LayoutGrid size={15} />Organizar</button>
+            </div>
+            <SystemFlowEditor key={fitKey} diagram={diagram ?? emptyDiagram} selected={selected}
+              select={setSelected} update={edit} addEdge={addEdge} disabled={!!busy} />
+          </> :
             <fieldset className="system-form" disabled={!!busy}>
               {(!project || dirty) && <p className="system-hint">Salve o diagrama antes de gerar a implementação.</p>}
               <label>Tecnologia e instruções<textarea value={technology} maxLength={4000} rows={4}

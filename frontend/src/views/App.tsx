@@ -307,7 +307,7 @@ export function App() {
     </div>
     {openedDiagrams && <div className="app-screen" hidden={!diagrams}>
       <Suspense fallback={<Loading />}><SystemDiagramStudio exit={() => setDiagrams(false)} provider={provider}
-        assistantDiagram={assistantDiagram} onDiagram={setCurrentDiagram} openAssistant={() => setAssistantOpen(true)} /></Suspense>
+        assistantDiagram={assistantDiagram} onDiagram={setCurrentDiagram} /></Suspense>
     </div>}
     <AssistantDock open={assistantOpen} setOpen={setAssistantOpen} provider={provider} setProvider={setProvider}
       screen={screen} diagram={diagrams ? currentDiagram : null} onDiagram={applyAssistantDiagram} />

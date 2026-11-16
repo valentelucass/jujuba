@@ -27,6 +27,10 @@ pub enum Kind {
     Start,
     Action,
     Decision,
+    InputOutput,
+    Document,
+    Subprocess,
+    Connector,
     End,
 }
 
@@ -150,9 +154,11 @@ impl Diagram {
         for (id, kind) in &kinds {
             let count = forward.get(id).map_or(0, Vec::len);
             match kind {
-                Kind::Start | Kind::Action if count != 1 => return Err(invalid(
-                    "O início e cada ação precisam de uma saída. Use uma decisão para ramificar.",
-                )),
+                kind if !matches!(kind, Kind::Decision | Kind::End) && count != 1 => {
+                    return Err(invalid(
+                        "Cada etapa do fluxo precisa de uma saída. Use uma decisão para ramificar.",
+                    ))
+                }
                 Kind::Decision if count < 2 => {
                     return Err(invalid("Cada decisão precisa de pelo menos duas saídas."))
                 }
@@ -189,6 +195,10 @@ impl Diagram {
                 Kind::Start | Kind::End => format!("([\"{label}\"])"),
                 Kind::Decision => format!("{{\"{label}\"}}"),
                 Kind::Action => format!("[\"{label}\"]"),
+                Kind::InputOutput => format!("[/\"{label}\"/]"),
+                Kind::Document => format!("@{{ shape: doc, label: \"{label}\" }}"),
+                Kind::Subprocess => format!("[[\"{label}\"]]"),
+                Kind::Connector => format!("((\"{label}\"))"),
             };
             let _ = writeln!(out, "  n{index}{shape}");
         }

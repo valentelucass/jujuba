@@ -62,10 +62,23 @@ impl Provider {
             .into_iter()
             .filter(|path| path.is_absolute())
             .find_map(|path| {
-                [format!("{name}.exe"), format!("{name}.cmd")]
-                    .into_iter()
-                    .map(|file| path.join(file))
-                    .find(|candidate| candidate.is_file())
+                let executable = path.join(format!("{name}.exe"));
+                if executable.is_file() {
+                    return Some(executable);
+                }
+                if matches!(self, Self::Claude) {
+                    let npm = if path.ends_with(".bin") {
+                        path.parent()?.to_path_buf()
+                    } else {
+                        path.join("node_modules")
+                    };
+                    let executable = npm.join("@anthropic-ai/claude-code/bin/claude.exe");
+                    if executable.is_file() {
+                        return Some(executable);
+                    }
+                }
+                let shim = path.join(format!("{name}.cmd"));
+                shim.is_file().then_some(shim)
             })
     }
 
@@ -90,10 +103,16 @@ impl Provider {
 pub async fn check(provider: Provider) -> Result<()> {
     let dir = tempfile::tempdir().map_err(|_| process_error(provider))?;
     let mut command = provider.command(dir.path())?;
-    if matches!(provider, Provider::Codex) {
-        command.args(["login", "status"]);
-    } else {
-        command.arg("--version");
+    match provider {
+        Provider::Codex => {
+            command.args(["login", "status"]);
+        }
+        Provider::Claude => {
+            command.args(["auth", "status", "--json"]);
+        }
+        Provider::Gemini => {
+            command.arg("--version");
+        }
     }
     run(provider, command, b"", Duration::from_secs(20)).await?;
     Ok(())
@@ -102,7 +121,7 @@ pub async fn check(provider: Provider) -> Result<()> {
 const FLOW_GUIDE: &str = "Você desenha fluxos para implementação de sistemas. Responda em português do Brasil. \
         Faça um fluxograma compacto, geralmente 5 a 12 nós. Inclua o que a pessoa faz, o que o sistema faz \
         e caminhos de erro e recuperação pertinentes à descrição. Use exatamente um start, pelo menos um end, \
-        ids ASCII curtos sem espaços e conexões from/to com ids existentes. O start e cada action têm \
+        ids ASCII curtos sem espaços e conexões from/to com ids existentes. O start e as etapas de processo, entrada e saída, documento, subprocesso e conector têm \
         exatamente uma saída. Cada decision tem pelo menos duas saídas com rótulos distintos (como Sim e Não). \
         end não tem saídas. Todo nó é alcançável e pode chegar a um end. Evite auto-conexões. \
         Use detail para descrever regras importantes. Registre dúvidas em openQuestions. Em uma revisão, preserve as regras \
@@ -542,6 +561,7 @@ async fn run(
             "log in",
             "logged out",
             "not logged",
+            "\"loggedin\": false",
             "unauthorized",
             "authenticate",
             "api key",
@@ -635,7 +655,7 @@ fn diagram_schema() -> Value {
             "title": string, "summary": string, "requirements": list, "openQuestions": list,
             "nodes": { "type": "array", "minItems": 2, "maxItems": MAX_NODES, "items": {
                 "type": "object", "additionalProperties": false, "required": ["id", "kind", "label", "detail"],
-                "properties": { "id": string, "kind": { "enum": ["start", "action", "decision", "end"] },
+                "properties": { "id": string, "kind": { "enum": ["start", "action", "decision", "inputOutput", "document", "subprocess", "connector", "end"] },
                     "label": string, "detail": string }
             }},
             "edges": { "type": "array", "minItems": 1, "maxItems": MAX_EDGES, "items": {

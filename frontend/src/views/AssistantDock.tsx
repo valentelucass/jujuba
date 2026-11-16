@@ -1,5 +1,6 @@
 import { FolderOpen, LoaderCircle, Paperclip, Send, Sparkles, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import jujuba from '../assets/jujuba.png'
 import { appError, systemDiagram } from '../controllers/api'
 import type { AiProvider, ChatMessage, ReferenceDocument, SystemDiagram } from '../models/systemDiagram'
 
@@ -84,7 +85,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   function check() {
     void perform('Verificando assistente…', async () => {
       await systemDiagram.checkAgent(provider)
-      setNotice(provider === 'codex' ? 'Codex instalado e autenticado.' : 'Assistente instalado. Confira se você está conectado à sua conta.')
+      setNotice(provider === 'gemini' ? 'Gemini CLI instalado. Envie uma mensagem para testar a sessão.' : 'Assistente instalado e autenticado.')
     })
   }
 
@@ -179,6 +180,9 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     </section>}
     <button ref={launcher} className="assistant-launch" aria-label={open ? 'Fechar assistente' : 'Abrir assistente de IA'}
       title={open ? 'Fechar assistente' : 'Abrir assistente de IA'} aria-expanded={open} aria-controls={open ? 'assistant-dock' : undefined}
-      onClick={() => open ? close() : setOpen(true)}>{open ? <X size={20} /> : <Sparkles size={22} />}</button>
+      onClick={() => open ? close() : setOpen(true)}>{open ? <X size={20} /> : <>
+        <img src={jujuba} alt="" />
+        <span className="assistant-launch-sparkle" aria-hidden="true"><Sparkles size={12} /></span>
+      </>}</button>
   </>
 }

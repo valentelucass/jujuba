@@ -1,4 +1,4 @@
-export type NodeKind = 'start' | 'action' | 'decision' | 'end'
+export type NodeKind = 'start' | 'action' | 'decision' | 'inputOutput' | 'document' | 'subprocess' | 'connector' | 'end'
 export type StagePosition = { x: number; y: number }
 export interface SystemNode { id: string; kind: NodeKind; label: string; detail: string; position?: StagePosition }
 export interface SystemEdge { from: string; to: string; label: string }
@@ -29,18 +29,17 @@ export interface AssistantRequest {
   diagram: SystemDiagram | null
 }
 
-export const nodeKinds: Record<NodeKind, string> = { start: 'Início', action: 'Ação', decision: 'Decisão', end: 'Fim' }
+export const nodeKinds: Record<NodeKind, string> = {
+  start: 'Início',
+  action: 'Processo',
+  decision: 'Decisão',
+  inputOutput: 'Entrada e saída',
+  document: 'Documento',
+  subprocess: 'Subprocesso',
+  connector: 'Conector',
+  end: 'Fim',
+}
 
-export function blankDiagram(): SystemDiagram {
-  return {
-    title: 'Novo fluxo',
-    summary: '',
-    nodes: [
-      { id: 'start', kind: 'start', label: 'Início', detail: '' },
-      { id: 'end', kind: 'end', label: 'Fim', detail: '' },
-    ],
-    edges: [{ from: 'start', to: 'end', label: '' }],
-    requirements: [],
-    openQuestions: [],
-  }
+export const emptyDiagram: SystemDiagram = {
+  title: 'Novo fluxo', summary: '', nodes: [], edges: [], requirements: [], openQuestions: [],
 }
