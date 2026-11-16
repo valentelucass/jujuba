@@ -1,4 +1,6 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
+import type { NoSqlEngine } from '../models/engines'
+import type { DocumentsPage, RedisEntry, RedisKeys } from '../models/noSql'
 import type { DatabaseFile, DashboardOverview, DashboardPerformance, LiveActivity, TableStorage } from '../models/dashboard'
 import type {
   AppError, Connection, ConnectionInput, DatabaseDiagram, EditInput, QueryOutput, PageRequest, RecordsPage, Relationship,
@@ -33,6 +35,15 @@ export const sql = {
   dashboardPerformance: (scope: Scope, hours: number) =>
     call<DashboardPerformance>('dashboard_performance', { scope, hours }),
   relationships: (scope: TableScope) => call<Relationship[]>('relationships', { scope }),
+}
+
+export const noSql = {
+  connect: (engine: NoSqlEngine, uri: string) => call<Connection>('connect_nosql', { engine, uri }),
+  collections: (scope: Scope) => call<string[]>('mongo_collections', { scope }),
+  documents: (scope: Scope, collection: string, filter: string, page: number) =>
+    call<DocumentsPage>('mongo_documents', { scope, collection, filter, page }),
+  keys: (scope: Scope, cursor: string, pattern: string) => call<RedisKeys>('redis_keys', { scope, cursor, pattern }),
+  entry: (scope: Scope, id: string) => call<RedisEntry>('redis_entry', { scope, id }),
 }
 
 export function appError(error: unknown): AppError {

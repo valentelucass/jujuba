@@ -152,7 +152,7 @@ impl OtherSession {
                     )
                 }
             }
-            Engine::SqlServer => return Err(invalid_input()),
+            Engine::SqlServer | Engine::Mongodb | Engine::Redis => return Err(invalid_input()),
         };
 
         let (pools, endpoint, transport, databases) = result;

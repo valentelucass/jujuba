@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-redis-entry"
+description = "Enables the redis_entry command without any pre-configured scope."
+commands.allow = ["redis_entry"]
+
+[[permission]]
+identifier = "deny-redis-entry"
+description = "Denies the redis_entry command without any pre-configured scope."
+commands.deny = ["redis_entry"]

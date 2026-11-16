@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, ChevronDown, Database, Plug, Power, Search } from 'lucide-react'
 import jujuba from '../assets/jujuba.png'
 import type { Connection, Database as DatabaseName } from '../models/sql'
+import { UpdateButton } from './DesktopUpdates'
 
 export function Header({ connection, database, onConnect, onDisconnect, onDatabase, tools, disconnecting, connecting }: {
   tools?: ReactNode
@@ -61,6 +62,7 @@ export function Header({ connection, database, onConnect, onDisconnect, onDataba
     </div>
     {tools}
     <div className="header-spacer" />
+    <UpdateButton />
     <span className={`connection-status${connection ? ' online' : ''}`}><i />{connection ? 'Conectado' : 'Desconectado'}</span>
   </header>
 }

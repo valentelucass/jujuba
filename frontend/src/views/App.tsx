@@ -7,7 +7,9 @@ import { useTable } from '../controllers/useTable'
 import type { Connection, Database, Relationship, Scope, Structure as TableStructure, Tab, Table, TableScope } from '../models/sql'
 import { CenterEnginePicker, SelectedEngine } from './EnginePicker'
 import { OtherConnectionForm } from './OtherConnectionForm'
-import { engines, type Engine } from '../models/engines'
+import { NoSqlConnectionForm } from './NoSqlConnectionForm'
+import { NoSqlStudio } from './NoSqlStudio'
+import { engines, isNoSql, type Engine } from '../models/engines'
 import { ConnectionForm } from './ConnectionForm'
 import jujuba from '../assets/jujuba.png'
 import { Diagram, Graph } from './Diagram'
@@ -238,9 +240,16 @@ export function App() {
     setStep('intro')
   }
 
-  if (connection) return <ConnectedStudio key={connection.session} connection={connection} disconnect={async () => {
-    try { await sql.disconnect() } finally { setConnection(null) }
-  }} />
+  async function disconnect() {
+    try { await sql.disconnect() } finally {
+      setConnection(null)
+      setSelectedEngine(null)
+    }
+  }
+
+  if (connection) return isNoSql(connection.engine) ?
+    <NoSqlStudio key={connection.session} connection={connection} disconnect={disconnect} /> :
+    <ConnectedStudio key={connection.session} connection={connection} disconnect={disconnect} />
 
   return <>
     <Header onConnect={openPicker} connecting={loading} />
@@ -250,14 +259,15 @@ export function App() {
           <div className="welcome-mark" aria-hidden="true"><img src={jujuba} alt="" /></div>
           <div className="welcome-copy">
             <h1>Conecte a um banco de dados</h1>
-            <p>Consulte os bancos, explore tabelas e visualize seus relacionamentos.</p>
+            <p>Consulte dados e explore tabelas, coleções e chaves.</p>
             <button className="button primary" onClick={openPicker}><Plug size={16} /> Nova conexão <ArrowRight size={16} /></button>
           </div>
         </div>}
-        {step === 'picker' && <CenterEnginePicker selected={selectedEngine} choose={chooseEngine} back={() => setStep('intro')} />}
+        {step === 'picker' && <CenterEnginePicker selected={selectedEngine} choose={chooseEngine} back={() => { setStep('intro'); setSelectedEngine(null) }} />}
         {step === 'sqlServer' && <ConnectionForm onClose={openPicker} onConnected={connected} loading={loading} setLoading={setLoading} />}
-        {step !== 'intro' && step !== 'picker' && step !== 'sqlServer' && <OtherConnectionForm key={step} engine={step}
-          onClose={openPicker} onConnected={connected} loading={loading} setLoading={setLoading} />}
+        {step !== 'intro' && step !== 'picker' && step !== 'sqlServer' && (isNoSql(step) ?
+          <NoSqlConnectionForm key={step} engine={step} onClose={openPicker} onConnected={connected} loading={loading} setLoading={setLoading} /> :
+          <OtherConnectionForm key={step} engine={step} onClose={openPicker} onConnected={connected} loading={loading} setLoading={setLoading} />)}
       </main>
       <SelectedEngine engine={selectedEngine} />
     </StudioLayout>

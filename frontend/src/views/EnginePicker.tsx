@@ -23,13 +23,17 @@ function EngineOptions({ selected, choose }: EngineOptionsProps) {
 
 export function SelectedEngine({ engine }: { engine: Engine | null }) {
   return <aside className="details engine-panel" aria-labelledby="engine-picker-title">
-    <div className="panel-title"><PanelRight size={15} /><h2 id="engine-picker-title">Banco escolhido</h2></div>
-    {engine && <div className="details-body">
-      <div className="engine-option engine-selection" aria-current="true">
-        <span className="engine-icon"><img src={engines[engine].icon} alt="" /></span>
-        <strong>{engines[engine].name}</strong><Check size={15} aria-hidden="true" />
-      </div>
-    </div>}
+    <div className="panel-title"><PanelRight size={15} /><h2 id="engine-picker-title">Bancos de dados</h2></div>
+    <div className="details-body">
+      <ul className="engine-list">
+        {engineOrder.map((option) => <li key={option} className="engine-option engine-selection"
+          aria-current={option === engine ? true : undefined}>
+          <span className="engine-icon"><img src={engines[option].icon} alt="" /></span>
+          <strong>{engines[option].name}</strong>
+          {option === engine && <Check size={15} aria-hidden="true" />}
+        </li>)}
+      </ul>
+    </div>
   </aside>
 }
 

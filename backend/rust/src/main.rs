@@ -8,6 +8,7 @@ mod edit;
 mod editor;
 mod error;
 mod models;
+mod no_sql;
 mod other_db;
 mod records;
 mod relationships;
@@ -31,6 +32,11 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             commands::connect,
             commands::choose_sqlite_file,
+            commands::connect_nosql,
+            commands::mongo_collections,
+            commands::mongo_documents,
+            commands::redis_keys,
+            commands::redis_entry,
             commands::has_saved_password,
             commands::forget_password,
             commands::disconnect,

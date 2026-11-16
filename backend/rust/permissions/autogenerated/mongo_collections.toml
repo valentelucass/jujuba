@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-mongo-collections"
+description = "Enables the mongo_collections command without any pre-configured scope."
+commands.allow = ["mongo_collections"]
+
+[[permission]]
+identifier = "deny-mongo-collections"
+description = "Denies the mongo_collections command without any pre-configured scope."
+commands.deny = ["mongo_collections"]

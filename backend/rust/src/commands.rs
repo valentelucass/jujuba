@@ -4,9 +4,10 @@ use crate::{
     edit, editor,
     error::{deadline, AppError, Result},
     models::{
-        ConnectInput, Connected, DatabaseDiagram, EditInput, EditOutcome, QueryOutput,
+        ConnectInput, Connected, DatabaseDiagram, EditInput, EditOutcome, Engine, QueryOutput,
         RecordsInput, RecordsPage, Relationship, Scope, Structure, Table, TableScope,
     },
+    no_sql::{DocumentsPage, RedisEntry, RedisKeys},
     records, relationships,
     sql_server::dashboard,
 };
@@ -64,6 +65,54 @@ pub async fn connect(
     state
         .connect(input, use_saved.unwrap_or(false), remember.unwrap_or(false))
         .await
+}
+
+#[tauri::command]
+pub async fn connect_nosql(
+    engine: Engine,
+    uri: String,
+    state: State<'_, Connections>,
+) -> Result<Connected> {
+    state.connect_nosql(engine, uri).await
+}
+
+#[tauri::command]
+pub async fn mongo_collections(scope: Scope, state: State<'_, Connections>) -> Result<Vec<String>> {
+    let session = state.no_sql(&scope).await?;
+    deadline(session.collections(&scope.database)).await
+}
+
+#[tauri::command]
+pub async fn mongo_documents(
+    scope: Scope,
+    collection: String,
+    filter: String,
+    page: u32,
+    state: State<'_, Connections>,
+) -> Result<DocumentsPage> {
+    let session = state.no_sql(&scope).await?;
+    deadline(session.documents(&scope.database, &collection, &filter, page)).await
+}
+
+#[tauri::command]
+pub async fn redis_keys(
+    scope: Scope,
+    cursor: String,
+    pattern: String,
+    state: State<'_, Connections>,
+) -> Result<RedisKeys> {
+    let session = state.no_sql(&scope).await?;
+    deadline(session.redis_keys(&cursor, &pattern)).await
+}
+
+#[tauri::command]
+pub async fn redis_entry(
+    scope: Scope,
+    id: String,
+    state: State<'_, Connections>,
+) -> Result<RedisEntry> {
+    let session = state.no_sql(&scope).await?;
+    deadline(session.redis_entry(&id)).await
 }
 
 #[tauri::command]

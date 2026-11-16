@@ -5,7 +5,6 @@ import { openUrl } from '@tauri-apps/plugin-opener'
 import { Database as DatabaseIcon, ExternalLink, ShieldCheck } from 'lucide-react'
 import { engines, type Engine } from '../models/engines'
 import type { Database } from '../models/sql'
-import { UpdateButton } from './DesktopUpdates'
 import { version as buildVersion } from '../../package.json'
 
 const links = [
@@ -34,7 +33,6 @@ export function StatusBar({ engine, endpoint, database, passwordSaveFailed }: {
     <span className="status-permissions"><ShieldCheck size={13} /> {engine ? 'Permissões · ' + engines[engine].name : 'Sem conexão'}</span>
     {database && <span className="status-context"><DatabaseIcon size={12} /> <span>{database}</span></span>}
     <span className="status-end status-context">{endpoint ?? 'Sessão local'}</span>
-    <UpdateButton />
     <span className="status-version" title={`JujubaSQL ${version}`}>v{version}</span>
     <nav className="status-links" aria-label="Créditos do JujubaSQL">
       {links.map(({ label, url }) => <a key={url} href={url} target="_blank" rel="noopener noreferrer"

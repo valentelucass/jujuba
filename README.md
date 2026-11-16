@@ -4,11 +4,16 @@
 
 <img src="frontend/src/assets/jujuba.png" alt="Mascote do JujubaSQL" width="112" />
 
-Aplicativo desktop Windows para explorar SQL Server, MySQL, PostgreSQL e arquivos SQLite. O Tauri abre a interface React e o backend Rust local executa as consultas.
+Aplicativo desktop Windows para explorar SQL Server, MySQL, PostgreSQL, SQLite, MongoDB e Redis. O Tauri abre a interface React e o backend Rust local executa as consultas.
 
 ## Instalar e conectar
 
-Na tela inicial, clique em **Nova conexão** e escolha o tipo de banco no centro. O painel direito destaca a sua escolha. Para MySQL e PostgreSQL, informe servidor, porta e credenciais. Para PostgreSQL, indique também um banco inicial acessível. Para SQLite, abra um arquivo existente. Os três oferecem consultas, navegação, filtros e diagrama das chaves estrangeiras. A edição de células e os dashboards continuam disponíveis no SQL Server.
+Na tela inicial, clique em **Nova conexão** e escolha o tipo de banco no centro. O painel direito mostra os bancos disponíveis e destaca a sua escolha. Para MySQL e PostgreSQL, informe servidor, porta e credenciais. Para PostgreSQL, indique também um banco inicial acessível. Para SQLite, abra um arquivo existente. Os três oferecem consultas, navegação, filtros e diagrama das chaves estrangeiras. A edição de células e os dashboards continuam disponíveis no SQL Server.
+
+### MongoDB e Redis
+
+- No MongoDB, informe uma URI `mongodb://` ou `mongodb+srv://`. Abra uma coleção para consultar documentos paginados e aplicar filtros JSON.
+- No Redis, informe uma URI `redis://` ou `rediss://`. Indique o banco na URI, como `/2`, para abrir o `db2`. Busque chaves por padrão e confira tipo, valor e expiração.
 
 ### SQL Server
 
@@ -76,7 +81,7 @@ Ao conectar com um usuário do SQL Server, marque **Lembrar senha neste PC**. Ap
 
 ## Atualizações no Windows
 
-Instale a versão 0.1.14 ou posterior uma vez. O JujubaSQL procura uma release ao abrir e mostra **Atualização disponível** no rodapé quando encontra uma versão mais recente. Abra o aviso, salve seu trabalho e clique em **Atualizar agora**. O aplicativo valida a assinatura do instalador antes de iniciá-lo e reinicia após a instalação.
+Instale a versão 0.1.14 ou posterior uma vez. O JujubaSQL procura uma release ao abrir e destaca **Atualizações** na barra superior quando encontra uma versão mais recente. Abra **Atualizações**, salve seu trabalho e clique em **Atualizar agora**. O aplicativo valida a assinatura do instalador antes de iniciá-lo e reinicia após a instalação.
 
 Para distribuir uma versão, atualize as versões do frontend e do backend, incluindo os arquivos de dependências, e envie a tag correspondente, como `v0.1.15`. O workflow **Release Windows** compila o instalador x64, assina o pacote e publica os arquivos em uma Release. A chave pública está na configuração do Tauri. A chave privada fica no secret `TAURI_SIGNING_PRIVATE_KEY` do GitHub Actions e deve ter uma cópia protegida. As instalações existentes confiam nessa chave.
 

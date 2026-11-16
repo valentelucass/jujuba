@@ -2,13 +2,13 @@ import { useRef, useState, type FormEvent } from 'react'
 import { ArrowRight, File, LoaderCircle, LockKeyhole, X } from 'lucide-react'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { appError, sql } from '../controllers/api'
-import { engines, type Engine } from '../models/engines'
+import { engines, type SqlEngine } from '../models/engines'
 import type { AppError, Connection } from '../models/sql'
 
 export function OtherConnectionForm({ engine, onClose, onConnected, loading, setLoading }: {
   loading: boolean
   setLoading: (loading: boolean) => void
-  engine: Exclude<Engine, 'sqlServer'>
+  engine: Exclude<SqlEngine, 'sqlServer'>
   onClose: () => void
   onConnected: (connection: Connection) => void
 }) {

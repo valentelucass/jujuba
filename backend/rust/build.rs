@@ -3,6 +3,11 @@ fn main() {
         tauri_build::AppManifest::new().commands(&[
             "connect",
             "choose_sqlite_file",
+            "connect_nosql",
+            "mongo_collections",
+            "mongo_documents",
+            "redis_keys",
+            "redis_entry",
             "has_saved_password",
             "forget_password",
             "disconnect",

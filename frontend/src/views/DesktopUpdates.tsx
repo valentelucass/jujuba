@@ -103,8 +103,13 @@ export function DesktopUpdates({ children }: { children: ReactNode }) {
 
 export function UpdateButton() {
   const updates = useContext(Updates)
-  if (!updates) return null
-  return <button type="button" className={`update-button${updates.available ? ' available' : ''}`} onClick={updates.open}>
-    <Download size={12} />{updates.available ? 'Atualização disponível' : 'Atualizações'}
+  if (!updates) return <a className="update-button" href="https://github.com/valentelucass/jujubasql/releases/latest"
+    aria-label="Atualizações" title="Atualizações" target="_blank" rel="noopener noreferrer">
+    <Download size={14} /><span>Atualizações</span>
+  </a>
+  const label = updates.available ? 'Atualização disponível' : 'Atualizações'
+  return <button type="button" className={`update-button${updates.available ? ' available' : ''}`}
+    aria-label={label} title={label} onClick={updates.open}>
+    <Download size={14} /><span>Atualizações</span>
   </button>
 }

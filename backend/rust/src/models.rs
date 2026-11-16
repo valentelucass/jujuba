@@ -35,6 +35,8 @@ pub enum Engine {
     Mysql,
     Postgres,
     Sqlite,
+    Mongodb,
+    Redis,
 }
 
 #[derive(Deserialize)]

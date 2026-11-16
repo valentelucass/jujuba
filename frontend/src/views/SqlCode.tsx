@@ -16,7 +16,7 @@ const sqlServer = SQLDialect.define({
   ].join(' '),
 })
 
-const dialects = { sqlServer, mysql: MySQL, postgres: PostgreSQL, sqlite: SQLite }
+const dialects: Partial<Record<Engine, SQLDialect>> = { sqlServer, mysql: MySQL, postgres: PostgreSQL, sqlite: SQLite }
 
 const colors = HighlightStyle.define([
   { tag: tags.comment, class: 'sql-comment' },
@@ -44,7 +44,7 @@ export function SqlCode({ engine, source, onChange, form }: {
       parent: parent.current,
       state: EditorState.create({
         extensions: [
-          lineNumbers(), history(), sql({ dialect: dialects[engine] }), syntaxHighlighting(colors),
+          lineNumbers(), history(), sql({ dialect: dialects[engine] ?? sqlServer }), syntaxHighlighting(colors),
           EditorView.contentAttributes.of({ 'aria-labelledby': 'sql-code-label', spellcheck: 'false' }),
           EditorState.changeFilter.of((transaction) => transaction.newDoc.length <= 32768),
           keymap.of([

@@ -35,6 +35,7 @@ pub fn validate_for(source: &str, engine: Engine) -> Result<String> {
         Engine::Mysql => &MySqlDialect {},
         Engine::Postgres => &PostgreSqlDialect {},
         Engine::Sqlite => &SQLiteDialect {},
+        Engine::Mongodb | Engine::Redis => return Err(rejected()),
     };
     let statements = Parser::parse_sql(dialect, source).map_err(|_| rejected())?;
     let [statement @ Statement::Query(_)] = statements.as_slice() else {

@@ -1,6 +1,6 @@
 [package]
 name = "jujubasql"
-version = "0.1.17"
+version = "0.1.18"
 description = "Explorador local de SQL Server"
 edition = "2021"
 build = "build.rs"
@@ -22,6 +22,9 @@ sqlparser = { version = "0.63", default-features = false, features = ["std", "vi
 sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio", "tls-native-tls", "mysql", "postgres", "sqlite", "chrono", "bigdecimal", "uuid", "json"] }
 chrono = { version = "0.4", default-features = false }
 bigdecimal = "0.4"
+base64 = "0.22"
+mongodb = "3.10.1"
+redis = { version = "1.8.2", default-features = false, features = ["tokio-native-tls-comp", "connection-manager"] }
 uuid = "1"
 tauri-plugin-dialog = { version = "2", default-features = false }
 tauri-plugin-opener = "2"

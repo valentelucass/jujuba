@@ -1,7 +1,8 @@
 use crate::{
     credentials::PasswordKey,
     error::{deadline, AppError, Result},
-    models::{ConnectInput, Connected, Engine, Scope},
+    models::{ConnectInput, Connected, Engine, Scope, Transport},
+    no_sql::NoSqlSession,
     other_db::OtherSession,
     sql_server::{
         catalog,
@@ -30,6 +31,7 @@ struct Session {
 enum SessionProfile {
     SqlServer(Arc<Profile>),
     Other(Arc<OtherSession>),
+    NoSql(Arc<NoSqlSession>),
 }
 
 impl Connections {
@@ -100,25 +102,46 @@ impl Connections {
         let revision = self.clear().await;
         let (other, endpoint, transport, databases) =
             deadline(OtherSession::connect(input)).await?;
-        let mut state = self.state.write().await;
-        if state.revision != revision {
-            return Err(AppError::new(
-                "disconnected",
-                "A conexão foi substituída ou encerrada.",
-            ));
-        }
-        state.active = Some(Session {
-            profile: SessionProfile::Other(Arc::new(other)),
-            databases: databases.iter().cloned().collect(),
-        });
-        Ok(Connected {
+        let connected = Connected {
             engine,
             session: revision,
             endpoint,
             transport,
             databases,
             password_save_failed: false,
-        })
+        };
+        self.activate(connected, SessionProfile::Other(Arc::new(other)))
+            .await
+    }
+
+    pub async fn connect_nosql(&self, engine: Engine, uri: String) -> Result<Connected> {
+        let revision = self.clear().await;
+        let (session, endpoint, databases) = deadline(NoSqlSession::open(engine, uri)).await?;
+        let connected = Connected {
+            engine,
+            session: revision,
+            endpoint,
+            transport: Transport::Network,
+            databases,
+            password_save_failed: false,
+        };
+        self.activate(connected, SessionProfile::NoSql(Arc::new(session)))
+            .await
+    }
+
+    async fn activate(&self, connected: Connected, profile: SessionProfile) -> Result<Connected> {
+        let mut state = self.state.write().await;
+        if state.revision != connected.session {
+            return Err(AppError::new(
+                "disconnected",
+                "A conexão foi substituída ou encerrada.",
+            ));
+        }
+        state.active = Some(Session {
+            profile,
+            databases: connected.databases.iter().cloned().collect(),
+        });
+        Ok(connected)
     }
 
     async fn clear(&self) -> u32 {
@@ -136,7 +159,23 @@ impl Connections {
         let state = self.state.read().await;
         match state.session(scope)? {
             SessionProfile::SqlServer(_) => Ok(None),
+            SessionProfile::NoSql(_) => Err(AppError::new(
+                "unsupported",
+                "Use o explorador deste banco.",
+            )),
+
             SessionProfile::Other(other) => Ok(Some(Arc::clone(other))),
+        }
+    }
+
+    pub async fn no_sql(&self, scope: &Scope) -> Result<Arc<NoSqlSession>> {
+        let state = self.state.read().await;
+        match state.session(scope)? {
+            SessionProfile::NoSql(session) => Ok(Arc::clone(session)),
+            _ => Err(AppError::new(
+                "unsupported",
+                "Esta operação exige uma conexão NoSQL.",
+            )),
         }
     }
 
@@ -145,7 +184,7 @@ impl Connections {
             let state = self.state.read().await;
             match state.session(scope)? {
                 SessionProfile::SqlServer(profile) => Arc::clone(profile),
-                SessionProfile::Other(_) => {
+                SessionProfile::Other(_) | SessionProfile::NoSql(_) => {
                     return Err(AppError::new(
                         "unsupported",
                         "Esta operação está disponível em conexões SQL Server.",
