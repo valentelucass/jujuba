@@ -3,9 +3,10 @@ import { Check, ChevronDown, Database, Plug, Power, Search } from 'lucide-react'
 import jujuba from '../assets/jujuba.png'
 import type { Connection, Database as DatabaseName } from '../models/sql'
 
-export function Header({ connection, database, onConnect, onDisconnect, onDatabase, tools, disconnecting }: {
+export function Header({ connection, database, onConnect, onDisconnect, onDatabase, tools, disconnecting, connecting }: {
   tools?: ReactNode
   disconnecting?: boolean
+  connecting?: boolean
   connection?: Connection
   database?: DatabaseName | null
   onConnect?: () => void
@@ -38,7 +39,7 @@ export function Header({ connection, database, onConnect, onDisconnect, onDataba
     <div className="header-divider" />
     {connection ? <button className="button header-connect" onClick={onDisconnect} disabled={disconnecting} title="Desconectar">
       <Power size={15} /><span>Desconectar</span></button> :
-      <button className="button primary header-connect" onClick={onConnect}><Plug size={15} /><span>Conectar</span></button>}
+      <button className="button primary header-connect" onClick={onConnect} disabled={connecting}><Plug size={15} /><span>Conectar</span></button>}
     <div className="database-picker" ref={dropdown}
       onKeyDown={(event) => { if (event.key === 'Escape' && open) { setOpen(false); picker.current?.focus() } }}>
       <button ref={picker} className="button database-button" aria-expanded={open} disabled={!connection}

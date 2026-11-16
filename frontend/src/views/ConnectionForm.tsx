@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { ArrowRight, Eye, EyeOff, LoaderCircle, LockKeyhole, Server, X } from 'lucide-react'
 import { appError, sql } from '../controllers/api'
 import { readConnectionPreference, rememberConnection } from '../controllers/connectionPreference'
 import { useRemote } from '../controllers/useRemote'
 import type { AppError, Authentication, Connection, Transport } from '../models/sql'
 
-export function ConnectionDialog({ onClose, onConnected }: {
+export function ConnectionForm({ onClose, onConnected, loading, setLoading }: {
+  loading: boolean
+  setLoading: (loading: boolean) => void
   onClose: () => void
   onConnected: (connection: Connection) => void
 }) {
-  const dialog = useRef<HTMLDialogElement>(null)
+
   const [saved] = useState(readConnectionPreference)
   const [transport, setTransport] = useState<Transport>(saved.transport)
   const [authentication, setAuthentication] = useState<Authentication>(saved.authentication)
@@ -22,7 +24,7 @@ export function ConnectionDialog({ onClose, onConnected }: {
   const [credentialRevision, setCredentialRevision] = useState(0)
   const loopback = ['127.0.0.1', 'localhost', '::1'].includes(host.trim().toLowerCase())
   const [showPassword, setShowPassword] = useState(false)
-  const [loading, setLoading] = useState(false)
+
   const [error, setError] = useState<AppError | null>(null)
   const profile = useMemo(() => ({
     transport,
@@ -41,9 +43,6 @@ export function ConnectionDialog({ onClose, onConnected }: {
   const hasSavedPassword = passwordStatus.status === 'ready' && passwordStatus.data
   const useSavedPassword = hasSavedPassword && manualProfile !== profileKey
 
-  useEffect(() => {
-    dialog.current?.showModal()
-  }, [])
 
   async function connect(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -85,11 +84,11 @@ export function ConnectionDialog({ onClose, onConnected }: {
     }
   }
 
-  return <dialog ref={dialog} className="connection-dialog" aria-labelledby="connection-title"
-    onCancel={(event) => { event.preventDefault(); if (!loading) onClose() }}>
+  return <section className="connection-dialog connection-form" aria-labelledby="connection-title"
+    onKeyDown={(event) => { if (event.key === 'Escape' && !loading) onClose() }}>
     <form onSubmit={connect}>
       <div className="dialog-top"><span className="quiet-icon accent-icon"><Server size={21} /></span>
-        <button type="button" className="icon-button" aria-label="Fechar" onClick={onClose} disabled={loading}><X size={18} /></button>
+        <button type="button" className="icon-button" aria-label="Voltar aos tipos de banco" onClick={onClose} disabled={loading}><X size={18} /></button>
       </div>
       <h2 id="connection-title">Conectar ao SQL Server</h2>
       <p>Escolha onde está o SQL Server e informe o login com acesso aos bancos.</p>
@@ -110,7 +109,7 @@ export function ConnectionDialog({ onClose, onConnected }: {
           {loopback && <button type="button" className="detail-link" onClick={() => { setTransport('local'); setError(null) }}>
             Conectar ao SQL Server neste computador
           </button>}
-        </> : <label>Instância local<input name="instance" value={instance} onChange={(event) => setInstance(event.target.value)} maxLength={16} placeholder="Em branco para a instância padrão"
+        </> : <label>Instância local<input name="instance" autoFocus value={instance} onChange={(event) => setInstance(event.target.value)} maxLength={16} placeholder="Em branco para a instância padrão"
           spellCheck={false} autoComplete="off" /></label>}
         <label>Autenticação<select name="authentication" value={authentication}
           onChange={(event) => { setAuthentication(event.target.value as Authentication); setShowPassword(false) }}>
@@ -144,5 +143,5 @@ export function ConnectionDialog({ onClose, onConnected }: {
         <button className="button primary" disabled={loading}>{loading ? <><LoaderCircle className="spin" size={16} /> Conectando…</> : <>Conectar <ArrowRight size={16} /></>}</button>
       </div>
     </form>
-  </dialog>
+  </section>
 }

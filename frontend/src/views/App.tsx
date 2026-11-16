@@ -1,14 +1,14 @@
-import { lazy, Suspense, useCallback, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { lazy, Suspense, useCallback, useId, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { ArrowDownRight, ArrowRight, Braces, ChartNoAxesCombined, ChevronRight, Database as DatabaseIcon, GitFork, KeyRound,
-  PanelRight, Plug, RefreshCw, Search, Server, Table2 } from 'lucide-react'
+  PanelRight, Plug, RefreshCw, Search, Table2 } from 'lucide-react'
 import { sql } from '../controllers/api'
 import { useExplorer } from '../controllers/useExplorer'
 import { useTable } from '../controllers/useTable'
 import type { Connection, Database, Relationship, Scope, Structure as TableStructure, Tab, Table, TableScope } from '../models/sql'
-import { EnginePicker } from './EnginePicker'
-import { OtherConnectionDialog } from './OtherConnectionDialog'
+import { CenterEnginePicker, SelectedEngine } from './EnginePicker'
+import { OtherConnectionForm } from './OtherConnectionForm'
 import { engines, type Engine } from '../models/engines'
-import { ConnectionDialog } from './ConnectionDialog'
+import { ConnectionForm } from './ConnectionForm'
 import jujuba from '../assets/jujuba.png'
 import { Diagram, Graph } from './Diagram'
 import { useRemote } from '../controllers/useRemote'
@@ -26,17 +26,17 @@ function Details({ children }: { children: ReactNode }) {
     <div className="details-body">{children}</div></aside>
 }
 
-function ConnectionDetails({ connection, database }: { connection?: Connection; database?: Database | null }) {
+function ConnectionDetails({ connection, database }: { connection: Connection; database?: Database | null }) {
+  const engine = engines[connection.engine]
   return <Details>
-    <div className="details-heading"><span className="quiet-icon"><Server size={17} /></span>
-      <div><h3>Conexão {engines[connection?.engine ?? 'sqlServer'].name}</h3><p>{connection ? 'Sessão ativa' : 'Aguardando conexão'}</p></div></div>
+    <div className="details-heading"><span className="engine-icon"><img src={engine.icon} alt="" /></span>
+      <div><h3>Conexão {engine.name}</h3><p>Sessão ativa</p></div></div>
     <dl>
-      {connection && <><dt>{connection.engine === 'sqlite' ? 'Arquivo' : 'Servidor'}</dt><dd>{connection.endpoint}</dd></>}
+      <dt>{connection.engine === 'sqlite' ? 'Arquivo' : 'Servidor'}</dt><dd>{connection.endpoint}</dd>
       {database && <><dt>Banco</dt><dd>{database}</dd></>}
-      <dt>Modo</dt><dd>{connection?.engine === 'sqlServer' ? 'Consulta e edição conforme permissões' : 'Consulta'}</dd>
-      <dt>Segurança</dt><dd>{connection?.engine === 'sqlite' ? 'Arquivo aberto em modo de leitura' :
-        connection?.transport === 'local' ? 'Conexão direta neste computador' :
-        connection ? 'TLS com certificado validado' : 'Validação TLS para conexões pela rede'}</dd>
+      <dt>Modo</dt><dd>{connection.engine === 'sqlServer' ? 'Consulta e edição conforme permissões' : 'Consulta'}</dd>
+      <dt>Segurança</dt><dd>{connection.engine === 'sqlite' ? 'Arquivo aberto em modo de leitura' :
+        connection.transport === 'local' ? 'Conexão direta neste computador' : 'TLS com certificado validado'}</dd>
     </dl>
   </Details>
 }
@@ -222,17 +222,20 @@ function ConnectedStudio({ connection, disconnect }: { connection: Connection; d
 
 export function App() {
   const [connection, setConnection] = useState<Connection | null>(null)
-  const [dialog, setDialog] = useState<Engine | null>(null)
+  const [step, setStep] = useState<Engine | 'picker' | 'intro'>('intro')
+  const [selectedEngine, setSelectedEngine] = useState<Engine | null>(null)
+  const [loading, setLoading] = useState(false)
 
-  const enginePicker = useRef<HTMLButtonElement>(null)
+  const openPicker = () => setStep('picker')
 
-  function chooseEngine() {
-    enginePicker.current?.focus()
+  function chooseEngine(engine: Engine) {
+    setSelectedEngine(engine)
+    setStep(engine)
   }
 
   function connected(active: Connection) {
     setConnection(active)
-    setDialog(null)
+    setStep('intro')
   }
 
   if (connection) return <ConnectedStudio key={connection.session} connection={connection} disconnect={async () => {
@@ -240,22 +243,24 @@ export function App() {
   }} />
 
   return <>
-    <Header onConnect={chooseEngine} />
+    <Header onConnect={openPicker} connecting={loading} />
     <StudioLayout items={[]} connected={false}>
       <main className="workspace welcome">
-        <div className="welcome-content">
+        {step === 'intro' && <div className="welcome-content welcome-intro">
+          <div className="welcome-mark" aria-hidden="true"><img src={jujuba} alt="" /></div>
           <div className="welcome-copy">
             <h1>Conecte a um banco de dados</h1>
             <p>Consulte os bancos, explore tabelas e visualize seus relacionamentos.</p>
-            <button className="button primary" onClick={chooseEngine}><Plug size={16} /> Nova conexão <ArrowRight size={16} /></button>
+            <button className="button primary" onClick={openPicker}><Plug size={16} /> Nova conexão <ArrowRight size={16} /></button>
           </div>
-          <div className="welcome-mark" aria-hidden="true"><img src={jujuba} alt="" /></div>
-        </div>
+        </div>}
+        {step === 'picker' && <CenterEnginePicker selected={selectedEngine} choose={chooseEngine} back={() => setStep('intro')} />}
+        {step === 'sqlServer' && <ConnectionForm onClose={openPicker} onConnected={connected} loading={loading} setLoading={setLoading} />}
+        {step !== 'intro' && step !== 'picker' && step !== 'sqlServer' && <OtherConnectionForm key={step} engine={step}
+          onClose={openPicker} onConnected={connected} loading={loading} setLoading={setLoading} />}
       </main>
-      <EnginePicker choose={setDialog} firstButton={enginePicker} />
+      <SelectedEngine engine={selectedEngine} />
     </StudioLayout>
     <StatusBar />
-    {dialog === 'sqlServer' && <ConnectionDialog onClose={() => setDialog(null)} onConnected={connected} />}
-    {dialog && dialog !== 'sqlServer' && <OtherConnectionDialog engine={dialog} onClose={() => setDialog(null)} onConnected={connected} />}
   </>
 }

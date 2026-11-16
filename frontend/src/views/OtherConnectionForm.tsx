@@ -1,25 +1,26 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { ArrowRight, File, LoaderCircle, LockKeyhole, X } from 'lucide-react'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { appError, sql } from '../controllers/api'
 import { engines, type Engine } from '../models/engines'
 import type { AppError, Connection } from '../models/sql'
 
-export function OtherConnectionDialog({ engine, onClose, onConnected }: {
+export function OtherConnectionForm({ engine, onClose, onConnected, loading, setLoading }: {
+  loading: boolean
+  setLoading: (loading: boolean) => void
   engine: Exclude<Engine, 'sqlServer'>
   onClose: () => void
   onConnected: (connection: Connection) => void
 }) {
-  const dialog = useRef<HTMLDialogElement>(null)
+
   const file = useRef<HTMLInputElement>(null)
   const [host, setHost] = useState('localhost')
-  const [loading, setLoading] = useState(false)
+
   const [error, setError] = useState<AppError | null>(null)
   const info = engines[engine]
   const localFile = engine === 'sqlite'
   const loopback = ['localhost', '127.0.0.1', '::1'].includes(host.trim().toLowerCase())
 
-  useEffect(() => { dialog.current?.showModal() }, [])
 
   async function chooseFile() {
     try {
@@ -55,11 +56,11 @@ export function OtherConnectionDialog({ engine, onClose, onConnected }: {
     }
   }
 
-  return <dialog ref={dialog} className="connection-dialog" aria-labelledby="connection-title"
-    onCancel={(event) => { event.preventDefault(); if (!loading) onClose() }}>
+  return <section className="connection-dialog connection-form" aria-labelledby="connection-title"
+    onKeyDown={(event) => { if (event.key === 'Escape' && !loading) onClose() }}>
     <form onSubmit={connect}>
       <div className="dialog-top"><span className="engine-icon"><img src={info.icon} alt="" /></span>
-        <button type="button" className="icon-button" aria-label="Fechar" onClick={onClose} disabled={loading}><X size={18} /></button>
+        <button type="button" className="icon-button" aria-label="Voltar aos tipos de banco" onClick={onClose} disabled={loading}><X size={18} /></button>
       </div>
       <h2 id="connection-title">{localFile ? 'Abrir SQLite' : 'Conectar ao ' + info.name}</h2>
       <p>{localFile ? 'Escolha um arquivo de banco SQLite existente.' : 'Informe o servidor e o usuário com acesso ao banco.'}</p>
@@ -88,5 +89,5 @@ export function OtherConnectionDialog({ engine, onClose, onConnected }: {
           <>{localFile ? 'Abrir arquivo' : 'Conectar'} <ArrowRight size={16} /></>}</button>
       </div>
     </form>
-  </dialog>
+  </section>
 }

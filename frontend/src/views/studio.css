@@ -504,14 +504,31 @@ code { font-family: var(--mono); }
 .dashboard-request-heading h2 { font-size: 15px; }
 .dashboard-blocker { color: var(--berry-text); font-weight: 650; }
 
-.engine-panel-note { color: var(--muted); font-size: 12px; line-height: 1.45; margin-bottom: 12px; }
 .engine-list { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
 .engine-option { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; width: 100%; align-items: center; gap: 9px; text-align: left; padding: 8px; min-height: 49px; color: inherit; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; }
-.engine-option:hover, .engine-option:focus { border-color: var(--berry-line); background: var(--berry-selected); outline: none; }
+.engine-option:hover, .engine-option:focus-visible, .engine-option[aria-current="true"] { border-color: var(--berry-line); background: var(--berry-selected); outline: none; }
 .engine-option strong { font-size: 12px; font-weight: 650; overflow-wrap: anywhere; }
 .engine-option > svg { color: var(--muted); }
 .engine-icon { display: inline-grid; place-items: center; flex: 0 0 auto; width: 32px; height: 32px; border-radius: 7px; background: #f2f4f4; }
 .engine-icon img { width: 24px; height: 24px; object-fit: contain; }
+.engine-option[aria-current="true"] > svg { color: var(--berry); }
+.welcome:has(> :is(.welcome-intro, .welcome-engines, .connection-form)) { overflow: auto; justify-content: safe center; padding-block: 16px; }
+.welcome .welcome-intro, .welcome .welcome-engines { display: grid; grid-template-columns: minmax(0, 1fr); width: min(90%, 640px); }
+.welcome .welcome-intro { justify-items: center; text-align: center; }
+.welcome-intro p { margin-inline: auto; }
+.welcome .welcome-mark { grid-row: auto; justify-self: center; width: clamp(145px, 34cqw, 310px); }
+.welcome-engines .welcome-mark { max-width: 245px; }
+.welcome-picker-heading + .engine-list { margin-top: 0; }
+.welcome-picker-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 19px; text-align: left; }
+.welcome-picker-heading h1 { font-size: clamp(23px, 3vw, 32px); outline: none; }
+.welcome-engines .engine-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.welcome-engines .engine-option { min-height: 56px; }
+.welcome .connection-form { width: min(90%, 465px); max-height: none; overflow: visible; flex: 0 0 auto; }
+.welcome .connection-form p { margin: 0; font-size: inherit; max-width: none; }
+.engine-selection { cursor: default; }
+@container (max-width: 395px) {
+  .welcome-engines .engine-list { grid-template-columns: minmax(0, 1fr); }
+}
 .sqlite-file-field { display: flex; gap: 8px; align-items: stretch; }
 .sqlite-file-field input { min-width: 0; flex: 1; }
 @media (max-width: 760px) {
