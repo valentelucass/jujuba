@@ -57,7 +57,7 @@ pub async fn diagram_open(app: AppHandle) -> Result<Option<Opened>> {
     let dialog = app
         .dialog()
         .file()
-        .add_filter("Diagrama do JujubaSQL", &["json"]);
+        .add_filter("Fluxograma do JujubaSQL", &["json"]);
     let path = choose(dialog, FileDialogBuilder::pick_file).await?;
     path.as_deref().map(files::open).transpose()
 }
@@ -76,8 +76,8 @@ pub async fn diagram_save(
     let dialog = app
         .dialog()
         .file()
-        .add_filter("Diagrama do JujubaSQL", &["json"])
-        .set_file_name("diagrama.jujuba.json");
+        .add_filter("Fluxograma do JujubaSQL", &["json"])
+        .set_file_name("fluxograma.jujuba.json");
     let Some(path) = choose(dialog, FileDialogBuilder::save_file).await? else {
         return Ok(None);
     };
@@ -100,7 +100,7 @@ pub async fn diagram_markdown(app: AppHandle, diagram: Diagram) -> Result<Option
         .dialog()
         .file()
         .add_filter("Markdown", &["md"])
-        .set_file_name("DIAGRAMA.md");
+        .set_file_name("FLUXOGRAMA.md");
     let Some(path) = choose(dialog, FileDialogBuilder::save_file).await? else {
         return Ok(None);
     };

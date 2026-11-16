@@ -77,7 +77,7 @@ impl Diagram {
             || !list(&self.requirements)
             || !list(&self.open_questions)
         {
-            return Err(invalid("Confira o título e o tamanho do diagrama."));
+            return Err(invalid("Confira o título e o tamanho do fluxograma."));
         }
 
         let mut kinds = HashMap::new();

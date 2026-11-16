@@ -150,7 +150,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
           <p>{turn.content}</p>
           {turn.diagram && <button className="button design-accent" onClick={() => {
             if (turn.diagram && onDiagram(turn.diagram, turn.revisionOf ?? null)) close()
-          }}>Abrir diagrama no editor</button>}
+          }}>Abrir fluxograma no editor</button>}
         </li>)}
         <li className="assistant-scroll-anchor" aria-hidden="true" ref={end} />
       </ol>
@@ -165,7 +165,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
               aria-label={'Remover ' + name}><X size={12} /></button>
           </li>)}
         </ul>}
-        <textarea ref={composer} rows={3} aria-label="Mensagem para o assistente" placeholder="Ex. Construa o diagrama do cadastro"
+        <textarea ref={composer} rows={3} aria-label="Mensagem para o assistente" placeholder="Ex. Construa o fluxograma do cadastro"
           value={draft} maxLength={4000} disabled={!!busy} onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); send() } }} />
         <div className="assistant-compose-actions">

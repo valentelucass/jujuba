@@ -52,7 +52,7 @@ pub fn open(path: &Path) -> Result<Opened> {
     let path = diagram_path(path)?;
     let bytes = read(&path)?;
     let contents: FileDiagram = serde_json::from_slice(&bytes)
-        .map_err(|_| invalid("O arquivo não é um diagrama do JujubaSQL válido."))?;
+        .map_err(|_| invalid("O arquivo não é um fluxograma do JujubaSQL válido."))?;
     if contents.format != FORMAT {
         return Err(invalid(
             "O formato deste arquivo precisa de outra versão do JujubaSQL.",
@@ -131,7 +131,7 @@ fn read(path: &Path) -> Result<Vec<u8>> {
         .read_to_end(&mut bytes)
         .map_err(|_| file_error())?;
     if bytes.len() as u64 > MAX_FILE {
-        return Err(invalid("O arquivo é grande demais para um diagrama."));
+        return Err(invalid("O arquivo é grande demais para um fluxograma."));
     }
     Ok(bytes)
 }
@@ -146,7 +146,7 @@ fn write(path: &Path, bytes: &[u8], replace: bool) -> Result<()> {
     } else {
         temp.persist_noclobber(path).map_err(|failure| {
             if failure.error.kind() == std::io::ErrorKind::AlreadyExists {
-                invalid("Já existe um diagrama com esse nome. Abra-o ou escolha outro nome.")
+                invalid("Já existe um fluxograma com esse nome. Abra-o ou escolha outro nome.")
             } else {
                 file_error()
             }
@@ -250,7 +250,7 @@ fn safe_relative_path(path: &str) -> bool {
 }
 
 fn changed() -> AppError {
-    invalid("O arquivo mudou no disco. Abra o diagrama novamente para usar a versão atual.")
+    invalid("O arquivo mudou no disco. Abra o fluxograma novamente para usar a versão atual.")
 }
 fn file_error() -> AppError {
     AppError::new(

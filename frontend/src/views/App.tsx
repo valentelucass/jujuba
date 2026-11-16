@@ -245,7 +245,7 @@ export function App() {
   const [databaseScreen, setDatabaseScreen] = useState('Bancos de dados')
   const [currentDiagram, setCurrentDiagram] = useState<SystemDiagram | null>(null)
   const [assistantDiagram, setAssistantDiagram] = useState<{ diagram: SystemDiagram; revisionOf: SystemDiagram | null } | null>(null)
-  const screen = diagrams ? 'Diagramas de sistema' : connection ? databaseScreen :
+  const screen = diagrams ? 'Fluxogramas de sistema' : connection ? databaseScreen :
     step === 'intro' ? 'Tela inicial' : step === 'picker' ? 'Seleção de banco' : 'Conexão · ' + engines[step].name
   const openPicker = () => setStep('picker')
 
@@ -255,7 +255,7 @@ export function App() {
   }
 
   function applyAssistantDiagram(diagram: SystemDiagram, revisionOf: SystemDiagram | null) {
-    if (currentDiagram && currentDiagram !== revisionOf && !window.confirm('Abrir o diagrama do assistente e substituir o diagrama atual no editor?')) return false
+    if (currentDiagram && currentDiagram !== revisionOf && !window.confirm('Abrir o fluxograma do assistente e substituir o fluxo atual no editor?')) return false
     setAssistantDiagram({ diagram, revisionOf })
     openDiagrams()
     return true

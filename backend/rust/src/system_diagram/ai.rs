@@ -313,6 +313,7 @@ async fn generate<T: DeserializeOwned>(
                     "json",
                     "--approval-mode",
                     "plan",
+                    "--skip-trust", // This working directory is created by JujubaSQL for this request.
                     "--extensions",
                     "none",
                     "--allowed-mcp-server-names",
@@ -557,6 +558,14 @@ async fn run(
         .map_err(|_| process_error(provider))?;
     if !status.success() {
         let diagnostic = format!("{stderr}\n{stdout}").to_lowercase();
+        if matches!(provider, Provider::Gemini)
+            && diagnostic.contains("not running in a trusted directory")
+        {
+            return Err(AppError::new(
+                "ai",
+                "Abra o Gemini CLI na pasta do projeto e marque essa pasta como confiável.",
+            ));
+        }
         if [
             "log in",
             "logged out",
@@ -600,7 +609,7 @@ async fn run(
             return Err(AppError::with_message(
                 "ai",
                 format!(
-                    "Atualize {} para usar a geração de diagramas.",
+                    "Atualize {} para usar a geração de fluxogramas.",
                     provider.name()
                 ),
             ));

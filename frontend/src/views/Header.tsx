@@ -67,7 +67,7 @@ export function Header({ connection, database, onConnect, onDisconnect, onDataba
     </div>
     </>}
     {onDiagrams && <button className="button system-tab" aria-pressed={!!diagramActive}
-      onClick={diagramActive ? undefined : onDiagrams}><GitBranch size={15} />Diagramas</button>}
+      onClick={diagramActive ? undefined : onDiagrams}><GitBranch size={15} />Fluxogramas</button>}
     {tools}
     <div className="header-spacer" />
     <button className="icon-button theme-toggle" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}

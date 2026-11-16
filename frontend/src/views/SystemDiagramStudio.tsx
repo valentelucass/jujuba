@@ -114,23 +114,23 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
 
   async function open() {
     if (!confirmDiscard()) return
-    await perform('Abrindo diagrama…', async () => {
+    await perform('Abrindo fluxograma…', async () => {
       const opened = await systemDiagram.open()
       if (opened) {
         replace(opened.diagram, opened.project, false)
-        setNotice('Diagrama aberto.')
+        setNotice('Fluxograma aberto.')
       }
     })
   }
 
   function save() {
     if (!diagram) return
-    void perform('Salvando diagrama…', async () => {
+    void perform('Salvando fluxograma…', async () => {
       const saved = await systemDiagram.save(diagram, project)
       if (saved) {
         setProject(saved)
         setDirty(false)
-        setNotice('Diagrama salvo.')
+        setNotice('Fluxograma salvo.')
       }
     })
   }
@@ -163,11 +163,11 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
 
   return <>
     <Header onDiagrams={exit} diagramActive />
-    <main className="system-design" aria-label="Diagramas de sistema">
+    <main className="system-design" aria-label="Fluxogramas de sistema">
       <header className="system-design-toolbar">
         <div className="system-doc">
-          <h1><GitBranch size={19} />{diagram?.title || 'Diagramas de sistema'}</h1>
-          {project ? <code title={project.path}>{project.path}</code> : <small>{diagram ? 'Diagrama ainda sem arquivo' : 'Planeje o fluxo antes de implementar.'}</small>}
+          <h1><GitBranch size={19} />{diagram?.title || 'Fluxogramas de sistema'}</h1>
+          {project ? <code title={project.path}>{project.path}</code> : <small>{diagram ? 'Fluxograma ainda sem arquivo' : 'Planeje o fluxo antes de implementar.'}</small>}
         </div>
         <div className="system-doc-actions">
           <button className="button" disabled={!!busy} onClick={newDiagram}><FilePlus2 size={15} />Novo</button>
@@ -184,12 +184,12 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
           choose={(id) => { setSelected(id); if (id) setTab('flow') }} connect={addEdge}
           move={moveStep} disabled={!!busy} />
         <aside className="system-design-panel system-inspector">
-          <div className="system-panel-tabs" aria-label="Detalhes do diagrama">
+          <div className="system-panel-tabs" aria-label="Detalhes do fluxograma">
             <button className="button" aria-pressed={tab === 'flow'} onClick={() => setTab('flow')}><GitBranch size={14} />Fluxo</button>
             <button className="button" aria-pressed={tab === 'code'} onClick={() => setTab('code')}><Braces size={14} />Código</button>
           </div>
           {tab === 'flow' ? <>
-            <div className="flow-edit-actions" aria-label="Edição do diagrama">
+            <div className="flow-edit-actions" aria-label="Edição do fluxograma">
               <button className="icon-button" disabled={!!busy || !history.past.length}
                 aria-label="Desfazer" title="Desfazer" onClick={() => restore('past')}><Undo2 size={16} /></button>
               <button className="icon-button" disabled={!!busy || !history.future.length}
@@ -201,7 +201,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
               select={setSelected} update={edit} addEdge={addEdge} disabled={!!busy} />
           </> :
             <fieldset className="system-form" disabled={!!busy}>
-              {(!project || dirty) && <p className="system-hint">Salve o diagrama antes de gerar a implementação.</p>}
+              {(!project || dirty) && <p className="system-hint">Salve o fluxograma antes de gerar a implementação.</p>}
               <label>Tecnologia e instruções<textarea value={technology} maxLength={4000} rows={4}
                 placeholder="Ex. HTML, CSS e JavaScript, com validação e instruções de uso."
                 onChange={(event) => setTechnology(event.target.value)} /></label>

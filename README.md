@@ -27,7 +27,7 @@ O login deve conseguir abrir o catálogo `master` para descobrir os bancos. Em c
 
 ## Planejar um sistema com IA
 
-O ícone do assistente no canto inferior direito abre o mesmo chat em todas as telas. Descreva o fluxo ou anexe até quatro documentos de texto, como Markdown, TXT, JSON ou CSV. O assistente reconhece a tela atual e pode propor um fluxograma de sistema. Use **Abrir diagrama no editor** para revisar. Em **Diagramas**, use as formas e as ferramentas do painel direito para desenhar manualmente. Arraste as etapas, edite as conexões e use **Desfazer**, **Refazer** ou **Organizar** quando precisar. O arquivo `.jujuba.json` guarda o fluxo e as posições. Você também pode exportar Markdown com Mermaid.
+O ícone do assistente no canto inferior direito abre o mesmo chat em todas as telas. Descreva o fluxo ou anexe até quatro documentos de texto, como Markdown, TXT, JSON ou CSV. O assistente reconhece a tela atual e pode propor um fluxograma de sistema. Use **Abrir fluxograma no editor** para revisar. Em **Fluxogramas**, use as formas e as ferramentas do painel direito para desenhar manualmente. Arraste as etapas, edite as conexões e use **Desfazer**, **Refazer** ou **Organizar** quando precisar. O arquivo `.jujuba.json` guarda o fluxo e as posições. Você também pode exportar Markdown com Mermaid.
 
 Para usar a conta de um assistente, instale o cliente oficial no Windows e entre nele primeiro. Em seguida, selecione-o no chat e clique em **Conexão → Verificar assistente**.
 
@@ -35,7 +35,7 @@ Para usar a conta de um assistente, instale o cliente oficial no Windows e entre
 - **Claude** usa o Claude Code instalado no computador. Abra `claude` e siga a instrução de login. [Instalação e login do Claude Code](https://code.claude.com/docs/en/quickstart)
 - **Gemini** usa o Gemini CLI instalado no computador. Abra `gemini` e escolha entrar com o Google para autenticar o cliente. Para editar código, marque a pasta do projeto como confiável no Gemini CLI. [Autenticação do Gemini CLI](https://geminicli.com/docs/get-started/authentication/)
 
-Em **Código**, o assistente usa o fluxograma salvo para criar uma primeira implementação. Revise a prévia e escolha onde salvar os arquivos. No chat, clique no ícone de pasta para escolher um projeto e peça ajuda para entender ou editar seus arquivos. Ao enviar da tela **Diagramas**, o fluxo aberto acompanha o pedido. Os clientes usam a sessão configurada no Windows e enviam o pedido e o contexto de trabalho ao serviço escolhido.
+Em **Código**, o assistente usa o fluxograma salvo para criar uma primeira implementação. Revise a prévia e escolha onde salvar os arquivos. No chat, clique no ícone de pasta para escolher um projeto e peça ajuda para entender ou editar seus arquivos. Ao enviar da tela **Fluxogramas**, o fluxo aberto acompanha o pedido. Os clientes usam a sessão configurada no Windows e enviam o pedido e o contexto de trabalho ao serviço escolhido.
 
 Use o ícone do sol ou da lua na barra superior para trocar entre fundo branco e preto. O aplicativo lembra a sua escolha.
 
