@@ -326,6 +326,9 @@ mod tests {
             "host:1433",
         ] {
             let result = Profile::new(ConnectInput {
+                engine: Default::default(),
+                database: None,
+                path: None,
                 host: host.to_owned(),
                 port: 1433,
                 transport: Transport::Network,
@@ -346,6 +349,9 @@ mod tests {
             (Some("SQLEXPRESS"), Some("SQLEXPRESS")),
         ] {
             let profile = Profile::new(ConnectInput {
+                engine: Default::default(),
+                database: None,
+                path: None,
                 host: String::new(),
                 port: 0,
                 transport: Transport::Local,
@@ -365,6 +371,9 @@ mod tests {
     #[ignore = "requer uma instância SQL Server local com memória compartilhada"]
     fn local_connection_reaches_authentication() {
         let profile = Profile::new(ConnectInput {
+                engine: Default::default(),
+                database: None,
+                path: None,
             host: String::new(),
             port: 0,
             transport: Transport::Local,
@@ -387,6 +396,9 @@ mod tests {
         let host = std::env::var("JUJUBASQL_TEST_UNTRUSTED_SQL_HOST")
             .expect("informar o DNS do SQL Server de teste");
         let profile = Profile::new(ConnectInput {
+                engine: Default::default(),
+                database: None,
+                path: None,
             host,
             port: 1433,
             transport: Transport::Network,

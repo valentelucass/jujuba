@@ -2,6 +2,7 @@ fn main() {
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "connect",
+            "choose_sqlite_file",
             "has_saved_password",
             "forget_password",
             "disconnect",

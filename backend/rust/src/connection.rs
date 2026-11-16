@@ -1,7 +1,8 @@
 use crate::{
     credentials::PasswordKey,
     error::{deadline, AppError, Result},
-    models::{ConnectInput, Connected, Scope},
+    models::{ConnectInput, Connected, Engine, Scope},
+    other_db::OtherSession,
     sql_server::{
         catalog,
         connection::{Profile, SqlClient},
@@ -22,8 +23,13 @@ struct ConnectionState {
 }
 
 struct Session {
-    profile: Arc<Profile>,
+    profile: SessionProfile,
     databases: HashSet<String>,
+}
+
+enum SessionProfile {
+    SqlServer(Arc<Profile>),
+    Other(Arc<OtherSession>),
 }
 
 impl Connections {
@@ -33,6 +39,9 @@ impl Connections {
         use_saved: bool,
         remember: bool,
     ) -> Result<Connected> {
+        if input.engine != Engine::SqlServer {
+            return self.connect_other(input).await;
+        }
         let key = PasswordKey::for_input(&input);
         let saved = if use_saved && input.password.is_none() {
             Some(
@@ -73,15 +82,42 @@ impl Connections {
                 .zip(profile.sql_password())
                 .is_some_and(|(key, password)| key.save(password).is_err());
         state.active = Some(Session {
-            profile,
+            profile: SessionProfile::SqlServer(profile),
             databases: databases.iter().cloned().collect(),
         });
         Ok(Connected {
+            engine: Engine::SqlServer,
             session: revision,
             endpoint,
             transport,
             databases,
             password_save_failed,
+        })
+    }
+
+    async fn connect_other(&self, input: ConnectInput) -> Result<Connected> {
+        let engine = input.engine;
+        let revision = self.clear().await;
+        let (other, endpoint, transport, databases) =
+            deadline(OtherSession::connect(input)).await?;
+        let mut state = self.state.write().await;
+        if state.revision != revision {
+            return Err(AppError::new(
+                "disconnected",
+                "A conexão foi substituída ou encerrada.",
+            ));
+        }
+        state.active = Some(Session {
+            profile: SessionProfile::Other(Arc::new(other)),
+            databases: databases.iter().cloned().collect(),
+        });
+        Ok(Connected {
+            engine,
+            session: revision,
+            endpoint,
+            transport,
+            databases,
+            password_save_failed: false,
         })
     }
 
@@ -96,24 +132,46 @@ impl Connections {
         self.clear().await;
     }
 
+    pub async fn other(&self, scope: &Scope) -> Result<Option<Arc<OtherSession>>> {
+        let state = self.state.read().await;
+        match state.session(scope)? {
+            SessionProfile::SqlServer(_) => Ok(None),
+            SessionProfile::Other(other) => Ok(Some(Arc::clone(other))),
+        }
+    }
+
     pub async fn open_database(&self, scope: &Scope) -> Result<SqlClient> {
         let profile = {
             let state = self.state.read().await;
-            let session = state
-                .active
-                .as_ref()
-                .filter(|_| state.revision == scope.session)
-                .ok_or_else(|| {
-                    AppError::new(
-                        "disconnected",
-                        "A conexão foi encerrada. Conecte novamente.",
-                    )
-                })?;
-            if !session.databases.contains(&scope.database) {
-                return Err(AppError::denied());
+            match state.session(scope)? {
+                SessionProfile::SqlServer(profile) => Arc::clone(profile),
+                SessionProfile::Other(_) => {
+                    return Err(AppError::new(
+                        "unsupported",
+                        "Esta operação está disponível em conexões SQL Server.",
+                    ))
+                }
             }
-            Arc::clone(&session.profile)
         };
         profile.open(&scope.database).await
+    }
+}
+
+impl ConnectionState {
+    fn session(&self, scope: &Scope) -> Result<&SessionProfile> {
+        let session = self
+            .active
+            .as_ref()
+            .filter(|_| self.revision == scope.session)
+            .ok_or_else(|| {
+                AppError::new(
+                    "disconnected",
+                    "A conexão foi encerrada. Conecte novamente.",
+                )
+            })?;
+        if !session.databases.contains(&scope.database) {
+            return Err(AppError::denied());
+        }
+        Ok(&session.profile)
     }
 }

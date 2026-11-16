@@ -1,17 +1,17 @@
 use crate::{
     connection::Connections,
     error::{deadline, AppError, Result},
-    models::{QueryOutput, Scope},
+    models::{Engine, QueryOutput, Scope},
 };
 use sqlparser::{
     ast::{Query, SetExpr, Statement, TableFactor, Visit, Visitor},
-    dialect::MsSqlDialect,
+    dialect::{Dialect, MsSqlDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect},
     parser::Parser,
 };
 use std::ops::ControlFlow;
 
 pub async fn read(connections: &Connections, scope: Scope, source: String) -> Result<QueryOutput> {
-    let statement = validate(&source)?;
+    let statement = validate_for(&source, Engine::SqlServer)?;
     deadline(async {
         let mut client = connections.open_database(&scope).await?;
         client.read_editor(&statement).await
@@ -26,11 +26,17 @@ fn rejected() -> AppError {
     )
 }
 
-fn validate(source: &str) -> Result<String> {
+pub fn validate_for(source: &str, engine: Engine) -> Result<String> {
     if source.len() > 32_768 {
         return Err(AppError::new("input", "A consulta excede 32 KB."));
     }
-    let statements = Parser::parse_sql(&MsSqlDialect {}, source).map_err(|_| rejected())?;
+    let dialect: &dyn Dialect = match engine {
+        Engine::SqlServer => &MsSqlDialect {},
+        Engine::Mysql => &MySqlDialect {},
+        Engine::Postgres => &PostgreSqlDialect {},
+        Engine::Sqlite => &SQLiteDialect {},
+    };
+    let statements = Parser::parse_sql(dialect, source).map_err(|_| rejected())?;
     let [statement @ Statement::Query(_)] = statements.as_slice() else {
         return Err(rejected());
     };
@@ -80,7 +86,11 @@ fn read_body(body: &SetExpr) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::validate;
+    use super::{validate_for, Engine};
+
+    fn validate(source: &str) -> crate::error::Result<String> {
+        validate_for(source, Engine::SqlServer)
+    }
 
     #[test]
     fn accepts_select_and_rejects_mutation_and_external_sources() {

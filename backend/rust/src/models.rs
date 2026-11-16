@@ -4,6 +4,10 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct ConnectInput {
     #[serde(default)]
+    pub engine: Engine,
+    pub database: Option<String>,
+    pub path: Option<String>,
+    #[serde(default)]
     pub host: String,
     #[serde(default)]
     pub port: u16,
@@ -23,6 +27,16 @@ pub enum Transport {
     Local,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum Engine {
+    #[default]
+    SqlServer,
+    Mysql,
+    Postgres,
+    Sqlite,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Authentication {
@@ -33,6 +47,7 @@ pub enum Authentication {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Connected {
+    pub engine: Engine,
     pub session: u32,
     pub endpoint: String,
     pub transport: Transport,

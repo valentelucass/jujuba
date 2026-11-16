@@ -1,12 +1,13 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
-import { MSSQL, SQLDialect, sql } from '@codemirror/lang-sql'
+import { MSSQL, MySQL, PostgreSQL, SQLite, SQLDialect, sql } from '@codemirror/lang-sql'
 import { EditorState } from '@codemirror/state'
 import { EditorView, keymap, lineNumbers } from '@codemirror/view'
 import { tags } from '@lezer/highlight'
+import type { Engine } from '../models/engines'
 
-const dialect = SQLDialect.define({
+const sqlServer = SQLDialect.define({
   ...MSSQL.spec,
   charSetCasts: true,
   builtin: [
@@ -14,6 +15,8 @@ const dialect = SQLDialect.define({
     'isnull getdate sysdatetime dateadd datediff datepart concat string_agg row_number',
   ].join(' '),
 })
+
+const dialects = { sqlServer, mysql: MySQL, postgres: PostgreSQL, sqlite: SQLite }
 
 const colors = HighlightStyle.define([
   { tag: tags.comment, class: 'sql-comment' },
@@ -27,7 +30,8 @@ const colors = HighlightStyle.define([
   { tag: tags.operator, class: 'sql-operator' },
 ])
 
-export function SqlCode({ source, onChange, form }: {
+export function SqlCode({ engine, source, onChange, form }: {
+  engine: Engine
   source: string
   onChange: (value: string) => void
   form: RefObject<HTMLFormElement | null>
@@ -40,7 +44,7 @@ export function SqlCode({ source, onChange, form }: {
       parent: parent.current,
       state: EditorState.create({
         extensions: [
-          lineNumbers(), history(), sql({ dialect }), syntaxHighlighting(colors),
+          lineNumbers(), history(), sql({ dialect: dialects[engine] }), syntaxHighlighting(colors),
           EditorView.contentAttributes.of({ 'aria-labelledby': 'sql-code-label', spellcheck: 'false' }),
           EditorState.changeFilter.of((transaction) => transaction.newDoc.length <= 32768),
           keymap.of([
@@ -55,7 +59,7 @@ export function SqlCode({ source, onChange, form }: {
     })
     view.current = editor
     return () => { view.current = null; editor.destroy() }
-  }, [form, onChange])
+  }, [engine, form, onChange])
 
   useEffect(() => {
     const editor = view.current

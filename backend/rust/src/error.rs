@@ -59,5 +59,5 @@ impl From<tiberius::error::Error> for AppError {
 pub async fn deadline<T>(operation: impl Future<Output = Result<T>>) -> Result<T> {
     tokio::time::timeout(Duration::from_secs(25), operation)
         .await
-        .map_err(|_| AppError::new("timeout", "O SQL Server demorou demais para responder."))?
+        .map_err(|_| AppError::new("timeout", "O banco de dados demorou demais para responder."))?
 }

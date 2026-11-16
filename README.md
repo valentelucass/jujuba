@@ -4,9 +4,13 @@
 
 <img src="frontend/src/assets/jujuba.png" alt="Mascote do JujubaSQL" width="112" />
 
-Aplicativo desktop Windows para consultar bancos de uma instância do SQL Server. O Tauri abre a interface React e executa as consultas e alterações autorizadas no backend Rust local.
+Aplicativo desktop Windows para explorar SQL Server, MySQL, PostgreSQL e arquivos SQLite. O Tauri abre a interface React e o backend Rust local executa as consultas.
 
 ## Instalar e conectar
+
+Na tela inicial, escolha o tipo de banco no painel direito. Para MySQL e PostgreSQL, informe servidor, porta e credenciais. Para PostgreSQL, indique também um banco inicial acessível. Para SQLite, abra um arquivo existente. Os três oferecem consultas, navegação, filtros e diagrama das chaves estrangeiras. A edição de células e os dashboards continuam disponíveis no SQL Server.
+
+### SQL Server
 
 1. Execute o instalador x64 do JujubaSQL. O aplicativo usa o runtime gratuito Microsoft Edge WebView2. O instalador pode baixar o runtime se ele ainda não estiver no Windows.
 2. Abra o JujubaSQL pelo menu Iniciar e selecione **Conectar**.
@@ -90,6 +94,8 @@ Com a conexão aprovada, selecione `ETL_SISTEMA` e `ETL_SISTEMA_V2` se ambos est
 - A descoberta dos bancos e a abertura de tabelas pela conexão local foram verificadas no Windows. Valide o catálogo completo e eventuais gravações em um banco de teste autorizado.
 
 ## Referências
+
+- Ícones dos bancos de dados de [Devicon](https://github.com/devicons/devicon/tree/v2.17.0), com licença em `frontend/src/assets/devicon-LICENSE.txt`.
 
 - [ByteTable, commit a56ee2d](https://github.com/Rezwanul-Haque/byteTable/tree/a56ee2db01389ae24fbb8b64a3ffddb13375ec45) para arquitetura, catálogo e grade.
 - [VeloxDB, commit ed58ff7](https://github.com/veloxbase/veloxdb/tree/ed58ff79acba554dd56444e54f6cdca64dede246) para árvore e diagrama.

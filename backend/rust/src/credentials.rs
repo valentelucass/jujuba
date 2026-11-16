@@ -16,7 +16,7 @@ pub struct PasswordKey(Vec<u16>);
 
 impl PasswordKey {
     pub fn for_input(input: &ConnectInput) -> Option<Self> {
-        if !matches!(input.authentication, Authentication::Sql) {
+        if input.engine != crate::models::Engine::SqlServer || !matches!(input.authentication, Authentication::Sql) {
             return None;
         }
         let user = input.username.as_deref()?.trim();
@@ -159,6 +159,9 @@ mod tests {
     fn windows_vault_remembers_and_forgets_only_the_matching_login() {
         let suffix = format!("credential-test-{}", std::process::id());
         let profile = |username: String, port| ConnectInput {
+            engine: Default::default(),
+            database: None,
+            path: None,
             host: "localhost.example".into(),
             port,
             transport: Transport::Network,

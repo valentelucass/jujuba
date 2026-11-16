@@ -1,10 +1,13 @@
-import { lazy, Suspense, useCallback, useId, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { lazy, Suspense, useCallback, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { ArrowDownRight, ArrowRight, Braces, ChartNoAxesCombined, ChevronRight, Database as DatabaseIcon, GitFork, KeyRound,
   PanelRight, Plug, RefreshCw, Search, Server, Table2 } from 'lucide-react'
 import { sql } from '../controllers/api'
 import { useExplorer } from '../controllers/useExplorer'
 import { useTable } from '../controllers/useTable'
 import type { Connection, Database, Relationship, Scope, Structure as TableStructure, Tab, Table, TableScope } from '../models/sql'
+import { EnginePicker } from './EnginePicker'
+import { OtherConnectionDialog } from './OtherConnectionDialog'
+import { engines, type Engine } from '../models/engines'
 import { ConnectionDialog } from './ConnectionDialog'
 import jujuba from '../assets/jujuba.png'
 import { Diagram, Graph } from './Diagram'
@@ -26,12 +29,13 @@ function Details({ children }: { children: ReactNode }) {
 function ConnectionDetails({ connection, database }: { connection?: Connection; database?: Database | null }) {
   return <Details>
     <div className="details-heading"><span className="quiet-icon"><Server size={17} /></span>
-      <div><h3>Conexão SQL Server</h3><p>{connection ? 'Sessão ativa' : 'Aguardando conexão'}</p></div></div>
+      <div><h3>Conexão {engines[connection?.engine ?? 'sqlServer'].name}</h3><p>{connection ? 'Sessão ativa' : 'Aguardando conexão'}</p></div></div>
     <dl>
-      {connection && <><dt>Servidor</dt><dd>{connection.endpoint}</dd></>}
+      {connection && <><dt>{connection.engine === 'sqlite' ? 'Arquivo' : 'Servidor'}</dt><dd>{connection.endpoint}</dd></>}
       {database && <><dt>Banco</dt><dd>{database}</dd></>}
-      <dt>Modo</dt><dd>Consulta e edição conforme permissões</dd>
-      <dt>Segurança</dt><dd>{connection?.transport === 'local' ? 'Conexão direta neste computador' :
+      <dt>Modo</dt><dd>{connection?.engine === 'sqlServer' ? 'Consulta e edição conforme permissões' : 'Consulta'}</dd>
+      <dt>Segurança</dt><dd>{connection?.engine === 'sqlite' ? 'Arquivo aberto em modo de leitura' :
+        connection?.transport === 'local' ? 'Conexão direta neste computador' :
         connection ? 'TLS com certificado validado' : 'Validação TLS para conexões pela rede'}</dd>
     </dl>
   </Details>
@@ -189,9 +193,9 @@ function ConnectedStudio({ connection, disconnect }: { connection: Connection; d
   return <>
     <Header connection={connection} database={database} onDatabase={explorer.chooseDatabase} onDisconnect={closeConnection} disconnecting={disconnecting}
       tools={database && <>
-        <button className="button" aria-pressed={workspaceView === 'dashboard'}
+        {connection.engine === 'sqlServer' && <button className="button" aria-pressed={workspaceView === 'dashboard'}
           onClick={() => setWorkspaceView(workspaceView === 'dashboard' ? 'objects' : 'dashboard')}>
-          <ChartNoAxesCombined size={15} /> Dashboards</button>
+          <ChartNoAxesCombined size={15} /> Dashboards</button>}
         <button className="button" aria-pressed={workspaceView === 'sql'}
           onClick={() => setWorkspaceView(workspaceView === 'sql' ? 'objects' : 'sql')}><Braces size={15} /> SQL</button>
         {(table || workspaceView !== 'objects') && <button className="button" onClick={() => { setTable(null); setWorkspaceView('objects') }}><GitFork size={15} /> Diagrama do banco</button>}
@@ -203,7 +207,7 @@ function ConnectedStudio({ connection, disconnect }: { connection: Connection; d
         <Suspense fallback={<Loading />}><DatabaseDashboard key={database} database={database} session={connection.session} /></Suspense>
         </main><ConnectionDetails connection={connection} database={database} /></>
         : database && workspaceView === 'sql' ? <><main className="workspace"><div className="object-heading"><h1>{database}</h1></div>
-        <Suspense fallback={<Loading />}><SqlEditor key={database} scope={{ session: connection.session, database }} /></Suspense></main>
+        <Suspense fallback={<Loading />}><SqlEditor key={database} engine={connection.engine} scope={{ session: connection.session, database }} /></Suspense></main>
         <ConnectionDetails connection={connection} database={database} /></>
         : database && table ? <TableWorkspace key={JSON.stringify([database, table.id])} table={table}
         scope={{ session: connection.session, database, tableId: table.id }} refreshKey={refreshKey}
@@ -212,37 +216,46 @@ function ConnectedStudio({ connection, disconnect }: { connection: Connection; d
             onTable={(entry) => explorer.chooseRelatedTable(database, entry)} />
         : <><DatabaseList connection={connection} choose={explorer.chooseDatabase} /><ConnectionDetails connection={connection} /></>}
     </StudioLayout>
-    <StatusBar endpoint={connection.endpoint} database={database} passwordSaveFailed={connection.passwordSaveFailed} />
+    <StatusBar engine={connection.engine} endpoint={connection.endpoint} database={database} passwordSaveFailed={connection.passwordSaveFailed} />
   </>
 }
 
 export function App() {
   const [connection, setConnection] = useState<Connection | null>(null)
-  const [dialog, setDialog] = useState(false)
+  const [dialog, setDialog] = useState<Engine | null>(null)
+
+  const enginePicker = useRef<HTMLButtonElement>(null)
+
+  function chooseEngine() {
+    enginePicker.current?.focus()
+  }
+
+  function connected(active: Connection) {
+    setConnection(active)
+    setDialog(null)
+  }
 
   if (connection) return <ConnectedStudio key={connection.session} connection={connection} disconnect={async () => {
     try { await sql.disconnect() } finally { setConnection(null) }
   }} />
 
   return <>
-    <Header onConnect={() => setDialog(true)} />
+    <Header onConnect={chooseEngine} />
     <StudioLayout items={[]} connected={false}>
       <main className="workspace welcome">
         <div className="welcome-content">
           <div className="welcome-copy">
-            <h1>Conecte ao SQL Server</h1>
+            <h1>Conecte a um banco de dados</h1>
             <p>Consulte os bancos, explore tabelas e visualize seus relacionamentos.</p>
-            <button className="button primary" onClick={() => setDialog(true)}><Plug size={16} /> Nova conexão <ArrowRight size={16} /></button>
+            <button className="button primary" onClick={chooseEngine}><Plug size={16} /> Nova conexão <ArrowRight size={16} /></button>
           </div>
           <div className="welcome-mark" aria-hidden="true"><img src={jujuba} alt="" /></div>
         </div>
       </main>
-      <ConnectionDetails />
+      <EnginePicker choose={setDialog} firstButton={enginePicker} />
     </StudioLayout>
     <StatusBar />
-    {dialog && <ConnectionDialog onClose={() => setDialog(false)} onConnected={(active) => {
-      setConnection(active)
-      setDialog(false)
-    }} />}
+    {dialog === 'sqlServer' && <ConnectionDialog onClose={() => setDialog(null)} onConnected={connected} />}
+    {dialog && dialog !== 'sqlServer' && <OtherConnectionDialog engine={dialog} onClose={() => setDialog(null)} onConnected={connected} />}
   </>
 }

@@ -503,3 +503,26 @@ code { font-family: var(--mono); }
 .dashboard-request-heading { margin-bottom: 10px; }
 .dashboard-request-heading h2 { font-size: 15px; }
 .dashboard-blocker { color: var(--berry-text); font-weight: 650; }
+
+.engine-panel-note { color: var(--muted); font-size: 12px; line-height: 1.45; margin-bottom: 12px; }
+.engine-list { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.engine-option { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; width: 100%; align-items: center; gap: 9px; text-align: left; padding: 8px; min-height: 49px; color: inherit; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; }
+.engine-option:hover, .engine-option:focus { border-color: var(--berry-line); background: var(--berry-selected); outline: none; }
+.engine-option strong { font-size: 12px; font-weight: 650; overflow-wrap: anywhere; }
+.engine-option > svg { color: var(--muted); }
+.engine-icon { display: inline-grid; place-items: center; flex: 0 0 auto; width: 32px; height: 32px; border-radius: 7px; background: #f2f4f4; }
+.engine-icon img { width: 24px; height: 24px; object-fit: contain; }
+.sqlite-file-field { display: flex; gap: 8px; align-items: stretch; }
+.sqlite-file-field input { min-width: 0; flex: 1; }
+@media (max-width: 760px) {
+  .studio:has(> .engine-panel) { grid-template-rows: auto minmax(0, 1fr); }
+  .studio:has(> .engine-panel) > :is(.sidebar, .explorer-divider) { grid-row: 1 / -1; }
+  .studio > .engine-panel { display: flex; grid-column: 3; grid-row: 1; border-left: 0; border-bottom: 1px solid var(--line); }
+  .studio:has(> .engine-panel) > .welcome { grid-column: 3; grid-row: 2; }
+  .engine-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 515px) {
+  .studio:has(> .engine-panel) { grid-template-columns: minmax(0, 1fr); }
+  .studio:has(> .engine-panel) > :is(.sidebar, .explorer-divider) { display: none; }
+  .studio > .engine-panel, .studio:has(> .engine-panel) > .welcome { grid-column: 1; }
+}

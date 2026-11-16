@@ -2,7 +2,7 @@ use crate::{
     catalog,
     connection::Connections,
     edit, editor,
-    error::Result,
+    error::{deadline, AppError, Result},
     models::{
         ConnectInput, Connected, DatabaseDiagram, EditInput, EditOutcome, QueryOutput,
         RecordsInput, RecordsPage, Relationship, Scope, Structure, Table, TableScope,
@@ -10,7 +10,8 @@ use crate::{
     records, relationships,
     sql_server::dashboard,
 };
-use tauri::State;
+use tauri::{AppHandle, State};
+use tauri_plugin_dialog::DialogExt;
 
 #[tauri::command]
 pub async fn dashboard_files(
@@ -66,6 +67,23 @@ pub async fn connect(
 }
 
 #[tauri::command]
+pub async fn choose_sqlite_file(app: AppHandle) -> Result<Option<String>> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .add_filter("Banco SQLite", &["sqlite", "sqlite3", "db", "db3"])
+        .pick_file(move |file| {
+            let _ = sender.send(file);
+        });
+    let file = receiver
+        .await
+        .map_err(|_| AppError::new("application", "Não foi possível selecionar o arquivo."))?;
+    Ok(file
+        .and_then(|file| file.into_path().ok())
+        .map(|path| path.to_string_lossy().into_owned()))
+}
+
+#[tauri::command]
 pub fn has_saved_password(input: ConnectInput) -> Result<bool> {
     match crate::credentials::PasswordKey::for_input(&input) {
         Some(key) => key.exists(),
@@ -89,6 +107,9 @@ pub async fn disconnect(state: State<'_, Connections>) -> Result<()> {
 
 #[tauri::command]
 pub async fn schemas(scope: Scope, state: State<'_, Connections>) -> Result<Vec<String>> {
+    if let Some(other) = state.other(&scope).await? {
+        return deadline(other.schemas(&scope.database)).await;
+    }
     catalog::schemas(&state, scope).await
 }
 
@@ -98,16 +119,26 @@ pub async fn tables(
     schema: String,
     state: State<'_, Connections>,
 ) -> Result<Vec<Table>> {
+    if let Some(other) = state.other(&scope).await? {
+        return deadline(other.tables(&scope.database, Some(&schema))).await;
+    }
     catalog::tables(&state, scope, schema).await
 }
 
 #[tauri::command]
 pub async fn structure(scope: TableScope, state: State<'_, Connections>) -> Result<Structure> {
+    if let Some(other) = state.other(&scope.scope).await? {
+        return deadline(other.structure(&scope.scope.database, scope.table_id)).await;
+    }
     catalog::structure(&state, scope).await
 }
 
 #[tauri::command]
 pub async fn records(input: RecordsInput, state: State<'_, Connections>) -> Result<RecordsPage> {
+    if let Some(other) = state.other(&input.table.scope).await? {
+        let database = input.table.scope.database.clone();
+        return deadline(other.records(&database, input)).await;
+    }
     records::page(&state, input).await
 }
 
@@ -117,6 +148,9 @@ pub async fn query_read(
     source: String,
     state: State<'_, Connections>,
 ) -> Result<QueryOutput> {
+    if let Some(other) = state.other(&scope).await? {
+        return deadline(other.read(&scope.database, &source)).await;
+    }
     editor::read(&state, scope, source).await
 }
 
@@ -130,6 +164,9 @@ pub async fn database_diagram(
     scope: Scope,
     state: State<'_, Connections>,
 ) -> Result<DatabaseDiagram> {
+    if let Some(other) = state.other(&scope).await? {
+        return deadline(other.diagram(&scope.database)).await;
+    }
     relationships::database(&state, scope).await
 }
 
@@ -138,5 +175,8 @@ pub async fn relationships(
     scope: TableScope,
     state: State<'_, Connections>,
 ) -> Result<Vec<Relationship>> {
+    if let Some(other) = state.other(&scope.scope).await? {
+        return deadline(other.relationships(&scope.scope.database, scope.table_id)).await;
+    }
     relationships::list(&state, scope).await
 }

@@ -1,8 +1,13 @@
+import type { Engine } from './engines'
+
 export type Transport = 'network' | 'local'
 
 export type Authentication = 'windows' | 'sql'
 
 export interface ConnectionInput {
+  engine?: Engine
+  database?: string
+  path?: string
   transport: Transport
   host?: string
   port?: number
@@ -13,6 +18,7 @@ export interface ConnectionInput {
 }
 
 export interface Connection {
+  engine: Engine
   session: number
   endpoint: string
   transport: Transport

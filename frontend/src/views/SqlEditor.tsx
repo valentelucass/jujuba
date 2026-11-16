@@ -1,12 +1,14 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { Play } from 'lucide-react'
 import { appError, sql } from '../controllers/api'
+import type { Engine } from '../models/engines'
 import type { Remote, QueryOutput, Scope } from '../models/sql'
 import { Empty, Failure, Loading } from './States'
 import { SqlCode } from './SqlCode'
 
-export function SqlEditor({ scope }: { scope: Scope }) {
-  const [source, setSource] = useState('SELECT TOP (25) name FROM sys.tables ORDER BY name')
+export function SqlEditor({ engine, scope }: { engine: Engine; scope: Scope }) {
+  const [source, setSource] = useState(engine === 'sqlServer'
+    ? 'SELECT TOP (25) name FROM sys.tables ORDER BY name' : 'SELECT 1 AS exemplo')
   const [result, setResult] = useState<Remote<QueryOutput>>({ status: 'idle' })
   const running = useRef(false)
   const form = useRef<HTMLFormElement>(null)
@@ -27,7 +29,7 @@ export function SqlEditor({ scope }: { scope: Scope }) {
         <span>SELECT · até 200 linhas</span>
         <button className="button primary" disabled={!source.trim() || result.status === 'loading'}><Play size={15} /> Executar</button>
       </div>
-      <SqlCode source={source} onChange={setSource} form={form} />
+      <SqlCode engine={engine} source={source} onChange={setSource} form={form} />
     </form>
     <section className="sql-results" aria-label="Resultados da consulta">
       {result.status === 'idle' && <Empty title="Resultados da consulta" note="Execute o SQL para ver os registros aqui." />}
@@ -39,7 +41,7 @@ export function SqlEditor({ scope }: { scope: Scope }) {
           <tbody>{output.rows.map((row, index) => <tr key={index}>{row.map((value, col) =>
             <td key={col} title={value ?? undefined}>{value === null ? <em className="null-value">NULL</em> : value}</td>)}</tr>)}</tbody>
         </table>{!output.rows.length && <Empty title="A consulta não retornou registros" />}</div>
-        <div className="pagination">{output.truncated ? 'Mostrando as primeiras 200 linhas.' : output.rows.length + ' registros'}</div>
+        <div className="pagination">{output.truncated ? 'Mostrando as primeiras 200 linhas.' : `${output.rows.length} ${output.rows.length === 1 ? 'registro' : 'registros'}`}</div>
       </>}
     </section>
   </div>

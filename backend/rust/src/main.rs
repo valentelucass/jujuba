@@ -8,6 +8,7 @@ mod edit;
 mod editor;
 mod error;
 mod models;
+mod other_db;
 mod records;
 mod relationships;
 mod sql_server;
@@ -24,10 +25,12 @@ fn main() {
             }
         }))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(connection::Connections::default())
         .invoke_handler(tauri::generate_handler![
             commands::connect,
+            commands::choose_sqlite_file,
             commands::has_saved_password,
             commands::forget_password,
             commands::disconnect,

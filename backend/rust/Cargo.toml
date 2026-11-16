@@ -19,6 +19,11 @@ zeroize = "1"
 futures-util = "0.3"
 odbc-api = { version = "30.1", default-features = false, features = ["odbc_version_3_80"] }
 sqlparser = { version = "0.63", default-features = false, features = ["std", "visitor"] }
+sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio", "tls-native-tls", "mysql", "postgres", "sqlite", "chrono", "bigdecimal", "uuid", "json"] }
+chrono = { version = "0.4", default-features = false }
+bigdecimal = "0.4"
+uuid = "1"
+tauri-plugin-dialog = { version = "2", default-features = false }
 tauri-plugin-opener = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-single-instance = "2"

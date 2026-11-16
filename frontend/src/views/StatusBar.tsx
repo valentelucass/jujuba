@@ -3,6 +3,7 @@ import { getVersion } from '@tauri-apps/api/app'
 import { isTauri } from '@tauri-apps/api/core'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import { Database as DatabaseIcon, ExternalLink, ShieldCheck } from 'lucide-react'
+import { engines, type Engine } from '../models/engines'
 import type { Database } from '../models/sql'
 import { UpdateButton } from './DesktopUpdates'
 import { version as buildVersion } from '../../package.json'
@@ -12,8 +13,8 @@ const links = [
   { label: 'Feito por Lucas Andrade', url: 'https://github.com/valentelucass' },
 ]
 
-export function StatusBar({ endpoint, database, passwordSaveFailed }: {
-  endpoint?: string; database?: Database | null; passwordSaveFailed?: boolean
+export function StatusBar({ engine, endpoint, database, passwordSaveFailed }: {
+  engine?: Engine; endpoint?: string; database?: Database | null; passwordSaveFailed?: boolean
 }) {
   const [error, setError] = useState(false)
   const [version, setVersion] = useState(buildVersion)
@@ -30,7 +31,7 @@ export function StatusBar({ endpoint, database, passwordSaveFailed }: {
   }
 
   return <footer className="statusbar">
-    <span className="status-permissions"><ShieldCheck size={13} /> Permissões do SQL Server</span>
+    <span className="status-permissions"><ShieldCheck size={13} /> {engine ? 'Permissões · ' + engines[engine].name : 'Sem conexão'}</span>
     {database && <span className="status-context"><DatabaseIcon size={12} /> <span>{database}</span></span>}
     <span className="status-end status-context">{endpoint ?? 'Sessão local'}</span>
     <UpdateButton />
