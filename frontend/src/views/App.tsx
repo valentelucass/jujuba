@@ -291,7 +291,7 @@ export function App() {
           <div className="welcome-copy">
             <h1>Conecte a um banco de dados</h1>
             <p>Consulte dados e explore tabelas, coleções e chaves.</p>
-            <button className="button primary" onClick={openPicker}><Plug size={16} /> Nova conexão <ArrowRight size={16} /></button>
+            <button className="button primary welcome-connect" onClick={openPicker}><Plug size={17} />Nova conexão</button>
           </div>
         </div>}
         {step === 'picker' && <CenterEnginePicker selected={selectedEngine} choose={chooseEngine} back={() => { setStep('intro'); setSelectedEngine(null) }} />}
