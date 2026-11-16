@@ -1,6 +1,6 @@
 # JujubaSQL
 
-## ⬇️ [Baixar o instalador para Windows (64 bits)](https://github.com/valentelucass/jujubasql/releases/download/v0.1.15/JujubaSQL_0.1.15_x64-setup.exe)
+## ⬇️ [Baixar o instalador para Windows (64 bits)](https://github.com/valentelucass/jujubasql/releases/latest)
 
 <img src="frontend/src/assets/jujuba.png" alt="Mascote do JujubaSQL" width="112" />
 
@@ -8,7 +8,7 @@ Aplicativo desktop Windows para explorar SQL Server, MySQL, PostgreSQL e arquivo
 
 ## Instalar e conectar
 
-Na tela inicial, escolha o tipo de banco no painel direito. Para MySQL e PostgreSQL, informe servidor, porta e credenciais. Para PostgreSQL, indique também um banco inicial acessível. Para SQLite, abra um arquivo existente. Os três oferecem consultas, navegação, filtros e diagrama das chaves estrangeiras. A edição de células e os dashboards continuam disponíveis no SQL Server.
+Na tela inicial, clique em **Nova conexão** e escolha o tipo de banco no centro. O painel direito destaca a sua escolha. Para MySQL e PostgreSQL, informe servidor, porta e credenciais. Para PostgreSQL, indique também um banco inicial acessível. Para SQLite, abra um arquivo existente. Os três oferecem consultas, navegação, filtros e diagrama das chaves estrangeiras. A edição de células e os dashboards continuam disponíveis no SQL Server.
 
 ### SQL Server
 
