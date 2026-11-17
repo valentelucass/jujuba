@@ -1255,7 +1255,7 @@ dialog.connection-dialog {
 .mascot-aim {
   position: fixed; z-index: 17;
   inset: var(--app-header-height, 54px) 0 var(--app-footer-height, 24px);
-  cursor: crosshair; touch-action: none; outline: none;
+  cursor: crosshair; touch-action: none; user-select: none; outline: none;
 }
 .mascot-aim:has(.mascot-toy-cursor) { cursor: none; }
 .mascot-aim-status {

@@ -46,6 +46,7 @@ export function MascotAim({ tool, own, targets, onExit, onFire, onTension, onHit
   runtime.current = { own, targets, onHit, onExit, onRicochet, onTension }
 
   useEffect(() => {
+    window.getSelection()?.removeAllRanges()
     surface.current?.focus()
     const animation = engine.current
     function cancelKey(event: KeyboardEvent) {
@@ -67,15 +68,22 @@ export function MascotAim({ tool, own, targets, onExit, onFire, onTension, onHit
       setDrawing(null)
       runtime.current.onTension(0)
     }
+    function keepPointerInTool(event: Event) {
+      event.preventDefault()
+    }
     window.addEventListener('keydown', cancelKey, true)
     window.addEventListener('contextmenu', cancelPointer, true)
     window.addEventListener('auxclick', cancelPointer, true)
     window.addEventListener('blur', stopHolding)
+    window.addEventListener('selectstart', keepPointerInTool, true)
+    window.addEventListener('dragstart', keepPointerInTool, true)
     return () => {
       window.removeEventListener('keydown', cancelKey, true)
       window.removeEventListener('contextmenu', cancelPointer, true)
       window.removeEventListener('auxclick', cancelPointer, true)
       window.removeEventListener('blur', stopHolding)
+      window.removeEventListener('selectstart', keepPointerInTool, true)
+      window.removeEventListener('dragstart', keepPointerInTool, true)
       cancelAnimationFrame(animation.frame)
       window.clearInterval(animation.auto)
       animation.frame = 0
@@ -191,6 +199,7 @@ export function MascotAim({ tool, own, targets, onExit, onFire, onTension, onHit
   function start(event: PointerEvent<HTMLDivElement>) {
     if (held.current || event.button !== 0 || !event.isPrimary ||
       (event.target instanceof Element && event.target.closest('.mascot-aim-status'))) return
+    event.preventDefault()
     const where = { x: event.clientX, y: event.clientY }
     track(event)
     held.current = { id: event.pointerId, start: where }
