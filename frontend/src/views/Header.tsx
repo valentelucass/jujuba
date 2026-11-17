@@ -55,7 +55,7 @@ export function Header({ connection, database, onConnect, onDisconnect, onDataba
   }
 
   return <header className="topbar">
-    <div className="wordmark"><span className="brand-mark" aria-hidden="true"><img src={jujuba} alt="" /></span><strong>Jujuba<span>SQL</span></strong></div>
+    <div className="wordmark"><img src={jujuba} alt="" /><strong>Jujuba <span>SQL</span></strong></div>
     <div className="header-divider" />
     {diagramActive ? <button className="button" onClick={onDiagrams}><Database size={15} />Bancos de dados</button> : <>
       {connection ? <button className="button header-connect" onClick={onDisconnect} disabled={disconnecting} title="Desconectar">

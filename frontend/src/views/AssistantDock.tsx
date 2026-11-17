@@ -15,7 +15,8 @@ const accepted = ['.txt', '.md', '.json', '.yaml', '.yml', '.csv', '.xml', '.mmd
 const attachmentLimit = 64_000
 const launcherPreference = 'jujuba.assistant.position'
 const launcherSize = 66
-const launcherMargin = 10
+const launcherMargin = 20
+const sideGesture = 24
 
 type Point = { x: number; y: number }
 type LauncherPosition = { side: 'left' | 'right'; y: number }
@@ -33,7 +34,14 @@ function readLauncherPosition(): LauncherPosition | null {
 }
 
 function viewport() {
-  return { width: window.innerWidth, height: window.innerHeight }
+  const root = document.getElementById('root')
+  const styles = root && getComputedStyle(root)
+  return {
+    width: window.innerWidth,
+    height: window.innerHeight,
+    header: Number.parseFloat(styles?.getPropertyValue('--app-header-height') ?? '') || 0,
+    footer: Number.parseFloat(styles?.getPropertyValue('--app-footer-height') ?? '') || 0,
+  }
 }
 
 function clamp(value: number, max: number, min = launcherMargin) {
@@ -89,12 +97,14 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     return () => window.removeEventListener('resize', resize)
   }, [])
 
-  const { width, height } = screenSize
+  const { width, height, header, footer } = screenSize
+  const side = placement?.side ?? 'right'
   const endX = width - launcherSize - launcherMargin
-  const endY = height - launcherSize - launcherMargin
+  const startY = header + launcherMargin
+  const endY = Math.max(startY, height - footer - launcherSize - launcherMargin)
   const point = dragPoint ?? {
-    x: placement?.side === 'left' ? launcherMargin : endX,
-    y: clamp(placement?.y ?? height - launcherSize - 40, endY),
+    x: side === 'left' ? launcherMargin : endX,
+    y: clamp(placement?.y ?? endY, endY, startY),
   }
   const dockWidth = Math.min(415, width - 28)
   const dockHeight = Math.min(615, height - 28)
@@ -109,7 +119,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   }
 
   function place(side: LauncherPosition['side'], y: number) {
-    const next = { side, y: clamp(y, endY) }
+    const next = { side, y: clamp(y, endY, startY) }
     setPlacement(next)
     try { localStorage.setItem(launcherPreference, JSON.stringify(next)) } catch { /* Placement remains active. */ }
   }
@@ -133,7 +143,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     active.moved = true
     setDragPoint({
       x: clamp(event.clientX - active.offset.x, endX),
-      y: clamp(event.clientY - active.offset.y, endY),
+      y: clamp(event.clientY - active.offset.y, endY, startY),
     })
   }
 
@@ -143,9 +153,14 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     drag.current = null
     setDragPoint(null)
     moved.current = active.moved
-    if (active.moved && event.type === 'pointerup') {
-      place(edgeAt(event.clientX - active.offset.x, width), event.clientY - active.offset.y)
-    }
+    if (!active.moved || event.type !== 'pointerup') return
+    const shiftX = event.clientX - active.origin.x
+    const shiftY = event.clientY - active.origin.y
+    const other = side === 'left' ? 'right' : 'left'
+    const inward = side === 'left' ? shiftX : -shiftX
+    const sideChange = inward >= Math.max(sideGesture, Math.abs(shiftY) / 3)
+      || edgeAt(event.clientX - active.offset.x, width) !== side
+    place(sideChange ? other : side, event.clientY - active.offset.y)
   }
 
   function close() {
@@ -279,10 +294,9 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     </section>}
     <button ref={launcher} className={'assistant-launch' + (dragPoint ? ' is-dragging' : '')}
       style={{ left: point.x, top: point.y }} aria-label={open ? 'Fechar assistente' : 'Abrir assistente de IA'}
-      title="Assistente de IA · clique para abrir ou arraste para mover" aria-expanded={open} aria-controls={open ? 'assistant-dock' : undefined}
+      title="Assistente de IA · arraste na vertical ou deslize para trocar de borda" aria-expanded={open} aria-controls={open ? 'assistant-dock' : undefined}
       onPointerDown={grab} onPointerMove={move} onPointerUp={release} onPointerCancel={release} onLostPointerCapture={release}
       onKeyDown={(event) => {
-        const side = placement?.side ?? 'right'
         const locations: Record<string, LauncherPosition> = {
           ArrowLeft: { side: 'left', y: point.y }, ArrowRight: { side: 'right', y: point.y },
           ArrowUp: { side, y: point.y - 12 }, ArrowDown: { side, y: point.y + 12 },
@@ -299,7 +313,18 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
         else setOpen(true)
       }}>
       <img src={jujuba} alt="" draggable={false} />
-      <Sparkles className="assistant-launch-sparkle" size={22} aria-hidden="true" />
+      <svg className="assistant-blink" viewBox="0 0 1280 1280" aria-hidden="true">
+        <defs>
+          <linearGradient id="mascot-eyelid" x1="0" y1="520" x2="0" y2="710" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#b1086d" />
+            <stop offset=".52" stopColor="#cc0c7e" />
+            <stop offset="1" stopColor="#e41182" />
+          </linearGradient>
+        </defs>
+        <path fill="url(#mascot-eyelid)" d="M346 615a90 94 0 1 1 180 0 90 94 0 1 1-180 0Z M699 605l150-47q23-7 22 18l-14 48c0 43-33 76-74 76-47 0-76-37-76-81Z" />
+        <path d="M363 604q66 72 140 2m224-1q59 62 120-15"
+          fill="none" stroke="#46042f" strokeWidth="18" strokeLinecap="round" />
+      </svg>
     </button>
   </>
 }

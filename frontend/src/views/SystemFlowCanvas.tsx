@@ -4,34 +4,36 @@ import {
 } from '@xyflow/react'
 import { MousePointer2, Workflow } from 'lucide-react'
 import { FlowOutline } from './FlowStageIcon'
-import { arrangeStages, stageGeometry } from '../models/flowGeometry'
+import { arrangeStages, type StageGeometry } from '../models/flowGeometry'
 import { useEffect, useMemo, useRef } from 'react'
 import { nodeKinds, type NodeKind, type StagePosition, type SystemDiagram, type SystemEdge } from '../models/systemDiagram'
 
 import { useTheme } from './Theme'
 
-type FlowNode = Node<{ label: string; kind: NodeKind }, 'flowStep'>
+type FlowNode = Node<{ label: string; kind: NodeKind; geometry: StageGeometry }, 'flowStep'>
 const nodeTypes = { flowStep: FlowStep }
 
 function FlowStep({ data, selected }: NodeProps<FlowNode>) {
-  const { width, height } = stageGeometry[data.kind]
+  const { kind, label, geometry } = data
+  const { width, height, labelWidth, labelY } = geometry
   return <div className={'flow-node flow-' + data.kind + (selected ? ' selected' : '')}
     style={{ width, height }} title={data.label || nodeKinds[data.kind]}>
-    <svg className="flow-node-geometry" viewBox={`0 0 ${width} ${height}`} aria-hidden="true"><FlowOutline kind={data.kind} /></svg>
+    <svg className="flow-node-geometry" viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
+      <FlowOutline kind={kind} geometry={geometry} />
+    </svg>
     {data.kind !== 'start' && <Handle type="target" position={Position.Top} />}
-    <div className="flow-node-label">
-      <small>{nodeKinds[data.kind]}</small>
-      <strong>{data.label || 'Sem nome'}</strong>
+    <div className="flow-node-label" style={{ width: labelWidth, top: labelY }}>
+      <small>{nodeKinds[kind]}</small>
+      <strong className="flow-stage-title">{label || 'Sem nome'}</strong>
     </div>
     {data.kind !== 'end' && <Handle type="source" position={Position.Bottom} />}
   </div>
 }
 
 function arrange(diagram: SystemDiagram): FlowNode[] {
-  const positions = arrangeStages(diagram)
-  return diagram.nodes.map(({ id, kind, label }) => ({
-    id, type: 'flowStep', position: positions.get(id)!,
-    data: { label, kind }, ariaLabel: nodeKinds[kind] + ' · ' + label,
+  return arrangeStages(diagram).map(({ node: { id, kind, label }, position, geometry }) => ({
+    id, type: 'flowStep', position,
+    data: { label, kind, geometry }, ariaLabel: nodeKinds[kind] + ' · ' + label,
   }))
 }
 

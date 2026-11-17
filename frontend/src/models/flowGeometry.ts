@@ -1,21 +1,39 @@
-
 import type { NodeKind, StagePosition, SystemDiagram } from './systemDiagram'
 
-export const stageGeometry: Record<NodeKind, { width: number; height: number; outline: string; detail?: string }> = {
-  start: { width: 190, height: 64, outline: 'M32 1H158a31 31 0 0 1 0 62H32a31 31 0 0 1 0-62Z' },
-  end: { width: 190, height: 64, outline: 'M32 1H158a31 31 0 0 1 0 62H32a31 31 0 0 1 0-62Z' },
-  action: { width: 190, height: 64, outline: 'M1 1H189V63H1Z' },
-  decision: { width: 228, height: 126, outline: 'M114 1 227 63 114 125 1 63Z' },
-  inputOutput: { width: 198, height: 70, outline: 'M24 1H197L174 69H1Z' },
-  document: { width: 190, height: 74, outline: 'M1 1H189V62C113 29 72 96 1 62Z' },
-  subprocess: { width: 190, height: 68, outline: 'M1 1H189V67H1Z', detail: 'M16 1V67M174 1V67' },
-  connector: { width: 88, height: 88, outline: 'M44 1a43 43 0 1 1 0 86 43 43 0 1 1 0-86Z' },
-  extract: { width: 190, height: 120, outline: 'M95 1 189 119H1Z' },
+const frames: Record<NodeKind, { width: number; height: number; maxWidth: number; textWidth: number; textCenter: number }> = {
+  start: { width: 190, height: 64, maxWidth: 304, textWidth: .76, textCenter: .5 },
+  end: { width: 190, height: 64, maxWidth: 304, textWidth: .76, textCenter: .5 },
+  action: { width: 190, height: 64, maxWidth: 316, textWidth: .82, textCenter: .5 },
+  decision: { width: 228, height: 126, maxWidth: 352, textWidth: .56, textCenter: .5 },
+  inputOutput: { width: 198, height: 70, maxWidth: 320, textWidth: .74, textCenter: .5 },
+  document: { width: 190, height: 74, maxWidth: 316, textWidth: .82, textCenter: .42 },
+  subprocess: { width: 190, height: 68, maxWidth: 316, textWidth: .78, textCenter: .5 },
+  connector: { width: 116, height: 116, maxWidth: 200, textWidth: .75, textCenter: .5 },
+  extract: { width: 190, height: 120, maxWidth: 324, textWidth: .52, textCenter: .72 },
+}
+
+export interface StageGeometry { width: number; height: number; labelWidth: number; labelY: number }
+
+export function stageGeometry(kind: NodeKind, label = ''): StageGeometry {
+  const frame = frames[kind]
+  // Estimate in flow coordinates so peers with different zoom levels use the same bounds.
+  const textWidth = Array.from(label.trim()).reduce((width, character) => {
+    if (/[ilI1.,:;'!| ]/.test(character)) return width + 4
+    if (/[MW@%]/.test(character) || character.codePointAt(0)! >= 0x2e80) return width + 12
+    return width + 7.5
+  }, 0)
+  const preferredWidth = Math.ceil(textWidth / frame.textWidth / 4) * 4
+  const width = Math.min(frame.maxWidth, Math.max(frame.width, preferredWidth))
+  const labelWidth = Math.floor(width * frame.textWidth)
+  const lines = Math.min(3, Math.max(1, Math.ceil(textWidth / labelWidth)))
+  const lineGrowth = kind === 'decision' || kind === 'extract' ? 30 : 18
+  const height = kind === 'connector' ? width : frame.height + (lines - 1) * lineGrowth
+  return { width, height, labelWidth, labelY: height * frame.textCenter }
 }
 
 export type FlowPreview = Pick<SystemDiagram, 'nodes' | 'edges'>
 
-export function arrangeStages(diagram: FlowPreview): Map<string, StagePosition> {
+export function arrangeStages(diagram: FlowPreview) {
   const start = diagram.nodes.find((node) => node.kind === 'start')?.id
   const distance = new Map<string, number>()
   if (start) {
@@ -30,20 +48,31 @@ export function arrangeStages(diagram: FlowPreview): Map<string, StagePosition> 
       }
     }
   }
+
+  const layout = diagram.nodes.map((node) => ({ node, geometry: stageGeometry(node.kind, node.label) }))
   const later = Math.max(-1, ...distance.values()) + 1
-  const rows = new Map<number, string[]>()
+  const rows = new Map<number, typeof layout>()
   let unconnected = 0
-  for (const node of diagram.nodes) {
-    if (!distance.has(node.id)) distance.set(node.id, later + Math.floor(unconnected++ / 4))
-    const row = distance.get(node.id)!
-    rows.set(row, [...(rows.get(row) ?? []), node.id])
+  for (const stage of layout) {
+    const row = distance.get(stage.node.id) ?? later + Math.floor(unconnected++ / 4)
+    const members = rows.get(row)
+    if (members) members.push(stage)
+    else rows.set(row, [stage])
   }
-  return new Map(diagram.nodes.map(({ id, kind, position }) => {
-    const row = distance.get(id)!
+
+  const positions = new Map<string, StagePosition>()
+  let y = 0
+  for (const row of Array.from(rows.keys()).sort((first, second) => first - second)) {
     const members = rows.get(row)!
-    return [id, position ?? {
-      x: (members.indexOf(id) - (members.length - 1) / 2) * 268 + (190 - stageGeometry[kind].width) / 2,
-      y: row * 166,
-    }]
-  }))
+    const gap = 60
+    const rowWidth = members.reduce((width, { geometry }) => width + geometry.width, gap * (members.length - 1))
+    let x = 95 - rowWidth / 2
+    for (const { node, geometry } of members) {
+      positions.set(node.id, node.position ?? { x, y })
+      x += geometry.width + gap
+    }
+    y += Math.max(166, Math.max(...members.map(({ geometry }) => geometry.height)) + 48)
+  }
+
+  return layout.map((stage) => ({ ...stage, position: positions.get(stage.node.id)! }))
 }
