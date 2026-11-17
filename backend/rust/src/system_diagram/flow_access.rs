@@ -11,6 +11,14 @@ pub(super) struct Sharing {
     pub key: [u8; 32],
     pub name: String,
     pub guest: Option<Guest>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invitation: Option<StoredInvitation>,
+}
+
+#[derive(Clone, Copy, Serialize, Deserialize)]
+pub(super) struct StoredInvitation {
+    pub token: Uuid,
+    pub expires_at: u64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -26,6 +34,7 @@ impl Sharing {
             key: SecretKey::generate().to_bytes(),
             name,
             guest: None,
+            invitation: None,
         }
     }
 }

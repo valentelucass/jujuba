@@ -6,7 +6,20 @@ import { Download, RefreshCw } from 'lucide-react'
 const AUTO_CHECK_INTERVAL = 5 * 60_000
 const FOCUS_CHECK_INTERVAL = 60_000
 
-const Updates = createContext<{ open: () => void; available: boolean } | null>(null)
+export type PrepareUpdate = () => Promise<void | (() => void)>
+const Updates = createContext<{
+  open: () => void
+  available: boolean
+  version: string | null
+  status: Status
+  busy: boolean
+  refresh: (manual: boolean) => Promise<void>
+  install: (prepare?: PrepareUpdate) => Promise<void>
+} | null>(null)
+
+export function useDesktopUpdates() {
+  return useContext(Updates)
+}
 type Status = 'idle' | 'checking' | 'current' | 'available' | 'downloading' | 'installing' | 'error'
 
 export function DesktopUpdates({ children }: { children: ReactNode }) {
@@ -19,6 +32,7 @@ export function DesktopUpdates({ children }: { children: ReactNode }) {
   const checkInProgress = useRef(false)
   const manualCheck = useRef(false)
   const installInProgress = useRef(false)
+  const prepareInstall = useRef<PrepareUpdate | undefined>(undefined)
   const lastCheck = useRef(-Infinity)
   const dialog = useRef<HTMLDialogElement>(null)
   const busy = status === 'downloading' || status === 'installing'
@@ -67,15 +81,19 @@ export function DesktopUpdates({ children }: { children: ReactNode }) {
     if (!visible && dialog.current?.open) dialog.current.close()
   }, [visible])
 
-  async function install() {
+  async function install(prepare = prepareInstall.current) {
     const update = resource.current
     if (!update || installInProgress.current || checkInProgress.current) return
     installInProgress.current = true
+    prepareInstall.current = prepare
+    setVisible(true)
     setStatus('downloading')
     setProgress(null)
     let total = 0
     let downloaded = 0
+    let rollback: void | (() => void) = undefined
     try {
+      rollback = await prepare?.()
       await update.downloadAndInstall((event) => {
         if (event.event === 'Started') total = event.data.contentLength ?? 0
         if (event.event === 'Progress') {
@@ -85,6 +103,7 @@ export function DesktopUpdates({ children }: { children: ReactNode }) {
         if (event.event === 'Finished') setStatus('installing')
       }, { timeout: 180000 })
     } catch {
+      rollback?.()
       installInProgress.current = false
       setError('Não foi possível baixar, validar ou instalar a atualização. Confira a conexão e tente novamente.')
       setStatus('error')
@@ -92,7 +111,8 @@ export function DesktopUpdates({ children }: { children: ReactNode }) {
   }
 
   if (!isTauri()) return children
-  return <Updates.Provider value={{ available: version !== null, open: () => {
+  return <Updates.Provider value={{ available: version !== null, version, status, busy, refresh: search, install, open: () => {
+    prepareInstall.current = undefined
     setVisible(true)
     if (!resource.current) void search(true)
   } }}>

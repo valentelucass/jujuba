@@ -1,15 +1,16 @@
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useRef, type CSSProperties } from 'react'
 import jujuba from '../assets/jujuba.png'
 import type { MascotMeetingKind } from '../models/flowMascot'
-import type { FlightFrame } from '../controllers/mascotMotion'
+import type { FlightFrame, Point } from '../controllers/mascotMotion'
 import { MascotHat, type Hat } from './MascotHat'
 
-export function JujubaMascot({ hero = false, followPointer = false, grabbed = false, reaction, flight, hat = 'none', greeting }: {
+export function JujubaMascot({ hero = false, followPointer = false, grabbed = false, reaction, flight, hat = 'none', greeting, direction }: {
   hero?: boolean; followPointer?: boolean; grabbed?: boolean
   reaction?: 'protesting' | 'scared' | 'wary' | 'relieved' | null
   flight?: FlightFrame | null
   hat?: Hat
   greeting?: MascotMeetingKind
+  direction?: Point
 }) {
   const id = useId()
   const mascot = useRef<HTMLSpanElement>(null)
@@ -24,6 +25,9 @@ export function JujubaMascot({ hero = false, followPointer = false, grabbed = fa
   const scared = reaction === 'scared' || reaction === 'wary' || !!flight
   const relieved = reaction === 'relieved'
   const kissing = greeting === 'kiss' && !flight
+  const watching = !!direction && !flight && !!greeting && ['look', 'hug', 'squeeze', 'kiss', 'dance'].includes(greeting)
+  const embracing = !!direction && !flight && !!greeting && ['hug', 'squeeze', 'push', 'kiss'].includes(greeting)
+  const towardLeft = (direction?.x ?? 0) < 0
   const squash = flight?.squash ?? 0
   const sideImpact = flight?.edge === 'left' || flight?.edge === 'right'
   const origins = { left: '8% 50%', right: '92% 50%', top: '50% 10%', bottom: '50% 91%' }
@@ -73,17 +77,27 @@ export function JujubaMascot({ hero = false, followPointer = false, grabbed = fa
   }, [followPointer])
 
   return <span ref={mascot} className={'jujuba-mascot' + (hero ? ' jujuba-hero' : '') + (greeting ? ' jujuba-greeting-' + greeting : '')} aria-hidden="true"
-    style={flight ? {
+    style={{
+      ...(direction && greeting ? { '--pair-x': direction.x, '--pair-y': direction.y,
+        '--pair-gaze-x': `${direction.x * 43}px`, '--pair-gaze-y': `${direction.y * 27}px` } : {}),
+      ...(flight ? {
       scale: sideImpact ? `${narrow} ${wide}` : `${wide} ${narrow}`,
       rotate: `${flight.velocity.x / 195 * (1 - squash)}deg`,
       transformOrigin: origins[flight.edge],
-    } : undefined}>
+      } : {}),
+    } as CSSProperties}>
     {(grabbed || scared) && <svg className="jujuba-arms" viewBox="0 0 1254 1254" aria-hidden="true">
       <path className="jujuba-arm jujuba-arm-left" d="M235 685Q152 670 101 544L72 465" />
       <path className="jujuba-arm jujuba-arm-right" d="M1018 695Q1116 661 1151 539L1181 468" />
     </svg>}
     <img src={jujuba} alt="" draggable={false} />
     <MascotHat hat={hat} />
+    {embracing && <svg className="jujuba-pair-arms" viewBox="0 0 1254 1254" aria-hidden="true"
+      style={towardLeft ? { scale: '-1 1' } : undefined}>
+      <path d={greeting === 'push' ? 'M938 737Q1124 669 1289 735L1414 689' :
+        'M931 792Q1100 839 1270 730Q1342 689 1384 719'} />
+      <path d="M121 727Q182 791 353 822" />
+    </svg>}
     <svg className="jujuba-expression" viewBox="0 0 1254 1254" aria-hidden="true">
       <defs>
         <linearGradient id={leftLid} x1="375" y1="524" x2="466" y2="704" gradientUnits="userSpaceOnUse">
@@ -97,7 +111,7 @@ export function JujubaMascot({ hero = false, followPointer = false, grabbed = fa
           <stop offset="1" stopColor="#d91489" />
         </linearGradient>
         <clipPath id={mouth}><path d={smile} /></clipPath>
-        {followPointer && <>
+        {(followPointer || watching) && <>
           <clipPath id={leftPupil}><ellipse cx="435" cy="615" rx="82" ry="88" /></clipPath>
           <clipPath id={rightPupil}><path d="M717 614 843 584C865 646 827 694 784 694 743 694 717 659 717 614Z" /></clipPath>
         </>}
@@ -107,7 +121,7 @@ export function JujubaMascot({ hero = false, followPointer = false, grabbed = fa
           <stop offset="1" stopColor="#d31487" />
         </linearGradient>}
       </defs>
-      {followPointer && <g className="jujuba-gaze">
+      {(followPointer || watching) && <g className={'jujuba-gaze' + (watching ? ' jujuba-pair-gaze' : '')}>
         <g clipPath={`url(#${leftPupil})`}>
           <rect x="339" y="521" width="194" height="190" fill="#510232" />
           <g className="jujuba-glints" fill="#fff7fc">

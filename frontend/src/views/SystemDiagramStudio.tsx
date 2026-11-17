@@ -3,6 +3,9 @@ import { ArrowLeft, Braces, Copy, FileDown, FilePlus2, FolderOpen, GitBranch, La
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import type { MascotRoom } from '../models/flowMascot'
 import type { Connection } from '../models/sql'
+import { clearFlowUpgrade, rememberFlowUpgrade, type FlowUpgrade } from '../controllers/flowUpgrade'
+import { FlowRoomVersion } from './FlowRoomVersion'
+import { version as buildVersion } from '../../package.json'
 import { appError, flowCollaboration, flowProjects, systemDiagram } from '../controllers/api'
 import type { FlowCommand, FlowProject, FlowProjectEntry, FlowSession } from '../models/flowWorkspace'
 import {
@@ -39,9 +42,10 @@ function hasElement(diagram: SystemDiagram, id: string | null) {
 
 type Panel = 'create' | 'share' | 'join' | null
 
-export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagram, onMascotRoom, connection }: {
+export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagram, onMascotRoom, connection, upgrade }: {
   exit: () => void
   connection?: Connection | null
+  upgrade: FlowUpgrade | null
   provider: AiProvider
   assistantDiagram: AssistantFlowChange | null
   onDiagram: (diagram: SystemDiagram | null) => void
@@ -58,6 +62,8 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
   const [remember, setRemember] = useState(false)
   const [savedAccess, setSavedAccess] = useState(readSavedAccess)
   const guestName = useRef('')
+  const attemptedJoin = useRef<{ code: string; name: string } | null>(null)
+  const resumedUpgrade = useRef(false)
   const savedTicket = useRef<string | null>(null)
   const [inspectorSizing, setInspectorSizing] = useState(false)
   const [inspectorLimit, setInspectorLimit] = useState(() => Math.max(inspectorMinimum, Math.min(640, Math.floor(window.innerWidth * .54))))
@@ -94,15 +100,26 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
   const guest = !!session && session.projectId === null
   const disabled = !!busy || (!!session && !session.canEdit && (guest || session.phase !== 'ended'))
 
+  useEffect(() => {
+    if (!upgrade || resumedUpgrade.current) return
+    resumedUpgrade.current = true
+    clearFlowUpgrade()
+    void perform('Voltando ao fluxograma…', async () => {
+      if (upgrade.kind === 'join') setActive(await joinProject(upgrade.code, upgrade.name))
+      else await openWorkspace(await flowProjects.load(upgrade.project), upgrade.resumeInvite)
+    })
+  }, [upgrade])
+
   useEffect(() => { onDiagram(diagram) }, [diagram, onDiagram])
 
   useEffect(() => {
     if (!sessionId || session?.phase !== 'connected' || !session.peer || !session.mascotSupported) {
       onMascotRoom(null)
     } else {
-      onMascotRoom({ id: sessionId, peer: session.peer, mascot: session.mascot ?? null, meeting: session.mascotMeeting ?? null })
+      onMascotRoom({ id: sessionId, peer: session.peer, host: session.projectId !== null, rich: !!session.peerVersion,
+        mascot: session.mascot ?? null, meeting: session.mascotMeeting ?? null, splats: session.mascotSplats ?? [] })
     }
-  }, [sessionId, session?.phase, session?.peer, session?.mascotSupported, session?.mascotVersion, onMascotRoom])
+  }, [sessionId, session?.phase, session?.peer, session?.peerVersion, session?.mascotSupported, session?.mascotVersion, onMascotRoom])
 
   useEffect(() => {
     function resize() {
@@ -303,11 +320,11 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
     setCode(null)
   }
 
-  async function openWorkspace(next: FlowProject) {
+  async function openWorkspace(next: FlowProject, resumeInvite = false) {
     setWorkspace(next.id)
     setPanel(null)
     replace(next.diagram, next.file, next.fileDirty)
-    if (next.returningGuest) setActive(await flowCollaboration.host(next.id))
+    if (next.returningGuest || resumeInvite) setActive(await flowCollaboration.host(next.id, undefined, resumeInvite))
   }
 
   function addEdge(edge: SystemEdge) {
@@ -393,8 +410,34 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
 
   function joinProject(code: string, name: string) {
     guestName.current = name.trim()
+    attemptedJoin.current = { code: code.trim(), name: guestName.current }
     savedTicket.current = null
     return flowCollaboration.join(code, name)
+  }
+
+  async function prepareFlowUpdate() {
+    await edits.current
+    const current = active.current
+    if (!current) return
+    if (workspace) {
+      rememberFlowUpgrade({ kind: 'host', project: workspace, resumeInvite: current.phase === 'approval' || current.phase === 'inviting' })
+      return clearFlowUpgrade
+    } else if (attemptedJoin.current) {
+      const code = current.returnCode ?? (current.phase === 'connected' ? null : attemptedJoin.current.code)
+      if (code) {
+        rememberFlowUpgrade({ kind: 'join', code, name: attemptedJoin.current.name })
+        return clearFlowUpgrade
+      }
+    }
+  }
+
+  function retryEntry() {
+    const attempt = attemptedJoin.current
+    if (attempt) void perform('Tentando entrar novamente…', async () => {
+      await endSession()
+      if (!workspace) replace(null, null, false)
+      setActive(await joinProject(attempt.code, attempt.name))
+    })
   }
 
   function returnToProject(access: SavedFlowAccess) {
@@ -509,7 +552,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
         </div>
         {session?.phase === 'connected' && <div className="flow-share-presence" aria-label="Compartilhamento do fluxograma">
           <Users size={17} />
-          <span><strong>{session.peer}</strong> está no fluxograma</span>
+          <span><strong>{session.peer}</strong> está no fluxograma{session.peerVersion === buildVersion && <> · v{session.peerVersion}</>}</span>
         </div>}
         <div className="system-doc-actions">
           {session?.phase === 'connected' && <>
@@ -578,7 +621,9 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
           {session.trustedPeer && <button className="button" disabled={!!busy}
             onClick={() => sessionCommand({ type: 'revoke' }, 'Revogando acesso…')}>Revogar acesso salvo</button>}
         </>}
-        {session.phase === 'joining' && <span role="status">Aguardando aprovação do dono do projeto…</span>}
+        {session.phase === 'joining' && <span role="status">{session.peer ? <>Aguardando a aprovação de <strong>{session.peer}</strong>…</> : 'Aguardando aprovação do dono do projeto…'}</span>}
+        {(session.phase === 'approval' || (session.phase === 'joining' && session.peerVersion)) &&
+          <FlowRoomVersion peerVersion={session.peerVersion} prepare={prepareFlowUpdate} disabled={!!busy} />}
         {session.code && <><label>Código do convite
           <input className="flow-invite-code" readOnly value={session.code} onFocus={(event) => event.target.select()} />
         </label>
@@ -603,10 +648,15 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
             onClick={() => sessionCommand({ type: 'reject' }, 'Recusando pedido…')}>Recusar</button>
         </>}
         {session.phase === 'ended' && <span role="status">{session.message}</span>}
+        {session.phase === 'ended' && guest && attemptedJoin.current && <button className="button"
+          disabled={!!busy} onClick={retryEntry}>Tentar entrar novamente</button>}
         <button className="button flow-end-share" disabled={!!busy} onClick={closeSharing}>
           {session.phase === 'ended' ? 'Fechar sessão' : guest ? 'Cancelar entrada' : 'Encerrar sessão'}
         </button>
       </div>}
+      {session?.phase === 'connected' && session.peerVersion !== buildVersion &&
+        <div className="flow-share-bar"><FlowRoomVersion peerVersion={session.peerVersion}
+          prepare={prepareFlowUpdate} disabled={!!busy} /></div>}
       {(busy || error || notice || (session?.phase === 'connected' && session.message)) && <div className={'system-message' + (error ? ' is-error' : '')} role={error ? 'alert' : 'status'}>
         {busy && <LoaderCircle size={15} className="spin" />}{error || busy || notice || session?.message}
       </div>}

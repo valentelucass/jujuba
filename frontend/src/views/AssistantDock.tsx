@@ -3,11 +3,11 @@ import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { JujubaMascot } from './JujubaMascot'
 import { MascotMeetingEffect, SharedMascot } from './SharedMascot'
 import { useSharedMascot } from '../controllers/useSharedMascot'
-import type { MascotRoom, MascotVisibility } from '../models/flowMascot'
+import type { MascotImpulse, MascotRoom, MascotVisibility } from '../models/flowMascot'
 import { makeSplat, MascotSplat, type Splat } from './MascotSplat'
 import { hats, MascotHat, readHat, saveHat, type Hat } from './MascotHat'
 import { appError, systemDiagram } from '../controllers/api'
-import { animateThrow, throwVelocity, type FlightBounds, type FlightFrame, type Point, type PointerSample } from '../controllers/mascotMotion'
+import { animateThrow, throwVelocity, type FlightBounds, type FlightFrame, type Impact, type Point, type PointerSample } from '../controllers/mascotMotion'
 import type { AiProvider, AssistantFlowResult, ChatMessage, ReferenceDocument, SystemDiagram } from '../models/systemDiagram'
 
 const assistants = {
@@ -168,11 +168,19 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const side = placement?.side === 'bottom' ? edgeAt(resting.x, width) : placement?.side ?? 'right'
   const point = dragPoint ?? flight ?? resting
   const expression = grabbed ? null : frightened && !flight ? (pointerNear ? 'scared' : 'wary') : reaction
-  const { preferences: mascotPreferences, savePreferences, remote, meeting } = useSharedMascot(mascotRoom, {
+  const { preferences: mascotPreferences, savePreferences, shareImpact, remote, meeting } = useSharedMascot(mascotRoom, {
     position: point, bounds, hat, flight,
     pose: grabbed ? 'held' : expression === 'scared' || expression === 'wary' ? expression : 'idle',
+    kick: collide, receiveSplat: addRemoteSplat,
   })
+  const showingRemote = !!remote
+  useEffect(() => {
+    if (!showingRemote) setSplats((marks) => marks.some((mark) => mark.remote) ? marks.filter((mark) => !mark.remote) : marks)
+  }, [showingRemote])
   const greeting = meeting?.near ? meeting.kind : undefined
+  const pairDelta = remote ? { x: remote.point.x - point.x, y: remote.point.y - point.y } : { x: 1, y: 0 }
+  const pairLength = Math.max(1, Math.hypot(pairDelta.x, pairDelta.y))
+  const pairDirection = { x: pairDelta.x / pairLength, y: pairDelta.y / pairLength }
   const dockAnchor = flight ? resting : point
   const dockWidth = Math.min(415, width - 28)
   const dockHeight = Math.min(615, height - 28)
@@ -280,6 +288,24 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     setPointerNear(!!lastPointer.current && pointerDistance(lastPointer.current, rest) < 87)
   }
 
+  function addRemoteSplat(impact: Impact) {
+    const mark = { ...makeSplat(impact, launcherSize, ++nextSplat.current), remote: true }
+    setSplats((previous) => [...previous.slice(-31), mark])
+  }
+
+  function collide(impulse: MascotImpulse, source: 'local' | 'remote') {
+    if (drag.current || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const { direction, strength } = impulse
+    const sign = source === 'local' ? -.88 : 1
+    const carry = flight?.velocity ?? { x: 0, y: 0 }
+    const motion = {
+      x: direction.x * strength * sign + carry.x * .14,
+      y: direction.y * strength * sign + carry.y * .14 - 180,
+    }
+    cancelFlight.current?.()
+    throwMascot({ x: point.x, y: point.y }, motion)
+  }
+
   function throwMascot(from: Point, velocity: Point) {
     setFrightened(true)
     setFlight({ ...from, velocity, squash: 0, edge: 'bottom' })
@@ -302,7 +328,8 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
       setTrail((previous) => [...previous.slice(-17), mark])
     }, (impact) => {
       const mark = makeSplat(impact, launcherSize, ++nextSplat.current)
-      setSplats((previous) => [...previous.slice(-23), mark])
+      setSplats((previous) => [...previous.slice(-31), mark])
+      shareImpact(impact)
     }, (rest) => {
       cancelFlight.current = null
       setFlight(null)
@@ -473,7 +500,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
         </div>
       </form>
     </section>}
-    {splats.map((mark) => <MascotSplat key={mark.id} mark={mark}
+    {splats.filter((mark) => !mark.remote || remote).map((mark) => <MascotSplat key={mark.id} mark={mark}
       remove={() => setSplats((previous) => previous.filter((entry) => entry.id !== mark.id))} />)}
     {trail.map((mark) => <span key={mark.id} className="jujuba-trail" aria-hidden="true" style={{
       left: mark.x, top: mark.y, width: mark.width, height: 3 + mark.strength * 7,
@@ -481,7 +508,8 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
       animationDuration: `${250 + mark.strength * 390}ms`,
     }} onAnimationEnd={() => setTrail((previous) => previous.filter((entry) => entry.id !== mark.id))} />)}
     {mascotRoom && remote && <SharedMascot key={mascotRoom.id} peer={mascotRoom.peer}
-      appearance={remote} visibility={mascotPreferences.remote} greeting={greeting} />}
+      appearance={remote} visibility={mascotPreferences.remote} greeting={greeting}
+      direction={{ x: -pairDirection.x, y: -pairDirection.y }} />}
     {meeting && <MascotMeetingEffect key={meeting.source + '-' + meeting.id} kind={meeting.kind} point={meeting.point} />}
     <button ref={launcher} className={`assistant-launch${grabbed ? ' is-grabbed' : ''}${dragPoint ? ' is-dragging' : ''}${flight ? ' is-flying' : ''}${expression ? ' is-' + expression : ''}`}
       style={{ left: point.x, top: point.y }} aria-label={open ? 'Fechar assistente' : 'Abrir assistente de IA'}
@@ -506,7 +534,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
         if (open) close()
         else setOpen(true)
       }}>
-      <JujubaMascot followPointer grabbed={grabbed} reaction={expression} flight={flight} hat={hat} greeting={greeting} />
+      <JujubaMascot followPointer grabbed={grabbed} reaction={expression} flight={flight} hat={hat} greeting={greeting} direction={pairDirection} />
     </button>
   </>
 }

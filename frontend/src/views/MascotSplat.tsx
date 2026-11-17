@@ -4,7 +4,7 @@ const directions = { top: 0, right: 90, bottom: 180, left: -90 }
 const colors = ['#df2885', '#ff65af', '#f2459d']
 
 type Drop = { x: number; y: number; width: number; height: number; rotation: number; color: string; delay: number }
-export type Splat = Point & { id: number; edge: Impact['edge']; angle: number; width: number; duration: number; path: string; highlight: string; drops: Drop[] }
+export type Splat = Point & { remote?: boolean; id: number; edge: Impact['edge']; angle: number; width: number; duration: number; path: string; highlight: string; drops: Drop[] }
 
 const vary = (min: number, max: number) => min + Math.random() * (max - min)
 
@@ -41,7 +41,7 @@ export function makeSplat(impact: Impact, size: number, id: number): Splat {
 }
 
 export function MascotSplat({ mark, remove }: { mark: Splat; remove: () => void }) {
-  return <svg className="jujuba-splat" data-edge={mark.edge} aria-hidden="true" viewBox="-64 -64 128 128"
+  return <svg className={'jujuba-splat' + (mark.remote ? ' is-remote' : '')} data-edge={mark.edge} aria-hidden="true" viewBox="-64 -64 128 128"
     style={{ left: mark.x, top: mark.y, width: mark.width, height: mark.width, animationDuration: `${mark.duration}s` }}
     onAnimationEnd={(event) => { if (event.target === event.currentTarget) remove() }}>
     <g transform={`rotate(${mark.angle})`}>

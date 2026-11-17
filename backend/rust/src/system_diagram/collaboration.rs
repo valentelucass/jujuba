@@ -1,6 +1,6 @@
 use super::{
-    flow_access::{self, Guest, Sharing},
-    flow_mascot::{Mascot, Meeting},
+    flow_access::{self, Guest, Sharing, StoredInvitation},
+    flow_mascot::{Mascot, Meeting, Splat},
     flow_merge::merge,
     model::{invalid, Diagram, Position},
     workspaces,
@@ -17,7 +17,7 @@ use std::{
     future::Future,
     path::PathBuf,
     sync::{Arc, Mutex},
-    time::Duration,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, State};
 use tokio::{
@@ -28,6 +28,7 @@ use tokio::{
 };
 use uuid::Uuid;
 
+const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 const ALPN: &[u8] = b"jujubasql/flow/4";
 const INVITATION_LIFETIME: Duration = Duration::from_secs(600);
 const APPROVAL_TIME: Duration = Duration::from_secs(120);
@@ -71,12 +72,14 @@ pub struct View {
     phase: Phase,
     code: Option<String>,
     peer: Option<String>,
+    peer_version: Option<String>,
     can_edit: bool,
     cursor: Option<Position>,
     mascot_supported: bool,
     mascot_version: u64,
     mascot: Option<Mascot>,
     mascot_meeting: Option<Meeting>,
+    mascot_splats: VecDeque<Splat>,
     diagram: Option<Diagram>,
     revision: u64,
     message: Option<String>,
@@ -93,6 +96,12 @@ enum Packet {
         token: [u8; 16],
         #[serde(default)]
         mascots: bool,
+        #[serde(default)]
+        version: Option<String>,
+    },
+    RoomVersion {
+        name: String,
+        version: String,
     },
     Accepted {
         name: String,
@@ -100,6 +109,8 @@ enum Packet {
         return_code: Option<String>,
         #[serde(default)]
         mascots: bool,
+        #[serde(default)]
+        version: Option<String>,
     },
     Rejected,
     Snapshot {
@@ -119,6 +130,9 @@ enum Packet {
     MascotMeeting {
         meeting: Meeting,
     },
+    MascotSplat {
+        splat: Splat,
+    },
 }
 
 #[derive(Deserialize)]
@@ -132,6 +146,7 @@ pub enum Command {
     Cursor { position: Option<Position> },
     Mascot { mascot: Option<Mascot> },
     MascotMeeting { meeting: Meeting },
+    MascotSplat { splat: Splat },
     Edit { before: Diagram, diagram: Diagram },
 }
 
@@ -146,6 +161,19 @@ type Inbox = mpsc::Receiver<Request>;
 struct SharedProject {
     id: Uuid,
     directory: PathBuf,
+}
+
+struct Visitor {
+    name: String,
+    token: [u8; 16],
+    mascots: bool,
+    version: Option<String>,
+}
+
+enum Approval {
+    Accepted { remember: bool },
+    Rejected,
+    Interrupted,
 }
 
 impl FlowCollaboration {
@@ -165,12 +193,14 @@ impl FlowCollaboration {
             phase: Phase::Starting,
             code: None,
             peer: None,
+            peer_version: None,
             can_edit: false,
             cursor: None,
             mascot_supported: false,
             mascot_version: 0,
             mascot: None,
             mascot_meeting: None,
+            mascot_splats: VecDeque::new(),
             diagram: None,
             revision: 0,
             message: None,
@@ -190,6 +220,7 @@ impl FlowCollaboration {
                 view.cursor = None;
                 view.mascot = None;
                 view.mascot_meeting = None;
+                view.mascot_splats.clear();
                 view.mascot_supported = false;
                 view.message = Some(
                     result
@@ -296,9 +327,10 @@ async fn host(
                     let request = request.ok_or_else(disconnected)?;
                     let result = match request.command {
                         Command::Invite => {
-                            invitation = Some(new_invitation());
-                            idle_view(&state, &endpoint, &sharing, invitation);
-                            Ok(())
+                            record_invitation(&project, &mut sharing, Some(new_invitation())).map(|next| {
+                                invitation = next;
+                                idle_view(&state, &endpoint, &sharing, invitation);
+                            })
                         }
                         Command::Revoke => revoke(&project, &mut sharing, &state),
                         Command::Edit { before, diagram: after } =>
@@ -309,30 +341,65 @@ async fn host(
                 }
             }
         };
-        let (connection, mut send, mut recv, peer, candidate, mascots) = attempt;
+        let (
+            connection,
+            mut send,
+            mut recv,
+            Visitor {
+                name: peer,
+                token: candidate,
+                mascots,
+                version,
+            },
+        ) = attempt;
         let peer_id = connection.remote_id();
         let saved = sharing
             .guest
             .as_ref()
             .filter(|guest| guest.id == peer_id && matches_token(candidate, guest.ticket));
         let return_code = if let Some(guest) = saved {
-            change(&state, |view| view.peer = Some(guest.name.clone()));
+            if announce_room(&mut send, &sharing.name, version.is_some())
+                .await
+                .is_err()
+            {
+                continue;
+            }
+            change(&state, |view| {
+                view.peer = Some(guest.name.clone());
+                view.peer_version.clone_from(&version);
+            });
             Some(encode(endpoint.id(), guest.ticket))
         } else if invitation.is_some_and(|(token, expiry)| {
             Instant::now() < expiry && matches_token(candidate, token)
         }) {
-            invitation = None;
+            if announce_room(&mut send, &sharing.name, version.is_some())
+                .await
+                .is_err()
+            {
+                continue;
+            }
             change(&state, |view| {
                 view.phase = Phase::Approval;
+                view.peer_version.clone_from(&version);
                 view.peer = Some(peer.clone());
                 view.code = None;
             });
-            let Some(remember) =
-                approve(&connection, &mut commands, &state, &project, &mut diagram).await
-            else {
-                reject(connection, send);
-                continue;
-            };
+            let remember =
+                match approve(&connection, &mut commands, &state, &project, &mut diagram).await {
+                    Approval::Accepted { remember } => {
+                        invitation = record_invitation(&project, &mut sharing, None)?;
+                        remember
+                    }
+                    Approval::Rejected => {
+                        invitation = record_invitation(&project, &mut sharing, None)?;
+                        reject(connection, send);
+                        continue;
+                    }
+                    Approval::Interrupted => {
+                        reject(connection, send);
+                        continue;
+                    }
+                };
             if remember {
                 let ticket = Uuid::new_v4();
                 let previous = sharing.guest.replace(Guest {
@@ -367,6 +434,7 @@ async fn host(
                 diagram: diagram.clone(),
                 return_code,
                 mascots,
+                version: Some(APP_VERSION.into()),
             },
         )
         .await
@@ -396,6 +464,69 @@ fn new_invitation() -> (Uuid, Instant) {
     (Uuid::new_v4(), Instant::now() + INVITATION_LIFETIME)
 }
 
+fn unix_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
+
+fn record_invitation(
+    project: &SharedProject,
+    sharing: &mut Sharing,
+    invitation: Option<(Uuid, Instant)>,
+) -> Result<Option<(Uuid, Instant)>> {
+    let previous = sharing.invitation;
+    sharing.invitation = invitation.map(|(token, deadline)| StoredInvitation {
+        token,
+        expires_at: unix_millis()
+            + deadline
+                .saturating_duration_since(Instant::now())
+                .as_millis() as u64,
+    });
+    if let Err(error) = flow_access::write(&project.directory, project.id, sharing) {
+        sharing.invitation = previous;
+        return Err(error);
+    }
+    Ok(invitation)
+}
+
+fn restore_invitation(sharing: &Sharing) -> Option<(Uuid, Instant)> {
+    let invitation = sharing.invitation?;
+    let remaining = invitation.expires_at.checked_sub(unix_millis())?;
+    if remaining == 0 || remaining > INVITATION_LIFETIME.as_millis() as u64 {
+        return None;
+    }
+    Some((
+        invitation.token,
+        Instant::now() + Duration::from_millis(remaining),
+    ))
+}
+
+fn valid_version(version: &str) -> bool {
+    version.len() <= 24
+        && version.split('.').count() == 3
+        && version.split('.').all(|part| {
+            !part.is_empty()
+                && part.bytes().all(|c| c.is_ascii_digit())
+                && part.parse::<u32>().is_ok()
+        })
+}
+
+async fn announce_room(send: &mut SendStream, name: &str, versioned: bool) -> Result<()> {
+    if versioned {
+        send_packet(
+            send,
+            Packet::RoomVersion {
+                name: name.into(),
+                version: APP_VERSION.into(),
+            },
+        )
+        .await?;
+    }
+    Ok(())
+}
+
 fn idle_view(
     state: &Mutex<View>,
     endpoint: &Endpoint,
@@ -410,9 +541,11 @@ fn idle_view(
         };
         view.code = invitation.map(|(token, _)| encode(endpoint.id(), token));
         view.peer = None;
+        view.peer_version = None;
         view.cursor = None;
         view.mascot = None;
         view.mascot_meeting = None;
+        view.mascot_splats.clear();
         view.mascot_supported = false;
         view.can_edit = true;
         view.trusted_peer = sharing.guest.as_ref().map(|guest| guest.name.clone());
@@ -431,22 +564,25 @@ async fn approve(
     state: &Mutex<View>,
     project: &SharedProject,
     diagram: &mut Diagram,
-) -> Option<bool> {
+) -> Approval {
     let expires = Instant::now() + APPROVAL_TIME;
     loop {
         let request = tokio::select! {
-            _ = connection.closed() => return None,
-            _ = sleep_until(expires) => return None,
-            request = commands.recv() => request?,
+            _ = connection.closed() => return Approval::Interrupted,
+            _ = sleep_until(expires) => return Approval::Interrupted,
+            request = commands.recv() => match request {
+                Some(request) => request,
+                None => return Approval::Interrupted,
+            },
         };
         let result = match request.command {
             Command::Accept { remember } => {
                 let _ = request.response.send(Ok(()));
-                return Some(remember);
+                return Approval::Accepted { remember };
             }
             Command::Reject => {
                 let _ = request.response.send(Ok(()));
-                return None;
+                return Approval::Rejected;
             }
             Command::Edit {
                 before,
@@ -485,9 +621,7 @@ fn matches_token(candidate: [u8; 16], token: Uuid) -> bool {
         == 0
 }
 
-async fn incoming(
-    endpoint: &Endpoint,
-) -> Result<(Connection, SendStream, RecvStream, String, [u8; 16], bool)> {
+async fn incoming(endpoint: &Endpoint) -> Result<(Connection, SendStream, RecvStream, Visitor)> {
     while let Some(incoming) = endpoint.accept().await {
         let attempt = timeout(IO_TIME, async {
             let connection = incoming.await.map_err(|_| unavailable())?;
@@ -496,11 +630,22 @@ async fn incoming(
                 name,
                 token,
                 mascots,
+                version,
             } = read_packet(&mut recv).await?
             else {
                 return Err(unavailable());
             };
-            Ok((connection, send, recv, alias(&name)?, token, mascots))
+            Ok((
+                connection,
+                send,
+                recv,
+                Visitor {
+                    name: alias(&name)?,
+                    token,
+                    mascots,
+                    version: version.filter(|value| valid_version(value)),
+                },
+            ))
         })
         .await;
         if let Ok(Ok(attempt)) = attempt {
@@ -530,6 +675,7 @@ async fn join(
                 name,
                 token,
                 mascots: true,
+                version: Some(APP_VERSION.into()),
             },
         )
         .await?;
@@ -538,30 +684,43 @@ async fn join(
     .await
     .map_err(|_| unavailable())??;
     change(&state, |view| view.phase = Phase::Joining);
-    let (name, mut diagram, return_code, mascots) =
-        match timeout(APPROVAL_TIME, read_packet(&mut recv)).await {
-            Ok(Ok(Packet::Accepted {
-                name,
-                diagram,
-                return_code,
-                mascots,
-            })) => (alias(&name)?, diagram, return_code, mascots),
-            Ok(Ok(Packet::Rejected)) => {
-                return Err(AppError::new(
-                    "declined",
-                    "O código ou o acesso salvo não está disponível neste projeto.",
-                ))
-            }
-            _ => {
-                return Err(AppError::new(
-                    "approval",
-                    "O convite foi encerrado ou expirou.",
-                ))
-            }
-        };
+    let deadline = Instant::now() + APPROVAL_TIME;
+    let mut answer = tokio::time::timeout_at(deadline, read_packet(&mut recv)).await;
+    if let Ok(Ok(Packet::RoomVersion { name, version })) = &answer {
+        let peer = alias(name)?;
+        change(&state, |view| {
+            view.peer = Some(peer);
+            view.peer_version = valid_version(version).then(|| version.clone());
+        });
+        answer = tokio::time::timeout_at(deadline, read_packet(&mut recv)).await;
+    }
+    let (name, mut diagram, return_code, mascots, version) = match answer {
+        Ok(Ok(Packet::Accepted {
+            name,
+            diagram,
+            return_code,
+            mascots,
+            version,
+        })) => (alias(&name)?, diagram, return_code, mascots, version),
+        Ok(Ok(Packet::Rejected)) => {
+            return Err(AppError::new(
+                "declined",
+                "O código ou o acesso salvo não está disponível neste projeto.",
+            ))
+        }
+        _ => {
+            return Err(AppError::new(
+                "approval",
+                "O convite foi encerrado ou expirou.",
+            ))
+        }
+    };
     diagram.validate_draft()?;
     change(&state, |view| {
         view.peer = Some(name);
+        if let Some(version) = version.filter(|value| valid_version(value)) {
+            view.peer_version = Some(version);
+        }
         view.return_code = return_code;
         view.diagram = Some(diagram.clone());
         view.revision += 1;
@@ -596,6 +755,12 @@ async fn connected(
         view.can_edit = true;
         view.code = None;
     });
+    let rich_mascots = mascots
+        && state
+            .lock()
+            .map_err(|_| unavailable())?
+            .peer_version
+            .is_some();
     let mut acknowledged = 0;
     let mut sequence = 0;
     let mut pending = VecDeque::new();
@@ -641,6 +806,8 @@ async fn connected(
                         },
                         Command::Mascot { mascot } if mascots && mascot.as_ref().is_none_or(Mascot::valid) =>
                             send_packet(send, Packet::Mascot { mascot }).await,
+                        Command::MascotSplat { splat } if rich_mascots && splat.valid() =>
+                            send_packet(send, Packet::MascotSplat { splat }).await,
                         Command::MascotMeeting { meeting } if mascots && meeting.valid() =>
                             send_packet(send, Packet::MascotMeeting { meeting }).await,
                         Command::Cursor { position } if valid_position(position) =>
@@ -662,9 +829,23 @@ async fn connected(
                     change(state, |view| {
                         if mascot.is_none() {
                             view.mascot_meeting = None;
+                            view.mascot_splats.clear();
                         }
                         view.mascot = mascot;
                         view.mascot_version += 1;
+                    });
+                }
+            }
+            Packet::MascotSplat { splat } if rich_mascots => {
+                if splat.valid() {
+                    change(state, |view| {
+                        if view.mascot.is_some() {
+                            if view.mascot_splats.len() >= 16 {
+                                view.mascot_splats.pop_front();
+                            }
+                            view.mascot_splats.push_back(splat);
+                            view.mascot_version += 1;
+                        }
                     });
                 }
             }
@@ -798,25 +979,32 @@ pub async fn flow_collab_host(
     sessions: State<'_, FlowCollaboration>,
     id: Uuid,
     name: Option<String>,
+    resume_invite: Option<bool>,
 ) -> Result<View> {
     let directory = workspaces::directory(&app)?;
     let diagram = workspaces::load(&directory, id)?.diagram;
     let saved = flow_access::read(&directory, id)?;
-    let (sharing, invitation) = match name {
-        Some(name) => {
-            let name = alias(&name)?;
-            let mut sharing = saved.unwrap_or_else(|| Sharing::new(name.clone()));
-            sharing.name = name;
-            (sharing, Some(new_invitation()))
-        }
-        None => (
-            saved
-                .filter(|sharing| sharing.guest.is_some())
-                .ok_or_else(operation_unavailable)?,
-            None,
-        ),
-    };
     let project = SharedProject { directory, id };
+    let (sharing, invitation) = if let Some(name) = name {
+        let name = alias(&name)?;
+        let mut sharing = saved.unwrap_or_else(|| Sharing::new(name.clone()));
+        sharing.name = name;
+        let invitation = record_invitation(&project, &mut sharing, Some(new_invitation()))?;
+        (sharing, invitation)
+    } else {
+        let sharing = saved.ok_or_else(operation_unavailable)?;
+        let invitation = resume_invite
+            .unwrap_or(false)
+            .then(|| restore_invitation(&sharing))
+            .flatten();
+        if invitation.is_none() && sharing.guest.is_none() {
+            return Err(AppError::new(
+                "expired",
+                "O convite anterior expirou. Gere um novo convite neste projeto.",
+            ));
+        }
+        (sharing, invitation)
+    };
     sessions.start(Some(id), |state, commands| async move {
         let endpoint = endpoint(true, SecretKey::from_bytes(&sharing.key)).await?;
         timeout(DIAL_TIME, endpoint.online())
@@ -977,6 +1165,34 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn remembers_only_an_unexpired_pending_invitation() {
+        let directory = tempfile::tempdir().unwrap();
+        let project = SharedProject {
+            id: Uuid::new_v4(),
+            directory: directory.path().to_owned(),
+        };
+        let mut sharing = Sharing::new("Ana".into());
+        let (token, _) = record_invitation(&project, &mut sharing, Some(new_invitation()))
+            .unwrap()
+            .unwrap();
+        let loaded = flow_access::read(&project.directory, project.id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(restore_invitation(&loaded).unwrap().0, token);
+        assert_eq!(sharing.key, loaded.key);
+        record_invitation(&project, &mut sharing, None).unwrap();
+        let loaded = flow_access::read(&project.directory, project.id)
+            .unwrap()
+            .unwrap();
+        assert!(restore_invitation(&loaded).is_none());
+        sharing.invitation = Some(StoredInvitation {
+            token,
+            expires_at: unix_millis().saturating_sub(1),
+        });
+        assert!(restore_invitation(&sharing).is_none());
+    }
+
     async fn test_endpoint(secret: SecretKey, relay: bool, host: bool) -> Endpoint {
         let mut builder = if relay {
             Endpoint::builder(presets::N0).clear_ip_transports()
@@ -1092,7 +1308,13 @@ mod tests {
 
         let request = wait(&owner, |view| view.phase == Phase::Approval).await;
         assert_eq!(request.peer.as_deref(), Some("Bia"));
-        let before_approval = wait(&guest, |view| view.phase == Phase::Joining).await;
+        assert_eq!(request.peer_version.as_deref(), Some(APP_VERSION));
+        let before_approval = wait(&guest, |view| {
+            view.phase == Phase::Joining && view.peer_version.is_some()
+        })
+        .await;
+        assert_eq!(before_approval.peer.as_deref(), Some("Ana"));
+        assert_eq!(before_approval.peer_version.as_deref(), Some(APP_VERSION));
         assert!(before_approval.diagram.is_none());
         assert!(!before_approval.can_edit);
         let host_tx = owner.sender(host.id).unwrap();
@@ -1152,10 +1374,29 @@ mod tests {
         .unwrap();
         wait(&guest, |view| view.mascot.is_some()).await;
 
+        let splat = Splat {
+            id: 1,
+            position: Position { x: 0.7, y: 1.0 },
+            edge: super::super::flow_mascot::Edge::Bottom,
+            slide: 0.15,
+            strength: 0.7,
+        };
+        submit(guest_tx.clone(), Command::MascotSplat { splat })
+            .await
+            .unwrap();
+        let splats = wait(&owner, |view| !view.mascot_splats.is_empty())
+            .await
+            .mascot_splats;
+        assert_eq!(splats[0].strength, 0.7);
+
         let meeting = Meeting {
             id: 1,
             position: Position { x: 0.5, y: 0.5 },
-            kind: super::super::flow_mascot::MeetingKind::Kiss,
+            kind: super::super::flow_mascot::MeetingKind::Bump,
+            impulse: Some(super::super::flow_mascot::Impulse {
+                direction: Position { x: 1.0, y: 0.0 },
+                strength: 920.0,
+            }),
         };
         submit(guest_tx.clone(), Command::MascotMeeting { meeting })
             .await
@@ -1173,6 +1414,7 @@ mod tests {
             .unwrap();
         let hidden = wait(&owner, |view| view.mascot.is_none()).await;
         assert!(hidden.mascot_meeting.is_none());
+        assert!(hidden.mascot_splats.is_empty());
         assert!(hidden.mascot_version >= 3);
 
         let position = Some(Position { x: 21.0, y: -117.0 });

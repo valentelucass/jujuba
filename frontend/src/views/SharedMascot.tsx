@@ -4,11 +4,12 @@ import { hats, type Hat } from './MascotHat'
 import type { Point } from '../controllers/mascotMotion'
 import type { MascotMeetingKind, MascotPresence, MascotVisibility } from '../models/flowMascot'
 
-export function SharedMascot({ peer, appearance, visibility, greeting }: {
+export function SharedMascot({ peer, appearance, visibility, greeting, direction }: {
   peer: string
   appearance: MascotPresence & { point: Point }
   visibility: MascotVisibility
   greeting?: MascotMeetingKind
+  direction: Point
 }) {
   const { point, hat, pose, flight } = appearance
   const classes = ['assistant-peer', 'is-' + visibility]
@@ -18,13 +19,13 @@ export function SharedMascot({ peer, appearance, visibility, greeting }: {
   return <div className={classes.join(' ')} role="img" aria-label={'Jujuba de ' + peer}
     data-pose={flight ? 'flight' : pose} style={{ left: point.x, top: point.y }}>
     <JujubaMascot hat={Object.hasOwn(hats, hat) ? hat as Hat : 'none'} grabbed={pose === 'held'}
-      reaction={pose === 'wary' || pose === 'scared' ? pose : null} greeting={greeting}
+      reaction={pose === 'wary' || pose === 'scared' ? pose : null} greeting={greeting} direction={direction}
       flight={flight ? { ...point, edge: flight.edge, squash: flight.squash, velocity: { x: flight.velocityX, y: 0 } } : null} />
   </div>
 }
 
 export function MascotMeetingEffect({ kind, point }: { kind: MascotMeetingKind; point: Point }) {
-  const Icon = kind === 'kiss' ? Heart : kind === 'bounce' ? Zap : Sparkles
+  const Icon = kind === 'kiss' || kind === 'hug' ? Heart : kind === 'bounce' || kind === 'bump' || kind === 'push' ? Zap : Sparkles
   return <div className={'jujuba-meeting jujuba-meeting-' + kind} aria-hidden="true"
     style={{ left: point.x + 33, top: point.y + 12 }}>
     <Icon size={24} />

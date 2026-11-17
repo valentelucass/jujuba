@@ -3,6 +3,7 @@ import { isTauri } from '@tauri-apps/api/core'
 import { ArrowDownRight, ArrowRight, Braces, ChevronRight, Database as DatabaseIcon, GitFork, KeyRound,
   PanelRight, Plug, RefreshCw, Search, Table2 } from 'lucide-react'
 import { appError, sql } from '../controllers/api'
+import { readFlowUpgrade } from '../controllers/flowUpgrade'
 import { activeDatabase, getSavedConnection, readSessionPreference, rememberActiveDatabase, rememberSession } from '../controllers/connectionPreference'
 import { useExplorer } from '../controllers/useExplorer'
 import { useTable } from '../controllers/useTable'
@@ -254,8 +255,9 @@ export function App() {
   const [savedEngines, setSavedEngines] = useState<Engine[]>([])
   const started = useRef(!restoring)
 
-  const [diagrams, setDiagrams] = useState(false)
-  const [openedDiagrams, setOpenedDiagrams] = useState(false)
+  const [flowUpgrade] = useState(readFlowUpgrade)
+  const [diagrams, setDiagrams] = useState(!!flowUpgrade)
+  const [openedDiagrams, setOpenedDiagrams] = useState(!!flowUpgrade)
   const [assistantOpen, setAssistantOpen] = useState(false)
   const [provider, setProvider] = useState(readProvider)
   const [databaseScreen, setDatabaseScreen] = useState('Bancos de dados')
@@ -404,7 +406,7 @@ export function App() {
     </div>
     {openedDiagrams && <div className="app-screen" hidden={!diagrams}>
       <Suspense fallback={<Loading />}><SystemDiagramStudio exit={() => setDiagrams(false)} provider={provider}
-        assistantDiagram={assistantDiagram} onDiagram={setCurrentDiagram} onMascotRoom={setMascotRoom} connection={connection} /></Suspense>
+        upgrade={flowUpgrade} assistantDiagram={assistantDiagram} onDiagram={setCurrentDiagram} onMascotRoom={setMascotRoom} connection={connection} /></Suspense>
     </div>}
     <AssistantDock open={assistantOpen} setOpen={setAssistantOpen} provider={provider} setProvider={setProvider}
       screen={screen} diagram={diagrams ? currentDiagram : null} onDiagram={applyAssistantDiagram}

@@ -42,6 +42,8 @@ pub struct Meeting {
     pub id: u32,
     pub position: Position,
     pub kind: MeetingKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub impulse: Option<Impulse>,
 }
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
@@ -50,6 +52,37 @@ pub enum MeetingKind {
     Kiss,
     Play,
     Bounce,
+    Hug,
+    Squeeze,
+    Look,
+    Dance,
+    Push,
+    Bump,
+}
+
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Impulse {
+    pub direction: Position,
+    pub strength: f64,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct Splat {
+    pub id: u32,
+    pub position: Position,
+    pub edge: Edge,
+    pub slide: f64,
+    pub strength: f64,
+}
+
+impl Splat {
+    pub fn valid(&self) -> bool {
+        self.id > 0
+            && valid_point(self.position)
+            && (-1.0..=1.0).contains(&self.slide)
+            && (0.0..=1.0).contains(&self.strength)
+    }
 }
 
 impl Mascot {
@@ -69,7 +102,13 @@ impl Mascot {
 
 impl Meeting {
     pub fn valid(&self) -> bool {
-        self.id > 0 && valid_point(self.position)
+        self.id > 0
+            && valid_point(self.position)
+            && self.impulse.is_none_or(|impulse| {
+                matches!(self.kind, MeetingKind::Push | MeetingKind::Bump)
+                    && (0.8..=1.01).contains(&impulse.direction.x.hypot(impulse.direction.y))
+                    && (120.0..=1900.0).contains(&impulse.strength)
+            })
     }
 }
 

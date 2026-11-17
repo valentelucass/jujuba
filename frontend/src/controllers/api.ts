@@ -76,7 +76,7 @@ export const flowProjects = {
 }
 
 export const flowCollaboration = {
-  host: (id: string, name?: string) => call<FlowSession>('flow_collab_host', { id, name }),
+  host: (id: string, name?: string, resumeInvite?: boolean) => call<FlowSession>('flow_collab_host', { id, name, resumeInvite }),
   join: (code: string, name: string) => call<FlowSession>('flow_collab_join', { code, name }),
   view: (id: string, seen: number) => call<FlowSession | null>('flow_collab_view', { id, seen }),
   command: (id: string, command: FlowCommand) => call<void>('flow_collab_command', { id, command }),
