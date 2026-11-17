@@ -91,6 +91,8 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
   const [error, setError] = useState('')
   const locking = useRef(false)
   const active = useRef<FlowSession | null>(null)
+  const queuedCursor = useRef<{ id: string; position: StagePosition | null } | null>(null)
+  const sendingCursor = useRef(false)
   const edits = useRef(Promise.resolve())
   const editGeneration = useRef(0)
   const pendingEdits = useRef(0)
@@ -147,18 +149,24 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
     if (!sessionId) return
     const id = sessionId
     let seen = 0
+    let known: number | undefined
     let disposed = false
     let timer: ReturnType<typeof setTimeout>
     async function refresh() {
       try {
         const generation = editGeneration.current
-        const view = await flowCollaboration.view(id, seen)
+        const view = await flowCollaboration.view(id, seen, known)
         if (disposed || active.current?.id !== id) return
         if (!view) {
           setError('A sessão de compartilhamento foi encerrada.')
           setActive(null)
           return
         }
+        if ('unchanged' in view) {
+          timer = setTimeout(() => void refresh(), 0)
+          return
+        }
+        known = view.liveVersion
         if (view.phase === 'approval' && active.current.phase !== 'approval') setRemember(false)
         active.current = view
         setSession(view)
@@ -178,7 +186,10 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
           }
           seen = view.revision
         }
-        if (view.phase !== 'ended') timer = setTimeout(() => void refresh(), 100)
+        if (view.phase !== 'ended') {
+          const delay = seen !== view.revision ? 16 : view.liveVersion === undefined ? 100 : 0
+          timer = setTimeout(() => void refresh(), delay)
+        }
       } catch (failure) {
         if (!disposed && active.current?.id === id) {
           setError(appError(failure).message)
@@ -474,11 +485,21 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
     })
   }
 
-  function sendCursor(position: StagePosition | null) {
+  async function sendCursor(position: StagePosition | null) {
     const current = active.current
-    if (current?.phase === 'connected') {
-      const command: FlowCommand = { type: 'cursor', position }
-      void flowCollaboration.command(current.id, command).catch(() => {})
+    if (current?.phase !== 'connected') return
+    queuedCursor.current = { id: current.id, position }
+    if (sendingCursor.current) return
+    sendingCursor.current = true
+    try {
+      while (queuedCursor.current) {
+        const next = queuedCursor.current
+        queuedCursor.current = null
+        if (active.current?.id !== next.id || active.current.phase !== 'connected') continue
+        await flowCollaboration.command(next.id, { type: 'cursor', position: next.position }).catch(() => {})
+      }
+    } finally {
+      sendingCursor.current = false
     }
   }
 

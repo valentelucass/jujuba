@@ -113,6 +113,11 @@ export function SystemFlowCanvas({ diagram, selected, choose, connect, move, ren
 }) {
   const flow = useRef<ReactFlowInstance<FlowNode, RoutedFlowEdge> | null>(null)
   const lastCursor = useRef(0)
+  const pendingCursor = useRef<StagePosition | null>(null)
+  const cursorTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const cursorSender = useRef(sendCursor)
+  cursorSender.current = sendCursor
+  useEffect(() => () => clearTimeout(cursorTimer.current), [])
   const renameCurrent = useRef(rename)
   renameCurrent.current = rename
   const { theme } = useTheme()
@@ -160,12 +165,29 @@ export function SystemFlowCanvas({ diagram, selected, choose, connect, move, ren
 
   return <section className="system-flow-canvas" aria-label="Fluxograma do sistema"
     onPointerMove={(event) => {
-      const now = performance.now()
-      if (!sendCursor || !flow.current || now - lastCursor.current < 60) return
-      lastCursor.current = now
-      sendCursor(flow.current.screenToFlowPosition({ x: event.clientX, y: event.clientY }))
+      if (!sendCursor || !flow.current) return
+      const position = flow.current.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+      const remaining = 32 - (performance.now() - lastCursor.current)
+      if (remaining <= 0 && cursorTimer.current === undefined) {
+        lastCursor.current = performance.now()
+        sendCursor(position)
+      } else {
+        pendingCursor.current = position
+        cursorTimer.current ??= setTimeout(() => {
+          cursorTimer.current = undefined
+          lastCursor.current = performance.now()
+          if (pendingCursor.current) cursorSender.current?.(pendingCursor.current)
+          pendingCursor.current = null
+        }, remaining)
+      }
     }}
-    onPointerLeave={() => { lastCursor.current = 0; sendCursor?.(null) }}>
+    onPointerLeave={() => {
+      clearTimeout(cursorTimer.current)
+      cursorTimer.current = undefined
+      pendingCursor.current = null
+      lastCursor.current = 0
+      sendCursor?.(null)
+    }}>
     <ReactFlow onInit={(api) => { flow.current = api }} nodes={nodes} edges={edges} onNodesChange={onNodesChange}
       nodeTypes={nodeTypes} edgeTypes={edgeTypes} colorMode={theme} fitView fitViewOptions={{ padding: .18, maxZoom: 1.25 }}
       minZoom={.12} zoomOnDoubleClick={false} nodeClickDistance={3} nodesDraggable={!disabled} nodesConnectable={!disabled} edgesReconnectable={false} deleteKeyCode={null}

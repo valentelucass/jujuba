@@ -22,7 +22,7 @@ use std::{
 use tauri::{AppHandle, State};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    sync::{mpsc, oneshot},
+    sync::{mpsc, oneshot, watch},
     task::AbortHandle,
     time::{sleep_until, timeout, Instant},
 };
@@ -49,6 +49,7 @@ struct Session {
 impl Drop for Session {
     fn drop(&mut self) {
         self.task.abort();
+        change(&self.view, |view| view.phase = Phase::Ended);
     }
 }
 
@@ -80,11 +81,26 @@ pub struct View {
     mascot: Option<Mascot>,
     mascot_meeting: Option<Meeting>,
     mascot_splats: VecDeque<Splat>,
-    diagram: Option<Diagram>,
+    diagram: Option<Arc<Diagram>>,
     revision: u64,
     message: Option<String>,
     trusted_peer: Option<String>,
     return_code: Option<String>,
+    live_version: u64,
+    #[serde(skip)]
+    updates: watch::Sender<u64>,
+}
+
+#[derive(Serialize)]
+#[serde(untagged)]
+pub enum ViewUpdate {
+    Unchanged {
+        id: Uuid,
+        unchanged: bool,
+        #[serde(rename = "liveVersion")]
+        live_version: u64,
+    },
+    Full(View),
 }
 
 #[derive(Serialize, Deserialize)]
@@ -206,6 +222,8 @@ impl FlowCollaboration {
             message: None,
             trusted_peer: None,
             return_code: None,
+            live_version: 0,
+            updates: watch::channel(0).0,
         };
         let view = Arc::new(Mutex::new(initial.clone()));
         let (tx, rx) = mpsc::channel(24);
@@ -251,17 +269,73 @@ impl FlowCollaboration {
     fn end(&self, id: Uuid) -> Result<()> {
         let mut guard = self.0.lock().map_err(|_| unavailable())?;
         if let Some(session) = guard.as_ref() {
-            if session.view.lock().map_err(|_| unavailable())?.id == id {
+            let matches = session.view.lock().map_err(|_| unavailable())?.id == id;
+            if matches {
                 *guard = None;
             }
         }
         Ok(())
     }
+
+    fn view(&self, id: Uuid) -> Result<Option<Arc<Mutex<View>>>> {
+        let guard = self.0.lock().map_err(|_| unavailable())?;
+        let Some(session) = guard.as_ref() else {
+            return Ok(None);
+        };
+        if session.view.lock().map_err(|_| unavailable())?.id != id {
+            return Ok(None);
+        }
+        Ok(Some(session.view.clone()))
+    }
+
+    async fn next_view(
+        &self,
+        id: Uuid,
+        seen: u64,
+        known: Option<u64>,
+    ) -> Result<Option<ViewUpdate>> {
+        let Some(state) = self.view(id)? else {
+            return Ok(None);
+        };
+        let mut updates = {
+            let view = state.lock().map_err(|_| unavailable())?;
+            if view.phase == Phase::Ended
+                || known != Some(view.live_version)
+                || seen != view.revision
+            {
+                return Ok(Some(snapshot(&view, seen)));
+            }
+            view.updates.subscribe()
+        };
+        let _ = timeout(Duration::from_millis(600), updates.changed()).await;
+        let Some(state) = self.view(id)? else {
+            return Ok(None);
+        };
+        let view = state.lock().map_err(|_| unavailable())?;
+        if view.phase != Phase::Ended && known == Some(view.live_version) && seen == view.revision {
+            return Ok(Some(ViewUpdate::Unchanged {
+                id,
+                unchanged: true,
+                live_version: view.live_version,
+            }));
+        }
+        Ok(Some(snapshot(&view, seen)))
+    }
+}
+
+fn snapshot(view: &View, seen: u64) -> ViewUpdate {
+    let mut view = view.clone();
+    if view.revision == seen {
+        view.diagram = None;
+    }
+    ViewUpdate::Full(view)
 }
 
 fn change(state: &Mutex<View>, update: impl FnOnce(&mut View)) {
     if let Ok(mut view) = state.lock() {
         update(&mut view);
+        view.live_version = view.live_version.wrapping_add(1);
+        view.updates.send_replace(view.live_version);
     }
 }
 
@@ -722,7 +796,7 @@ async fn join(
             view.peer_version = Some(version);
         }
         view.return_code = return_code;
-        view.diagram = Some(diagram.clone());
+        view.diagram = Some(Arc::new(diagram.clone()));
         view.revision += 1;
     });
 
@@ -922,7 +996,7 @@ fn apply_edit(
 fn publish(state: &Mutex<View>, diagram: &Diagram) {
     change(state, |view| {
         view.revision += 1;
-        view.diagram = Some(diagram.clone());
+        view.diagram = Some(Arc::new(diagram.clone()));
     });
 }
 
@@ -1050,24 +1124,13 @@ pub async fn flow_collab_join(
 }
 
 #[tauri::command]
-pub fn flow_collab_view(
+pub async fn flow_collab_view(
     sessions: State<'_, FlowCollaboration>,
     id: Uuid,
     seen: u64,
-) -> Result<Option<View>> {
-    let guard = sessions.0.lock().map_err(|_| unavailable())?;
-    let Some(session) = guard.as_ref() else {
-        return Ok(None);
-    };
-    let view = session.view.lock().map_err(|_| unavailable())?;
-    if view.id != id {
-        return Ok(None);
-    }
-    let mut view = view.clone();
-    if view.revision == seen {
-        view.diagram = None;
-    }
-    Ok(Some(view))
+    known: Option<u64>,
+) -> Result<Option<ViewUpdate>> {
+    sessions.next_view(id, seen, known).await
 }
 
 async fn submit(sender: mpsc::Sender<Request>, command: Command) -> Result<()> {
@@ -1090,8 +1153,12 @@ pub async fn flow_collab_command(
 
 #[tauri::command]
 pub async fn flow_collab_end(sessions: State<'_, FlowCollaboration>, id: Uuid) -> Result<()> {
-    if flow_collab_view(sessions.clone(), id, 0)?.is_some_and(|view| view.phase == Phase::Connected)
-    {
+    let connected = if let Some(view) = sessions.view(id)? {
+        view.lock().map_err(|_| unavailable())?.phase == Phase::Connected
+    } else {
+        false
+    };
+    if connected {
         let _ = submit(sessions.sender(id)?, Command::End).await;
     }
     sessions.end(id)
@@ -1441,10 +1508,22 @@ mod tests {
             .await
             .unwrap();
         wait(&owner, |view| view.cursor == position).await;
-        submit(host_tx.clone(), Command::Cursor { position })
-            .await
-            .unwrap();
-        wait(&guest, |view| view.cursor == position).await;
+        let current = wait(&guest, |view| view.phase == Phase::Connected).await;
+        let (update, sent) = tokio::join!(
+            guest.next_view(visitor.id, current.revision, Some(current.live_version)),
+            submit(host_tx.clone(), Command::Cursor { position }),
+        );
+        sent.unwrap();
+        let ViewUpdate::Full(updated) = update.unwrap().unwrap() else {
+            panic!("A posição deveria acordar a leitura pendente");
+        };
+        assert_eq!(updated.cursor, position);
+        assert!(updated.live_version > current.live_version);
+        assert!(updated.diagram.is_none());
+        assert!(matches!(
+            guest.next_view(visitor.id, updated.revision, Some(updated.live_version)).await.unwrap(),
+            Some(ViewUpdate::Unchanged { live_version, .. }) if live_version == updated.live_version
+        ));
 
         let mut host_edit = base.clone();
         host_edit.nodes[0].label = "Ana editou".into();

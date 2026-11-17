@@ -1,6 +1,6 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import type { AiProvider, AssistantReply, AssistantRequest, DiagramProject, GeneratedProject, OpenedDiagram, SystemDiagram } from '../models/systemDiagram'
-import type { FlowCommand, FlowProject, FlowProjectEntry, FlowSession } from '../models/flowWorkspace'
+import type { FlowCommand, FlowProject, FlowProjectEntry, FlowSession, FlowViewUpdate } from '../models/flowWorkspace'
 import type { NoSqlEngine } from '../models/engines'
 import type { DocumentsPage, RedisEntry, RedisKeys } from '../models/noSql'
 import type { DatabaseFile, DashboardOverview, DashboardPerformance, EngineDashboardData, LiveActivity, TableStorage } from '../models/dashboard'
@@ -78,7 +78,7 @@ export const flowProjects = {
 export const flowCollaboration = {
   host: (id: string, name?: string, resumeInvite?: boolean) => call<FlowSession>('flow_collab_host', { id, name, resumeInvite }),
   join: (code: string, name: string) => call<FlowSession>('flow_collab_join', { code, name }),
-  view: (id: string, seen: number) => call<FlowSession | null>('flow_collab_view', { id, seen }),
+  view: (id: string, seen: number, known?: number) => call<FlowViewUpdate | null>('flow_collab_view', { id, seen, known }),
   command: (id: string, command: FlowCommand) => call<void>('flow_collab_command', { id, command }),
   end: (id: string) => call<void>('flow_collab_end', { id }),
 }

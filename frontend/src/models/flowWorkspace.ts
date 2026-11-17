@@ -30,7 +30,9 @@ export interface FlowSession {
   message: string | null
   trustedPeer?: string | null
   returnCode?: string | null
+  liveVersion?: number
 }
+export type FlowViewUpdate = FlowSession | { id: string; unchanged: true; liveVersion: number }
 
 export type FlowCommand =
   | { type: 'reject' | 'invite' | 'revoke' }

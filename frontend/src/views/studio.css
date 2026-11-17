@@ -992,7 +992,10 @@ dialog.connection-dialog {
 .flow-share-bar input.flow-invite-code { width: min(440px, 74vw); font-family: monospace; font-size: 12px; }
 .flow-share-bar small { color: var(--quiet); }
 .flow-end-share { margin-left: auto; }
-.flow-peer-cursor { position: absolute; z-index: 1000; pointer-events: none; color: var(--berry); }
+.flow-peer-cursor { position: absolute; z-index: 1000; pointer-events: none; color: var(--berry); transition: left 32ms linear, top 32ms linear; }
+@media (prefers-reduced-motion: reduce) {
+  .flow-peer-cursor { transition: none; }
+}
 .flow-peer-cursor svg { display: block; transform: translate(-3px, -3px); stroke: var(--surface); stroke-width: 1.5; }
 .flow-peer-cursor span { position: absolute; top: 12px; left: 12px; display: block; padding: 2px 6px; border-radius: 4px; background: var(--berry); color: var(--workspace); font-size: 12px; white-space: nowrap; }
 
@@ -1056,7 +1059,7 @@ dialog.connection-dialog {
 .assistant-peer {
   position: fixed; z-index: 11; width: 66px; height: 66px;
   display: grid; place-items: center; pointer-events: none;
-  transition: left 105ms linear, top 105ms linear, opacity 160ms ease;
+  transition: left 40ms linear, top 40ms linear, opacity 160ms ease;
 }
 .assistant-peer.is-dim { opacity: .44; }
 .assistant-peer.is-full { opacity: .93; }
@@ -1118,8 +1121,8 @@ dialog.connection-dialog {
 .mascot-shared-scene { position: fixed; z-index: 12; inset: 0; pointer-events: none; }
 .mascot-shared-scene.is-dim { opacity: .55; }
 .mascot-shared-scene.is-hidden { display: none; }
-.mascot-shared-scene .mascot-shot { transition: left 65ms linear, top 65ms linear; }
-.mascot-shared-scene .jujuba-offspring { transition: left 65ms linear, top 65ms linear; }
+.mascot-shared-scene .mascot-shot { transition: left 32ms linear, top 32ms linear; }
+.mascot-shared-scene .jujuba-offspring { transition: left 32ms linear, top 32ms linear; }
 .jujuba-pair-gaze { visibility: visible; }
 .jujuba-pair-gaze .jujuba-glints {
   animation: none;

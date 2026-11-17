@@ -131,7 +131,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const [flight, setFlight] = useState<FlightFrame | null>(null)
   const [collisionRest, setCollisionRest] = useState<Point | null>(null)
   const [splats, setSplats] = useState<Splat[]>([])
-  const outgoingScene = useRef<MascotScene | null>(null)
+  const outgoingScene = useRef<(() => MascotScene) | null>(null)
   const drag = useRef<{ id: number; origin: Point; offset: Point; moved: boolean; samples: PointerSample[] } | null>(null)
   const cancelFlight = useRef<(() => void) | null>(null)
   const nextSplat = useRef(0)

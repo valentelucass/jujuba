@@ -9,7 +9,7 @@ const preferenceKey = 'jujuba.flow.mascots'
 const normal = (value: number) => Math.max(0, Math.min(value, 1))
 const greetingDistance = 60
 const separateDistance = 86
-const updateInterval = 65
+const updateInterval = 32
 const meetingTime = 1320
 const hugTime = 7200
 
@@ -59,7 +59,7 @@ export function useSharedMascot(room: MascotRoom | null, {
   relocate: (point: Point) => void
   receiveSplat?: (impact: Impact) => void
   practice?: Practice | null
-  scene?: RefObject<MascotScene | null>
+  scene?: RefObject<(() => MascotScene) | null>
 }) {
   const [preferences, setPreferences] = useState(readPreferences)
   const [shown, setShown] = useState<{ source: 'local' | 'remote'; room: string; event: MascotMeeting } | null>(null)
@@ -106,9 +106,10 @@ export function useSharedMascot(room: MascotRoom | null, {
     let pending = false
     let lastSent: string | undefined
     function publish() {
-      const mascot = latest.current ? { ...latest.current, scene: sharedScene?.current ?? undefined } : null
+      if (pending || !roomId) return
+      const mascot = latest.current ? { ...latest.current, scene: sharedScene?.current?.() } : null
       const snapshot = JSON.stringify(mascot)
-      if (pending || lastSent === snapshot || !roomId) return
+      if (lastSent === snapshot) return
       pending = true
       void flowCollaboration.command(roomId, { type: 'mascot', mascot }).then(
         () => { lastSent = snapshot }, () => { /* Tenta no próximo intervalo da sessão. */ },

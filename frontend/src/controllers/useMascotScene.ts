@@ -5,9 +5,9 @@ import type { MascotImpulse, MascotMeetingKind, MascotRoom } from '../models/flo
 import { mapToy, type MascotScene, type SceneHit, type SceneSound, type SceneSoundKind, type ToyKind, type ToyVisual } from '../models/mascotScene'
 
 type Companion = { point: Point | null; held: boolean; flight: FlightFrame | null; greeting?: MascotMeetingKind; direction: Point }
-const normal = (value: number) => Math.max(0, Math.min(1, value))
+const normal = (value: number) => Math.round(Math.max(0, Math.min(1, value)) * 10000) / 10000
 
-export function useMascotScene(outgoing: RefObject<MascotScene | null>, {
+export function useMascotScene(outgoing: RefObject<(() => MascotScene) | null>, {
   room, own, clone, hat, children, childPosition, peerPoint, receiveHit, fireSound,
 }: {
   room: MascotRoom | null; own: Point; clone: Companion; hat: string; children: Offspring[]
@@ -40,10 +40,10 @@ export function useMascotScene(outgoing: RefObject<MascotScene | null>, {
       outgoing.current = null
       return
     }
-    function publish() {
+    outgoing.current = () => {
       const { own, clone, hat, children, childPosition } = latest.current
       const normalize = (point: Point): Point => ({ x: normal(point.x / window.innerWidth), y: normal(point.y / window.innerHeight) })
-      outgoing.current = {
+      return {
         epoch: epoch.current, origin: normalize(own), toy: toy.current ? mapToy(toy.current, normalize) : null,
         clone: clone.point ? { point: normalize({ x: clone.point.x + 33, y: clone.point.y + 33 }), hat,
           pose: clone.held ? 'held' : 'idle', greeting: clone.greeting, direction: clone.direction, flight: clone.flight ? {
@@ -51,17 +51,13 @@ export function useMascotScene(outgoing: RefObject<MascotScene | null>, {
           } : null } : null,
         young: children.map((child) => ({
           id: child.id, point: normalize(childPosition(child)), phase: child.phase, held: !!child.held,
-          rotation: (child.flight?.velocity.x ?? 0) / 95, squash: child.flight?.squash ?? 0,
+          rotation: Math.round((child.flight?.velocity.x ?? 0) / 9.5) / 10,
+          squash: Math.round((child.flight?.squash ?? 0) * 100) / 100,
         })),
         hits: hits.current, sounds: sounds.current,
       }
     }
-    publish()
-    const timer = window.setInterval(publish, 40)
-    return () => {
-      window.clearInterval(timer)
-      outgoing.current = null
-    }
+    return () => { outgoing.current = null }
   }, [roomId, outgoing])
 
   const incoming = peerPoint ? room?.mascot?.scene : null
