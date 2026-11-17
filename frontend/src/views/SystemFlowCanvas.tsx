@@ -98,16 +98,17 @@ export function SystemFlowCanvas({ diagram, selected, choose, connect, move, dis
   }
 
   return <section className="system-flow-canvas" aria-label="Fluxograma do sistema">
-    {diagram?.nodes.length ? <ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange}
+    <ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange}
       nodeTypes={nodeTypes} colorMode={theme} fitView fitViewOptions={{ padding: .18, maxZoom: 1.25 }}
       minZoom={.12} nodesDraggable={!disabled} nodesConnectable={!disabled} edgesReconnectable={false} deleteKeyCode={null}
       multiSelectionKeyCode={null} nodeExtent={[[-100_000, -100_000], [100_000, 100_000]]}
       onNodeDragStop={(_, node) => move(node.id, node.position)}
       onNodeClick={(_, node) => choose(node.id)} onPaneClick={() => choose(null)} onConnect={add}>
-      <FitNewStages nodeIds={diagram.nodes.map((node) => node.id).join(',')} />
-      <Background gap={21} size={1.2} color="var(--dot)" />
-      <Controls showInteractive={false} />
-    </ReactFlow> : <div className="system-flow-empty">
+      <FitNewStages nodeIds={diagram?.nodes.map((node) => node.id).join(',') ?? ''} />
+      <Background id="system-flow-dots" gap={20} size={1.4} color="var(--canvas-dot)" />
+      {!!diagram?.nodes.length && <Controls showInteractive={false} />}
+    </ReactFlow>
+    {!diagram?.nodes.length && <div className="system-flow-empty">
       <span><Workflow size={28} /></span>
       <h2>Seu fluxo começa aqui</h2>
       <p>Adicione uma forma pelo painel direito para começar.</p>

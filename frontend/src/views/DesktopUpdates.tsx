@@ -1,7 +1,10 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
 import { check, type Update } from '@tauri-apps/plugin-updater'
 import { Download, RefreshCw } from 'lucide-react'
+
+const AUTO_CHECK_INTERVAL = 5 * 60_000
+const FOCUS_CHECK_INTERVAL = 60_000
 
 const Updates = createContext<{ open: () => void; available: boolean } | null>(null)
 type Status = 'idle' | 'checking' | 'current' | 'available' | 'downloading' | 'installing' | 'error'
@@ -15,13 +18,17 @@ export function DesktopUpdates({ children }: { children: ReactNode }) {
   const resource = useRef<Update | null>(null)
   const checkInProgress = useRef(false)
   const manualCheck = useRef(false)
+  const installInProgress = useRef(false)
+  const lastCheck = useRef(-Infinity)
   const dialog = useRef<HTMLDialogElement>(null)
   const busy = status === 'downloading' || status === 'installing'
 
-  async function search(manual: boolean) {
+  const search = useCallback(async (manual: boolean) => {
+    if (installInProgress.current) return
     manualCheck.current ||= manual
-    if (checkInProgress.current || busy) return
+    if (checkInProgress.current) return
     checkInProgress.current = true
+    lastCheck.current = Date.now()
     setStatus('checking')
     try {
       const found = await check({ timeout: 12000 })
@@ -32,18 +39,28 @@ export function DesktopUpdates({ children }: { children: ReactNode }) {
       setStatus(found ? 'available' : 'current')
     } catch {
       setError('Não foi possível consultar o GitHub. Tente novamente em instantes.')
-      setStatus(manualCheck.current ? 'error' : 'idle')
+      setStatus(manualCheck.current ? 'error' : resource.current ? 'available' : 'idle')
     } finally {
       checkInProgress.current = false
       manualCheck.current = false
     }
-  }
+  }, [])
 
   useEffect(() => {
     if (!isTauri()) return
-    const timer = window.setTimeout(() => { void search(false) }, 1000)
-    return () => window.clearTimeout(timer)
-  }, [])
+    const checkForUpdates = () => { void search(false) }
+    const checkOnFocus = () => {
+      if (Date.now() - lastCheck.current >= FOCUS_CHECK_INTERVAL) checkForUpdates()
+    }
+    const startup = window.setTimeout(checkOnFocus, 1000)
+    const interval = window.setInterval(checkForUpdates, AUTO_CHECK_INTERVAL)
+    window.addEventListener('focus', checkOnFocus)
+    return () => {
+      window.clearTimeout(startup)
+      window.clearInterval(interval)
+      window.removeEventListener('focus', checkOnFocus)
+    }
+  }, [search])
 
   useEffect(() => {
     if (visible && !dialog.current?.open) dialog.current?.showModal()
@@ -52,7 +69,8 @@ export function DesktopUpdates({ children }: { children: ReactNode }) {
 
   async function install() {
     const update = resource.current
-    if (!update || busy) return
+    if (!update || installInProgress.current || checkInProgress.current) return
+    installInProgress.current = true
     setStatus('downloading')
     setProgress(null)
     let total = 0
@@ -67,6 +85,7 @@ export function DesktopUpdates({ children }: { children: ReactNode }) {
         if (event.event === 'Finished') setStatus('installing')
       }, { timeout: 180000 })
     } catch {
+      installInProgress.current = false
       setError('Não foi possível baixar, validar ou instalar a atualização. Confira a conexão e tente novamente.')
       setStatus('error')
     }

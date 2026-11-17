@@ -1,5 +1,6 @@
 use crate::{
     credentials::PasswordKey,
+    engine_dashboard::{self, EngineDashboard},
     error::{deadline, AppError, Result},
     models::{ConnectInput, Connected, Engine, Scope, Transport},
     no_sql::NoSqlSession,
@@ -28,6 +29,7 @@ struct Session {
     databases: HashSet<String>,
 }
 
+#[derive(Clone)]
 enum SessionProfile {
     SqlServer(Arc<Profile>),
     Other(Arc<OtherSession>),
@@ -166,6 +168,23 @@ impl Connections {
 
             SessionProfile::Other(other) => Ok(Some(Arc::clone(other))),
         }
+    }
+
+    pub async fn dashboard(&self, scope: &Scope) -> Result<EngineDashboard> {
+        let profile = self.state.read().await.session(scope)?.clone();
+        deadline(async {
+            match profile {
+                SessionProfile::Other(session) => {
+                    engine_dashboard::sql(session.client(&scope.database).await?).await
+                }
+                SessionProfile::NoSql(session) =>
+                    engine_dashboard::no_sql(&session, &scope.database).await,
+                SessionProfile::SqlServer(_) => Err(AppError::new(
+                    "unsupported",
+                    "Use os painéis de monitoramento do SQL Server.",
+                )),
+            }
+        }).await
     }
 
     pub async fn no_sql(&self, scope: &Scope) -> Result<Arc<NoSqlSession>> {

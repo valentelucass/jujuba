@@ -57,6 +57,16 @@ async fn check_catalog(session: &OtherSession, database: &str, schema: &str) {
     assert!(!page.has_next);
 
     let diagram = session.diagram(database).await.unwrap();
+    let dashboard = crate::engine_dashboard::sql(session.client(database).await.unwrap())
+        .await
+        .unwrap();
+    let report = serde_json::to_value(dashboard).unwrap();
+    assert!(report["metrics"][0]["value"].as_u64().unwrap() >= 2);
+    assert!(report["metrics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|metric| metric["unit"] == "bytes" && metric["value"].as_u64().unwrap() > 0));
     assert!(diagram.tables.iter().any(|table| table.id == orders.id));
     assert!(diagram
         .relationships

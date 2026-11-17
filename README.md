@@ -8,7 +8,7 @@ Aplicativo desktop Windows para explorar SQL Server, MySQL, PostgreSQL, SQLite, 
 
 ## Instalar e conectar
 
-Na tela inicial, clique em **Nova conexão** e escolha o tipo de banco no centro. O painel direito mostra os bancos disponíveis e destaca a sua escolha. Para MySQL e PostgreSQL, informe servidor, porta e credenciais. Para PostgreSQL, indique também um banco inicial acessível. Para SQLite, abra um arquivo existente. Os três oferecem consultas, navegação, filtros e diagrama das chaves estrangeiras. A edição de células e os dashboards continuam disponíveis no SQL Server.
+Na tela inicial, clique em **Nova conexão** e escolha o tipo de banco no centro. O painel direito mostra os bancos disponíveis e destaca a sua escolha. Para MySQL e PostgreSQL, informe servidor, porta e credenciais. Para PostgreSQL, indique também um banco inicial acessível. Para SQLite, abra um arquivo existente. Os três oferecem consultas, navegação, filtros e diagrama das chaves estrangeiras. O SQL Server também oferece edição de células e painéis de atividade e desempenho.
 
 ### MongoDB e Redis
 
@@ -83,7 +83,9 @@ Selecione um banco para ver todas as tabelas e relações declaradas que o login
 
 ## Dashboards do banco
 
-Selecione um banco e abra **Dashboards**. **Visão geral** mostra os objetos visíveis e um gráfico de capacidade por tipo de arquivo. **Armazenamento** compara o espaço usado e reservado pelas maiores tabelas, incluindo seus índices. **Desempenho** consulta o Query Store em períodos de 24 horas, 7 dias ou 30 dias. Alterne entre linha e barras para comparar duração média, número de execuções e tempo acumulado.
+MySQL, PostgreSQL, SQLite, MongoDB e Redis têm um painel com métricas do banco selecionado. MySQL e PostgreSQL também exibem o espaço alocado nas maiores relações. Os dados dependem das permissões da conexão. No Redis, a memória, os clientes e as operações por segundo descrevem o servidor, enquanto a contagem de chaves se refere ao banco selecionado.
+
+No SQL Server, selecione um banco e abra **Dashboards**. **Visão geral** mostra os objetos visíveis e um gráfico de capacidade por tipo de arquivo. **Armazenamento** compara o espaço usado e reservado pelas maiores tabelas, incluindo seus índices. **Desempenho** consulta o Query Store em períodos de 24 horas, 7 dias ou 30 dias. Alterne entre linha e barras para comparar duração média, número de execuções e tempo acumulado.
 
 **Ao vivo** mostra solicitações em andamento, tipos de espera, sessões bloqueadoras e atividade de leitura e gravação por arquivo. Use **Só bloqueadas** para focar nos bloqueios por outras sessões. A atualização automática é opcional, roda a cada 15 segundos enquanto o painel está aberto e pausa se a leitura falhar. O painel exige permissão de monitoramento da instância e filtra as solicitações pelo banco selecionado.
 
@@ -95,7 +97,7 @@ Ao conectar com um usuário do SQL Server, marque **Lembrar senha neste PC**. Ap
 
 ## Atualizações no Windows
 
-Instale a versão 0.1.14 ou posterior uma vez. O JujubaSQL procura uma release ao abrir e destaca **Atualizações** na barra superior quando encontra uma versão mais recente. Abra **Atualizações**, salve seu trabalho e clique em **Atualizar agora**. O aplicativo valida a assinatura do instalador antes de iniciá-lo e reinicia após a instalação.
+Instale a versão 0.1.14 ou posterior uma vez. O JujubaSQL procura uma release ao abrir, ao voltar à janela e a cada cinco minutos. Ele destaca **Atualizações** na barra superior quando encontra uma versão mais recente. Abra **Atualizações**, salve seu trabalho e clique em **Atualizar agora**. O aplicativo valida a assinatura do instalador antes de iniciá-lo e reinicia após a instalação.
 
 Para distribuir uma versão, atualize as versões do frontend e do backend, incluindo os arquivos de dependências, e envie a tag correspondente, como `v0.1.15`. O workflow **Release Windows** compila o instalador x64, assina o pacote e publica os arquivos em uma Release. A chave pública está na configuração do Tauri. A chave privada fica no secret `TAURI_SIGNING_PRIVATE_KEY` do GitHub Actions e deve ter uma cópia protegida. As instalações existentes confiam nessa chave.
 

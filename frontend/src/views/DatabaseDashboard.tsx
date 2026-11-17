@@ -7,6 +7,8 @@ import { CanvasRenderer } from 'echarts/renderers'
 import { appError, sql } from '../controllers/api'
 import { useRemote } from '../controllers/useRemote'
 import type { DashboardOverview, DashboardPerformance, LiveActivity, TableStorage } from '../models/dashboard'
+import type { EngineDashboardData } from '../models/dashboard'
+import { engines, type Engine } from '../models/engines'
 import type { AppError, Scope } from '../models/sql'
 import { Empty, Failure, Loading } from './States'
 import { useTheme } from './Theme'
@@ -357,7 +359,48 @@ function StorageDashboard({ database, session }: Scope) {
   </>
 }
 
-export default function DatabaseDashboard({ database, session }: Scope) {
+function metricValue(metric: EngineDashboardData['metrics'][number]) {
+  if (metric.unit === 'count') return integer.format(metric.value)
+  if (metric.unit === 'perSecond') return integer.format(metric.value) + '/s'
+  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB']
+  const power = metric.value > 0 ? Math.min(units.length - 1, Math.floor(Math.log(metric.value) / Math.log(1024))) : 0
+  return number.format(metric.value / 1024 ** power) + ' ' + units[power]
+}
+
+function EngineDashboard({ database, session, engine }: Scope & { engine: Engine }) {
+  const [revision, setRevision] = useState(0)
+  const refresh = () => setRevision((value) => value + 1)
+  const load = useCallback(() => sql.engineDashboard({ database, session }), [database, session, revision])
+  const result = useRemote(load)
+  const data = result.status === 'ready' ? result.data : null
+  return <>
+    <div className="object-heading">
+      <div className="breadcrumbs"><Database size={14} />{engines[engine].name} · {database}</div>
+      <h1><ChartNoAxesCombined size={24} />Dashboards</h1>
+    </div>
+    <div className="dashboard-body">
+      <div className="dashboard-actions">
+        <button className="button" disabled={result.status === 'loading'} onClick={refresh}><RefreshCw size={14} />Atualizar painel</button>
+      </div>
+      {result.status === 'error' ? <Failure error={result.error} retry={refresh} /> : !data ? <Loading /> : <>
+        <dl className="dashboard-metrics">
+          {data.metrics.map((metric) => <div key={metric.label}><dt>{metric.label}</dt><dd>{metricValue(metric)}</dd></div>)}
+        </dl>
+        {data.tables.length > 0 && <HorizontalBars title="Maiores relações por espaço alocado" unit="MiB"
+          labels={data.tables.map((table) => table.name)}
+          series={[{ name: 'Alocado', color: '#749e80', values: data.tables.map((table) => table.bytes / 1_048_576) }]} />}
+        {data.partial && <p className="dashboard-updated">Parte das métricas do servidor ficou indisponível para esta conexão.</p>}
+        {engine === 'mysql' && <p className="dashboard-updated">Os valores de armazenamento são estimativas do catálogo.</p>}
+      </>}
+    </div>
+  </>
+}
+
+export default function DatabaseDashboard(props: Scope & { engine: Engine }) {
+  return props.engine === 'sqlServer' ? <SqlServerDashboard {...props} /> : <EngineDashboard {...props} />
+}
+
+function SqlServerDashboard({ database, session }: Scope) {
   const [tab, setTab] = useState<Tab>('overview')
   const [hours, setHours] = useState(24)
   const [revision, setRevision] = useState(0)

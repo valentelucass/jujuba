@@ -1,5 +1,6 @@
 import { Braces, FileDown, FilePlus2, FolderOpen, GitBranch, LayoutGrid, LoaderCircle, Redo2, Save, Sparkles, Undo2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import type { Connection } from '../models/sql'
 import { appError, systemDiagram } from '../controllers/api'
 import {
   emptyDiagram, type AiProvider, type DiagramProject, type GeneratedProject, type StagePosition,
@@ -10,8 +11,9 @@ import { StatusBar } from './StatusBar'
 import { SystemFlowCanvas } from './SystemFlowCanvas'
 import { SystemFlowEditor } from './SystemFlowEditor'
 
-export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagram }: {
+export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagram, connection }: {
   exit: () => void
+  connection?: Connection | null
   provider: AiProvider
   assistantDiagram: { diagram: SystemDiagram; revisionOf: SystemDiagram | null } | null
   onDiagram: (diagram: SystemDiagram | null) => void
@@ -216,6 +218,6 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
         </aside>
       </div>
     </main>
-    <StatusBar />
+    <StatusBar engine={connection?.engine} endpoint={connection?.endpoint} />
   </>
 }

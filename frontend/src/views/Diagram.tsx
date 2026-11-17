@@ -30,7 +30,7 @@ function TableNode({ data }: NodeProps<RelationNode>) {
     style={{ minHeight: portHeight }}>
     {data.ports.map(({ id, type, side, offset }) =>
       <Handle key={id} type={type} position={side} id={id} style={{ top: `calc(50% + ${offset}px)` }} />)}
-    <div><Table2 size={15} /><span title={`${data.table.schema}.${data.table.name}`}><small>{data.table.schema}</small>
+    <div className="diagram-node-heading"><Table2 size={15} /><span title={`${data.table.schema}.${data.table.name}`}><small>{data.table.schema}</small>
       <strong>{data.table.name}</strong></span></div>
     <ul>{data.columns.map((column) => <li key={column} title={column}>{column}</li>)}</ul>
   </div>
@@ -120,7 +120,7 @@ function ForeignKeyEdge({ id, source, target, sourceX, sourceY, targetX, targetY
 
   return <>
     <BaseEdge id={id} path={path} markerEnd={`url(#${arrowId}-${highlighted ? 'pink' : 'green'})`}
-      style={{ stroke: highlighted ? 'var(--berry)' : 'var(--mint)', strokeWidth: highlighted ? 2.3 : 1.5, opacity: dimmed ? .4 : 1 }} />
+      style={{ stroke: highlighted ? 'var(--berry)' : 'var(--graph-edge)', strokeWidth: highlighted ? 2.6 : 1.8, opacity: dimmed ? 'var(--graph-dimmed)' : 1 }} />
     {endpointBadge(relation.sourcePerTarget, sourceX + sourceDirection * 31, sourceY - 11, 'Origens por destino')}
     {endpointBadge(relation.targetPerSource, targetX + targetDirection * 31, targetY - 11, 'Destinos por origem')}
     <EdgeLabelRenderer>
@@ -311,7 +311,7 @@ export function Graph({ table, tables = noTables, relations, selected, onSelect,
       <svg className="diagram-markers" width="0" height="0" aria-hidden="true">
         <defs>
           <marker id={`${arrowId}-green`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9"
-            markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="var(--mint)" /></marker>
+            markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="var(--graph-edge)" /></marker>
           <marker id={`${arrowId}-pink`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="11" markerHeight="11"
             markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="var(--berry)" /></marker>
         </defs>
@@ -325,7 +325,7 @@ export function Graph({ table, tables = noTables, relations, selected, onSelect,
         onEdgeMouseEnter={(_, edge) => { if (edge.data?.compact) hoverEdge(edge.id) }}
         onEdgeMouseLeave={(_, edge) => { if (edge.data?.compact) hoverEdge(null) }}
         onEdgeClick={(_, edge) => { if (edge.data) onSelect(edge.data.relation) }}>
-        <Background color="var(--dot)" gap={20} size={1} />
+        <Background id={arrowId + '-dots'} color="var(--canvas-dot)" gap={20} size={1.4} />
         <DiagramControls />
         {!table && <TableFinder tables={tables} />}
       </ReactFlow>

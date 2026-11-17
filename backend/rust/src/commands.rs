@@ -31,6 +31,14 @@ pub async fn dashboard_live(
 }
 
 #[tauri::command]
+pub async fn dashboard_engine(
+    scope: Scope,
+    state: State<'_, Connections>,
+) -> Result<crate::engine_dashboard::EngineDashboard> {
+    state.dashboard(&scope).await
+}
+
+#[tauri::command]
 pub async fn dashboard_overview(
     scope: Scope,
     state: State<'_, Connections>,

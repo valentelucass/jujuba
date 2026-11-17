@@ -18,6 +18,7 @@ fn main() {
             "relationships",
             "database_diagram",
             "dashboard_overview",
+            "dashboard_engine",
             "dashboard_storage",
             "dashboard_files",
             "dashboard_performance",

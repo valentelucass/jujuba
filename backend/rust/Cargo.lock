@@ -2598,7 +2598,7 @@ dependencies = [
 
 [[package]]
 name = "jujubasql"
-version = "0.1.22"
+version = "0.1.23"
 dependencies = [
  "base64 0.22.1",
  "bigdecimal",

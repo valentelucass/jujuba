@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dashboard-engine"
+description = "Enables the dashboard_engine command without any pre-configured scope."
+commands.allow = ["dashboard_engine"]
+
+[[permission]]
+identifier = "deny-dashboard-engine"
+description = "Denies the dashboard_engine command without any pre-configured scope."
+commands.deny = ["dashboard_engine"]

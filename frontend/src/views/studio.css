@@ -15,6 +15,12 @@
   --quiet: #b8b8b8;
   --muted: #a2a2a2;
   --dot: #474747;
+  --canvas-dot: #585c59;
+  --graph-edge: #8acba1;
+  --graph-dimmed: .55;
+  --graph-node: var(--surface);
+  --graph-heading: var(--raised);
+  --graph-active-heading: var(--berry-button);
   --mint: #94dca9;
   --accent: #214532;
   --berry: #f396c2;
@@ -45,6 +51,12 @@
   --quiet: #4c4c4c;
   --muted: #646464;
   --dot: #d1d1d1;
+  --canvas-dot: #c5cec9;
+  --graph-edge: #325f4a;
+  --graph-dimmed: .70;
+  --graph-node: #fff;
+  --graph-heading: #eaf3ed;
+  --graph-active-heading: #f5cada;
   --mint: #246844;
   --accent: #def0e4;
   --berry: #a82264;
@@ -82,8 +94,20 @@ code { font-family: var(--mono); }
 ::-webkit-scrollbar-corner { background: var(--workspace); }
 
 .topbar {
-  display: flex; align-items: center; gap: 10px; padding: 0 19px;
+  display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 16px;
   background: var(--surface); border-bottom: 1px solid var(--line); position: relative; z-index: 3;
+}
+.bank-tools {
+  display: flex; align-items: center; gap: 6px; border-inline-start: 1px solid var(--line);
+  padding-inline-start: 8px; white-space: nowrap;
+}
+.bank-tools > * { flex-shrink: 0; }
+@media (max-width: 960px) {
+  .topbar { gap: 6px; padding-inline: 10px; }
+  .topbar .wordmark strong { display: none; }
+  .topbar .header-divider { margin-inline: 2px; }
+  .bank-tools .button { padding-inline: 7px; }
+  .bank-tools .bank-data span, .topbar .update-button span { display: none; }
 }
 .wordmark { display: flex; gap: 10px; align-items: center; white-space: nowrap; }
 .wordmark strong { font-size: 17px; letter-spacing: -.055em; font-weight: 680; }
@@ -115,7 +139,7 @@ code { font-family: var(--mono); }
 .connection-status.online i { background: var(--mint); box-shadow: 0 0 9px #7cd28045; }
 
 .database-picker { position: relative; min-width: 0; }
-.database-button { max-width: min(38vw, 360px); background: var(--surface); }
+.database-button { max-width: min(18vw, 280px); background: var(--surface); }
 .database-button > span { overflow: hidden; text-overflow: ellipsis; }
 .db-popover {
   position: absolute; top: calc(100% + 8px); left: 0; width: min(355px, 55vw);
@@ -318,19 +342,19 @@ code { font-family: var(--mono); }
 .diagram-controls .icon-button { height: 32px; width: 32px; border-color: transparent; color: var(--mint); }
 .diagram-controls .icon-button:hover:enabled { border-color: var(--line-strong); }
 .password-group { display: grid; gap: 5px; }
-.diagram-node { width: 212px; background: var(--surface); color: var(--text); border: 1px solid var(--line-strong); border-radius: 7px; overflow: hidden; }
+.diagram-node { width: 212px; background: var(--graph-node); color: var(--text); border: 1px solid var(--line-strong); border-radius: 7px; overflow: hidden; }
 .diagram-canvas .react-flow__node.draggable { cursor: grab; }
 .diagram-canvas .react-flow__node.dragging { cursor: grabbing; }
 .diagram-node.current { border-color: var(--mint); }
 .diagram-node.highlighted { border-color: var(--berry-line); background: var(--hover); }
 .diagram-node.active { border-color: var(--berry); background: var(--berry-selected); }
-.diagram-node.active > div { background: var(--berry-button); color: var(--berry-text); }
-.diagram-node.active > div :is(svg, small) { color: var(--berry-text); }
+.diagram-node.active .diagram-node-heading { background: var(--graph-active-heading); color: var(--berry-text); }
+.diagram-node.active .diagram-node-heading :is(svg, small) { color: var(--berry-text); }
 .diagram-markers { position: absolute; }
-.diagram-node > div { display: flex; align-items: center; gap: 8px; padding: 9px; background: var(--raised); }
-.diagram-node > div svg { color: var(--mint); }
+.diagram-node-heading { display: flex; align-items: center; gap: 8px; padding: 9px; background: var(--graph-heading); }
+.diagram-node-heading svg { color: var(--mint); }
 .diagram-node small, .diagram-node strong { display: block; max-width: 156px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.diagram-node small { color: var(--muted); font-size: 10px; }
+.diagram-node small { color: var(--quiet); font-size: 11px; }
 .diagram-node ul { list-style: none; margin: 0; padding: 4px 9px 6px; max-height: 168px; overflow: hidden; }
 .diagram-node li { font: 12px/21px var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .diagram-node .react-flow__handle { opacity: 0; }
@@ -344,7 +368,7 @@ code { font-family: var(--mono); }
 .edge-cardinality text { fill: var(--mint); font: 650 13px var(--mono); }
 .edge-cardinality.highlighted rect { fill: var(--berry-selected); stroke: var(--berry-line); }
 .edge-cardinality.highlighted text { fill: var(--berry-text); }
-.edge-cardinality.dimmed { opacity: .5; }
+.edge-cardinality.dimmed { opacity: .9; }
 .cardinality-legend { margin-inline-start: auto; display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 11px; }
 .cardinality-legend code, .cardinality-detail code {
   display: inline-block; border: 1px solid var(--line-strong); border-radius: 5px; color: var(--mint);
@@ -432,10 +456,11 @@ code { font-family: var(--mono); }
 .status-links a:hover { text-decoration: underline; }
 .update-button {
   display: inline-flex; flex: none; align-items: center; gap: 6px; white-space: nowrap;
-  height: 33px; padding: 0 9px; border: 1px solid var(--line-strong); border-radius: 7px;
-  background: var(--surface); color: var(--text); text-decoration: none;
+  height: 33px; padding: 0 9px; border: 1px solid transparent; border-radius: 7px;
+  background: transparent; color: var(--text); text-decoration: none;
 }
-.update-button:hover, .update-button.available {
+.update-button:not(.available):hover { background: var(--hover); }
+.update-button.available {
   background: var(--berry-selected); border-color: var(--berry-line); color: var(--berry-text);
 }
 .update-button.available svg { color: var(--berry); }
@@ -553,7 +578,7 @@ dialog.connection-dialog {
 .engine-option[aria-current="true"] > svg { color: var(--berry); }
 .welcome:has(> :is(.welcome-intro, .welcome-engines, .connection-form)) { overflow: auto; justify-content: safe center; padding-block: 16px; }
 .welcome-intro { justify-items: center; text-align: center; }
-.welcome-intro p { margin-inline: auto; }
+.welcome-intro p { margin-inline: auto; max-width: none; font-size: clamp(10px, 3.2cqw, 13px); white-space: nowrap; }
 .welcome-intro .welcome-connect { height: 44px; padding-inline: 18px; border-radius: 8px; font-size: 14px; font-weight: 650; }
 .welcome-engines .welcome-mark { max-width: 245px; }
 .welcome-picker-heading + .engine-list { margin-top: 0; }
@@ -623,10 +648,6 @@ dialog.connection-dialog {
   .redis-browser { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, .8fr) minmax(0, 1.2fr); }
   .redis-keys { border: 0; border-bottom: 1px solid var(--line); }
 }
-@media (max-width: 780px) {
-  .topbar .update-button span { display: none; }
-  .topbar .connection-status { font-size: 0; gap: 0; }
-}
 
 .app-screen { display: contents; }
 .app-screen[hidden] { display: none; }
@@ -668,7 +689,10 @@ dialog.connection-dialog {
 .system-field-row .icon-button { flex: none; }
 .system-code-preview { margin: 0; max-height: 390px; overflow: auto; padding: 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--workspace); color: var(--text); font: 11px/1.55 var(--mono); }
 .system-flow-canvas { min-width: 0; min-height: 0; position: relative; background: var(--workspace); }
-.system-flow-empty { position: absolute; inset: 0; display: grid; align-content: center; justify-items: center; padding: 16px; text-align: center; }
+.system-flow-empty {
+  position: absolute; inset: 0; display: grid; align-content: center; justify-items: center; padding: 16px; text-align: center;
+  pointer-events: none;
+}
 .system-flow-empty span { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 14px; border: 1px solid var(--gold-line); background: var(--gold-surface); color: var(--gold); margin-bottom: 12px; }
 .system-flow-empty h2 { font-size: 22px; margin-bottom: 7px; }
 .system-flow-empty p { color: var(--quiet); max-width: 260px; line-height: 1.55; }

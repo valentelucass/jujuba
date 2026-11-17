@@ -167,7 +167,7 @@ impl OtherSession {
         ))
     }
 
-    async fn client(&self, database: &str) -> Result<Client> {
+    pub(crate) async fn client(&self, database: &str) -> Result<Client> {
         const IDLE: Duration = Duration::from_secs(60);
         match &self.pools {
             Pools::Mysql(options, pools) => {

@@ -2,7 +2,7 @@ import { invoke, isTauri } from '@tauri-apps/api/core'
 import type { AiProvider, AssistantReply, AssistantRequest, DiagramProject, GeneratedProject, OpenedDiagram, SystemDiagram } from '../models/systemDiagram'
 import type { NoSqlEngine } from '../models/engines'
 import type { DocumentsPage, RedisEntry, RedisKeys } from '../models/noSql'
-import type { DatabaseFile, DashboardOverview, DashboardPerformance, LiveActivity, TableStorage } from '../models/dashboard'
+import type { DatabaseFile, DashboardOverview, DashboardPerformance, EngineDashboardData, LiveActivity, TableStorage } from '../models/dashboard'
 import type {
   AppError, Connection, ConnectionInput, DatabaseDiagram, EditInput, QueryOutput, PageRequest, RecordsPage, Relationship,
   Schema, Scope, Structure, Table, TableScope,
@@ -29,6 +29,7 @@ export const sql = {
   queryRead: (scope: Scope, source: string) => call<QueryOutput>('query_read', { scope, source }),
   updateCell: (input: EditInput) => call<{ changed: boolean }>('update_cell', { input }),
   databaseDiagram: (scope: Scope) => call<DatabaseDiagram>('database_diagram', { scope }),
+  engineDashboard: (scope: Scope) => call<EngineDashboardData>('dashboard_engine', { scope }),
   dashboardOverview: (scope: Scope) => call<DashboardOverview>('dashboard_overview', { scope }),
   dashboardLive: (scope: Scope) => call<LiveActivity>('dashboard_live', { scope }),
   dashboardStorage: (scope: Scope) => call<TableStorage[]>('dashboard_storage', { scope }),

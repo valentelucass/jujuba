@@ -1,9 +1,25 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Check, ChevronDown, Database, GitBranch, Moon, Plug, Power, Search, Sun } from 'lucide-react'
+import { Braces, ChartNoAxesCombined, Check, ChevronDown, Database, GitBranch, GitFork, Moon, Plug, Power, Search, Sun } from 'lucide-react'
 import jujuba from '../assets/jujuba.png'
 import type { Connection, Database as DatabaseName } from '../models/sql'
 import { UpdateButton } from './DesktopUpdates'
 import { useTheme } from './Theme'
+
+const bankTools = [
+  { id: 'diagram', label: 'Diagrama do banco', icon: GitFork },
+  { id: 'dashboard', label: 'Dashboards', icon: ChartNoAxesCombined },
+  { id: 'sql', label: 'SQL', icon: Braces },
+] as const
+
+type BankTool = (typeof bankTools)[number]['id']
+
+export function DatabaseTools({ active, actions = {} }: {
+  active?: BankTool
+  actions?: Partial<Record<BankTool, () => void>>
+}) {
+  return <>{bankTools.map(({ id, label, icon: Icon }) => <button key={id} type="button" className="button"
+    aria-pressed={active === id} disabled={!actions[id]} onClick={actions[id]}><Icon size={15} />{label}</button>)}</>
+}
 
 export function Header({ connection, database, onConnect, onDisconnect, onDatabase, tools, disconnecting, connecting, onDiagrams, diagramActive }: {
   onDiagrams?: () => void
@@ -43,39 +59,38 @@ export function Header({ connection, database, onConnect, onDisconnect, onDataba
     <div className="wordmark"><span className="brand-mark" aria-hidden="true"><img src={jujuba} alt="" /></span><strong>Jujuba<span>SQL</span></strong></div>
     <div className="header-divider" />
     {diagramActive ? <button className="button" onClick={onDiagrams}><Database size={15} />Bancos de dados</button> : <>
-    {connection ? <button className="button header-connect" onClick={onDisconnect} disabled={disconnecting} title="Desconectar">
-      <Power size={15} /><span>Desconectar</span></button> :
-      <button className="button primary header-connect" onClick={onConnect} disabled={connecting}><Plug size={15} /><span>Conectar</span></button>}
-    <div className="database-picker" ref={dropdown}
-      onKeyDown={(event) => { if (event.key === 'Escape' && open) { setOpen(false); picker.current?.focus() } }}>
-      <button ref={picker} className="button database-button" aria-expanded={open} disabled={!connection}
-        onClick={() => { setSearch(''); setOpen(!open) }}><Database size={15} />
-        <span>{database ?? 'Selecionar banco'}</span><ChevronDown size={14} /></button>
-      {open && connection && <div className="db-popover">
-        <label className="search-field"><Search size={16} /><input autoFocus aria-label="Buscar banco" placeholder="Buscar banco…"
-          value={search} onChange={(event) => setSearch(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key !== 'Enter' || !matches[0]) return
-            event.preventDefault()
-            select(matches[0])
-          }} /></label>
-        <div className="db-options">{matches.map((db) => <button key={db} onClick={() => select(db)}>
-          <Database size={15} /><span>{db}</span>{db === database && <Check size={14} />}</button>)}
-          {!matches.length && <p>Nenhum banco encontrado.</p>}
-        </div>
-      </div>}
-    </div>
+      {connection ? <button className="button header-connect" onClick={onDisconnect} disabled={disconnecting} title="Desconectar">
+        <Power size={15} /><span>Desconectar</span></button> :
+        <button className="button primary header-connect" onClick={onConnect} disabled={connecting}><Plug size={15} /><span>Conectar</span></button>}
+      <div className="database-picker" ref={dropdown}
+        onKeyDown={(event) => { if (event.key === 'Escape' && open) { setOpen(false); picker.current?.focus() } }}>
+        <button ref={picker} className="button database-button" aria-expanded={open} disabled={!connection}
+          onClick={() => { setSearch(''); setOpen(!open) }}><Database size={15} />
+          <span>{database ?? 'Selecionar banco'}</span><ChevronDown size={14} /></button>
+        {open && connection && <div className="db-popover">
+          <label className="search-field"><Search size={16} /><input autoFocus aria-label="Buscar banco" placeholder="Buscar banco…"
+            value={search} onChange={(event) => setSearch(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' || !matches[0]) return
+              event.preventDefault()
+              select(matches[0])
+            }} /></label>
+          <div className="db-options">{matches.map((db) => <button key={db} onClick={() => select(db)}>
+            <Database size={15} /><span>{db}</span>{db === database && <Check size={14} />}</button>)}
+            {!matches.length && <p>Nenhum banco encontrado.</p>}
+          </div>
+        </div>}
+      </div>
     </>}
-    {onDiagrams && <button className="button system-tab" aria-pressed={!!diagramActive}
-      onClick={diagramActive ? undefined : onDiagrams}><GitBranch size={15} />Fluxogramas</button>}
-    {tools}
+    <nav className="bank-tools" aria-label="Ferramentas do banco">{tools ?? <DatabaseTools />}</nav>
     <div className="header-spacer" />
     <button className="icon-button theme-toggle" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
       aria-label={theme === 'dark' ? 'Usar fundo branco' : 'Usar fundo preto'}
       title={theme === 'dark' ? 'Usar fundo branco' : 'Usar fundo preto'}>
       {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
     </button>
+    {onDiagrams && <button className="button system-tab" aria-pressed={!!diagramActive}
+      onClick={diagramActive ? undefined : onDiagrams}><GitBranch size={15} />Fluxogramas</button>}
     <UpdateButton />
-    {!diagramActive && <span className={`connection-status${connection ? ' online' : ''}`}><i />{connection ? 'Conectado' : 'Desconectado'}</span>}
   </header>
 }

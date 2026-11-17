@@ -59,6 +59,12 @@ fn opens_mongodb_and_filters_a_collection() {
         assert_eq!(page.documents.len(), 1);
         assert!(page.documents[0].json.contains("Ana"));
         assert!(!page.has_next);
+        let dashboard = serde_json::to_value(connections.dashboard(&scope).await.unwrap()).unwrap();
+        assert!(dashboard["metrics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|metric| metric["label"] == "Documentos" && metric["value"] == 2));
 
         connections.disconnect().await;
         assert!(connections.no_sql(&scope).await.is_err());
@@ -124,6 +130,8 @@ fn opens_redis_and_reads_keys_values_and_expiration() {
             .await
             .unwrap();
         assert_eq!(page.keys.len(), 5);
+        let dashboard = serde_json::to_value(connections.dashboard(&scope).await.unwrap()).unwrap();
+        assert!(dashboard["metrics"][0]["value"].as_u64().unwrap() >= 5);
         let entry = session.redis_entry(&STANDARD.encode(&key)).await.unwrap();
         assert_eq!(entry.kind, "string");
         assert_eq!(entry.value, json!("Ana"));

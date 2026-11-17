@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Braces, ChevronLeft, ChevronRight, Database, KeyRound, PanelRight, RefreshCw, Search } from 'lucide-react'
 import { noSql } from '../controllers/api'
 import type { TreeItem } from '../controllers/useExplorer'
@@ -6,10 +6,12 @@ import { useRemote } from '../controllers/useRemote'
 import { engines } from '../models/engines'
 import type { RedisKey } from '../models/noSql'
 import type { Connection, Scope } from '../models/sql'
-import { Header } from './Header'
+import { DatabaseTools, Header } from './Header'
 import { Empty, Failure, Loading } from './States'
 import { StatusBar } from './StatusBar'
 import { StudioLayout } from './StudioLayout'
+
+const DatabaseDashboard = lazy(() => import('./DatabaseDashboard'))
 
 export function NoSqlStudio({ connection, disconnect, openDiagrams, onScreen }: {
   connection: Connection; disconnect: () => Promise<void>; openDiagrams: () => void; onScreen: (screen: string) => void
@@ -18,10 +20,11 @@ export function NoSqlStudio({ connection, disconnect, openDiagrams, onScreen }: 
   const engine = engines[connection.engine]
   const [database, setDatabase] = useState<string | null>(connection.databases.find((name) => !['admin', 'config', 'local'].includes(name)) ?? connection.databases[0] ?? null)
   const [collection, setCollection] = useState<string | null>(null)
+  const [dashboard, setDashboard] = useState(false)
   useEffect(() => {
-    onScreen(connection.engine === 'redis' ? 'Explorador de chaves · Redis' :
+    onScreen(dashboard ? 'Dashboards · ' + engine.name : connection.engine === 'redis' ? 'Explorador de chaves · Redis' :
       collection ? 'Documentos · MongoDB' : 'Coleções · MongoDB')
-  }, [connection.engine, collection, onScreen])
+  }, [connection.engine, collection, dashboard, engine.name, onScreen])
   const [disconnecting, setDisconnecting] = useState(false)
   const [refresh, setRefresh] = useState(0)
   const session = connection.session
@@ -33,6 +36,11 @@ export function NoSqlStudio({ connection, disconnect, openDiagrams, onScreen }: 
   function selectDatabase(name: string) {
     setDatabase(name)
     setCollection(null)
+  }
+
+  function selectCollection(name: string) {
+    setCollection(name)
+    setDashboard(false)
   }
 
   async function close() {
@@ -52,14 +60,22 @@ export function NoSqlStudio({ connection, disconnect, openDiagrams, onScreen }: 
     if (!active || !mongo) return [node]
     return [node, ...names.map((name): TreeItem => ({
       id: id + '/collection:' + name, parent: id, label: name, type: 'table', level: 2,
-      selected: collection === name, choose: () => setCollection(name),
+      selected: collection === name, choose: () => selectCollection(name),
     }))]
   })
 
   return <>
-    <Header onDiagrams={openDiagrams} connection={connection} database={database} onDisconnect={close} disconnecting={disconnecting} onDatabase={selectDatabase} />
+    <Header onDiagrams={openDiagrams} connection={connection} database={database} onDisconnect={close}
+      disconnecting={disconnecting} onDatabase={selectDatabase} tools={<>
+        <DatabaseTools active={dashboard ? 'dashboard' : undefined}
+          actions={scope ? { dashboard: () => setDashboard(true) } : undefined} />
+        <button className="button" disabled={!scope} aria-pressed={!dashboard}
+          onClick={() => setDashboard(false)}>{mongo ? <Braces size={15} /> : <KeyRound size={15} />}{mongo ? 'Coleções' : 'Chaves'}</button>
+      </>} />
     <StudioLayout items={items} connected>
-      <main className="workspace nosql-workspace">
+      {scope && dashboard ? <main className="workspace">
+        <Suspense fallback={<Loading />}><DatabaseDashboard key={database} {...scope} engine={connection.engine} /></Suspense>
+      </main> : <main className="workspace nosql-workspace">
         <div className="object-heading">
           {database && collection && <div className="breadcrumbs"><Database size={14} />{database}<ChevronRight size={13} />Coleções</div>}
           <h1>{mongo ? <Braces size={23} /> : <KeyRound size={23} />}{collection ?? database ?? engine.name}</h1>
@@ -72,13 +88,13 @@ export function NoSqlStudio({ connection, disconnect, openDiagrams, onScreen }: 
               ? <MongoDocuments key={JSON.stringify([database, collection])} scope={scope} collection={collection} />
               : names.length
                 ? <div className="nosql-collections"><h2>Coleções</h2><div className="database-cards">
-                  {names.map((name) => <button key={name} onClick={() => setCollection(name)}>
+                  {names.map((name) => <button key={name} onClick={() => selectCollection(name)}>
                     <span className="quiet-icon"><Braces size={17} /></span><strong title={name}>{name}</strong><ChevronRight size={15} />
                   </button>)}
                 </div></div>
                 : <Empty title="Nenhuma coleção acessível" />)}
           </> : <RedisBrowser key={database} scope={scope} />}
-      </main>
+      </main>}
       <aside className="details">
         <div className="panel-title"><PanelRight size={15} /><h2>Detalhes</h2></div>
         <div className="details-body">

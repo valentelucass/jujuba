@@ -30,7 +30,8 @@ export function StatusBar({ engine, endpoint, database, passwordSaveFailed }: {
   }
 
   return <footer className="statusbar">
-    <span className="status-permissions"><ShieldCheck size={13} /> {engine ? 'Permissões · ' + engines[engine].name : 'Sem conexão'}</span>
+    <span className={`connection-status${engine ? ' online' : ''}`} role="status"><i />{engine ? 'Conectado' : 'Desconectado'}</span>
+    {engine && <span className="status-permissions"><ShieldCheck size={13} /> {engines[engine].name}</span>}
     {database && <span className="status-context"><DatabaseIcon size={12} /> <span>{database}</span></span>}
     <span className="status-end status-context">{endpoint ?? 'Sessão local'}</span>
     <span className="status-version" title={`JujubaSQL ${version}`}>v{version}</span>

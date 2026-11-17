@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useId, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { ArrowDownRight, ArrowRight, Braces, ChartNoAxesCombined, ChevronRight, Database as DatabaseIcon, GitFork, KeyRound,
+import { ArrowDownRight, ArrowRight, Braces, ChevronRight, Database as DatabaseIcon, GitFork, KeyRound,
   PanelRight, Plug, RefreshCw, Search, Table2 } from 'lucide-react'
 import { sql } from '../controllers/api'
 import { useExplorer } from '../controllers/useExplorer'
@@ -15,7 +15,7 @@ import jujuba from '../assets/jujuba.png'
 import { Diagram, Graph } from './Diagram'
 import { useRemote } from '../controllers/useRemote'
 import { StudioLayout } from './StudioLayout'
-import { Header } from './Header'
+import { DatabaseTools, Header } from './Header'
 import { Records } from './Records'
 import { Empty, Failure, Loading } from './States'
 import { Structure } from './Structure'
@@ -190,10 +190,10 @@ function ConnectedStudio({ connection, disconnect, openDiagrams, onScreen }: {
   }
   const [database, setDatabase] = useState<Database | null>(null)
   const [table, setTable] = useState<Table | null>(null)
-  const [workspaceView, setWorkspaceView] = useState<'objects' | 'sql' | 'dashboard'>('objects')
+  const [workspaceView, setWorkspaceView] = useState<'objects' | 'diagram' | 'sql' | 'dashboard'>('objects')
   useEffect(() => {
     const page = workspaceView === 'sql' ? 'Editor SQL' : workspaceView === 'dashboard' ? 'Dashboards' :
-      table ? 'Explorador de tabela' : database ? 'Diagrama do banco' : 'Lista de bancos'
+      workspaceView === 'objects' && table ? 'Explorador de tabela' : database ? 'Diagrama do banco' : 'Lista de bancos'
     onScreen(page + ' · ' + engines[connection.engine].name)
   }, [connection.engine, database, table, workspaceView, onScreen])
   const [refreshKey, setRefreshKey] = useState(0)
@@ -204,24 +204,26 @@ function ConnectedStudio({ connection, disconnect, openDiagrams, onScreen }: {
   }, (db, entry) => { setDatabase(db); setTable(entry); setWorkspaceView('objects') })
   return <>
     <Header onDiagrams={openDiagrams} connection={connection} database={database} onDatabase={explorer.chooseDatabase} onDisconnect={closeConnection} disconnecting={disconnecting}
-      tools={database && <>
-        {connection.engine === 'sqlServer' && <button className="button" aria-pressed={workspaceView === 'dashboard'}
-          onClick={() => setWorkspaceView(workspaceView === 'dashboard' ? 'objects' : 'dashboard')}>
-          <ChartNoAxesCombined size={15} /> Dashboards</button>}
-        <button className="button" aria-pressed={workspaceView === 'sql'}
-          onClick={() => setWorkspaceView(workspaceView === 'sql' ? 'objects' : 'sql')}><Braces size={15} /> SQL</button>
-        {(table || workspaceView !== 'objects') && <button className="button" onClick={() => { setTable(null); setWorkspaceView('objects') }}><GitFork size={15} /> Diagrama do banco</button>}
+      tools={<>
+        <DatabaseTools active={workspaceView === 'objects' ? (database && !table ? 'diagram' : undefined) : workspaceView}
+          actions={database ? {
+            diagram: () => setWorkspaceView('diagram'),
+            dashboard: () => setWorkspaceView('dashboard'),
+            sql: () => setWorkspaceView('sql'),
+          } : undefined} />
+        {table && <button className="button bank-data" aria-label="Dados" aria-pressed={workspaceView === 'objects'}
+          onClick={() => setWorkspaceView('objects')}><Table2 size={15} /><span>Dados</span></button>}
         {table && workspaceView === 'objects' && <button className="icon-button" title="Atualizar tabela" aria-label="Atualizar tabela"
           onClick={() => setRefreshKey((value) => value + 1)}><RefreshCw size={16} /></button>}
       </>} />
     <StudioLayout items={explorer.items} connected>
       {database && workspaceView === 'dashboard' ? <><main className="workspace">
-        <Suspense fallback={<Loading />}><DatabaseDashboard key={database} database={database} session={connection.session} /></Suspense>
+        <Suspense fallback={<Loading />}><DatabaseDashboard key={database} database={database} session={connection.session} engine={connection.engine} /></Suspense>
         </main><ConnectionDetails connection={connection} database={database} /></>
         : database && workspaceView === 'sql' ? <><main className="workspace"><div className="object-heading"><h1>{database}</h1></div>
         <Suspense fallback={<Loading />}><SqlEditor key={database} engine={connection.engine} scope={{ session: connection.session, database }} /></Suspense></main>
         <ConnectionDetails connection={connection} database={database} /></>
-        : database && table ? <TableWorkspace key={JSON.stringify([database, table.id])} table={table}
+        : database && table && workspaceView === 'objects' ? <TableWorkspace key={JSON.stringify([database, table.id])} table={table}
         scope={{ session: connection.session, database, tableId: table.id }} refreshKey={refreshKey}
         onTable={(entry) => explorer.chooseRelatedTable(database, entry)} /> : database
         ? <DatabaseWorkspace key={database} scope={{ session: connection.session, database }} connection={connection}
@@ -290,7 +292,7 @@ export function App() {
           <div className="welcome-mark" aria-hidden="true"><img src={jujuba} alt="" /></div>
           <div className="welcome-copy">
             <h1>Conecte a um banco de dados</h1>
-            <p>Consulte dados e explore tabelas, coleções e chaves.</p>
+            <p>Consulte dados, explore tabelas, coleções e chaves.</p>
             <button className="button primary welcome-connect" onClick={openPicker}><Plug size={17} />Nova conexão</button>
           </div>
         </div>}
@@ -307,7 +309,7 @@ export function App() {
     </div>
     {openedDiagrams && <div className="app-screen" hidden={!diagrams}>
       <Suspense fallback={<Loading />}><SystemDiagramStudio exit={() => setDiagrams(false)} provider={provider}
-        assistantDiagram={assistantDiagram} onDiagram={setCurrentDiagram} /></Suspense>
+        assistantDiagram={assistantDiagram} onDiagram={setCurrentDiagram} connection={connection} /></Suspense>
     </div>}
     <AssistantDock open={assistantOpen} setOpen={setAssistantOpen} provider={provider} setProvider={setProvider}
       screen={screen} diagram={diagrams ? currentDiagram : null} onDiagram={applyAssistantDiagram} />

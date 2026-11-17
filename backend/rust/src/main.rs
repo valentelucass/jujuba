@@ -6,6 +6,7 @@ mod connection;
 mod credentials;
 mod edit;
 mod editor;
+mod engine_dashboard;
 mod error;
 mod models;
 mod no_sql;
@@ -49,6 +50,7 @@ fn main() {
             commands::relationships,
             commands::database_diagram,
             commands::dashboard_overview,
+            commands::dashboard_engine,
             commands::dashboard_storage,
             commands::dashboard_files,
             commands::dashboard_performance,

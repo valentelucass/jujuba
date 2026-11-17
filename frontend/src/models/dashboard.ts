@@ -1,3 +1,9 @@
+export interface EngineDashboardData {
+  metrics: { label: string; value: number; unit: 'count' | 'bytes' | 'perSecond' }[]
+  tables: { name: string; bytes: number }[]
+  partial: boolean
+}
+
 export interface DatabaseFile {
   name: string
   kind: string
