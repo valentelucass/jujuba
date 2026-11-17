@@ -1,6 +1,9 @@
-import { FolderOpen, LoaderCircle, Paperclip, Send, Sparkles, X } from 'lucide-react'
+import { FolderOpen, LoaderCircle, Paperclip, Send, Sparkles, Users, X } from 'lucide-react'
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { JujubaMascot } from './JujubaMascot'
+import { MascotMeetingEffect, SharedMascot } from './SharedMascot'
+import { useSharedMascot } from '../controllers/useSharedMascot'
+import type { MascotRoom, MascotVisibility } from '../models/flowMascot'
 import { makeSplat, MascotSplat, type Splat } from './MascotSplat'
 import { hats, MascotHat, readHat, saveHat, type Hat } from './MascotHat'
 import { appError, systemDiagram } from '../controllers/api'
@@ -72,13 +75,14 @@ export function readProvider(): AiProvider {
   return 'codex'
 }
 
-export function AssistantDock({ open, setOpen, provider, setProvider, screen, diagram, onDiagram }: {
+export function AssistantDock({ open, setOpen, provider, setProvider, screen, diagram, onDiagram, mascotRoom }: {
   open: boolean
   setOpen: (open: boolean) => void
   provider: AiProvider
   setProvider: (provider: AiProvider) => void
   screen: string
   diagram: SystemDiagram | null
+  mascotRoom: MascotRoom | null
   onDiagram: (diagram: SystemDiagram, revisionOf: SystemDiagram | null) => boolean
 }) {
   const [workspace, setWorkspace] = useState('')
@@ -93,6 +97,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const [placement, setPlacement] = useState(readLauncherPosition)
   const [hat, setHat] = useState(readHat)
   const [hatsOpen, setHatsOpen] = useState(false)
+  const [mascotOptions, setMascotOptions] = useState(false)
   const [grabbed, setGrabbed] = useState(false)
   const [reaction, setReaction] = useState<Reaction | null>(null)
   const [dragPoint, setDragPoint] = useState<Point | null>(null)
@@ -163,6 +168,11 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const side = placement?.side === 'bottom' ? edgeAt(resting.x, width) : placement?.side ?? 'right'
   const point = dragPoint ?? flight ?? resting
   const expression = grabbed ? null : frightened && !flight ? (pointerNear ? 'scared' : 'wary') : reaction
+  const { preferences: mascotPreferences, savePreferences, remote, meeting } = useSharedMascot(mascotRoom, {
+    position: point, bounds, hat, flight,
+    pose: grabbed ? 'held' : expression === 'scared' || expression === 'wary' ? expression : 'idle',
+  })
+  const greeting = meeting?.near ? meeting.kind : undefined
   const dockAnchor = flight ? resting : point
   const dockWidth = Math.min(415, width - 28)
   const dockHeight = Math.min(615, height - 28)
@@ -379,7 +389,10 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
         <div><h2><Sparkles size={17} />Assistente de IA</h2><small>{screen}</small></div>
         <div className="assistant-heading-actions">
           <button className="button assistant-hats-trigger" type="button" aria-expanded={hatsOpen} aria-controls={hatsOpen ? 'assistant-hats' : undefined}
-            onClick={() => setHatsOpen(!hatsOpen)}><MascotHat hat="topHat" miniature />Chapéus</button>
+            onClick={() => { setHatsOpen(!hatsOpen); setMascotOptions(false) }}><MascotHat hat="topHat" miniature />Chapéus</button>
+          {mascotRoom && <button className="button assistant-mascots-trigger" type="button" aria-expanded={mascotOptions}
+            aria-controls={mascotOptions ? 'assistant-mascots' : undefined}
+            onClick={() => { setMascotOptions(!mascotOptions); setHatsOpen(false) }}><Users size={15} />Jujubas</button>}
           <button className="icon-button" onClick={close} aria-label="Fechar assistente"><X size={17} /></button>
         </div>
       </header>
@@ -389,6 +402,22 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
           {option === 'none' ? <span className="hat-miniature" aria-hidden="true">—</span> : <MascotHat hat={option} miniature />}
           <span>{hats[option]}</span>
         </button>)}
+      </div>}
+      {mascotRoom && mascotOptions && <div id="assistant-mascots" className="assistant-mascots" aria-label="Jujubas da sessão">
+        <label>Jujuba de {mascotRoom.peer}
+          <select value={mascotPreferences.remote} onChange={(event) => savePreferences({
+            ...mascotPreferences, remote: event.target.value as MascotVisibility,
+          })}>
+            <option value="dim">Discreta</option>
+            <option value="full">Mais visível</option>
+            <option value="hidden">Invisível</option>
+          </select>
+        </label>
+        <label>
+          <input type="checkbox" checked={mascotPreferences.shareOwn}
+            onChange={(event) => savePreferences({ ...mascotPreferences, shareOwn: event.target.checked })} />
+          Mostrar a minha Jujuba para a outra pessoa
+        </label>
       </div>}
       <div className="assistant-config">
         <label className="sr-only" htmlFor="assistant-provider">Assistente</label>
@@ -447,6 +476,9 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
       transform: `translate(-50%, -50%) rotate(${mark.angle}deg)`,
       animationDuration: `${250 + mark.strength * 390}ms`,
     }} onAnimationEnd={() => setTrail((previous) => previous.filter((entry) => entry.id !== mark.id))} />)}
+    {mascotRoom && remote && <SharedMascot key={mascotRoom.id} peer={mascotRoom.peer}
+      appearance={remote} visibility={mascotPreferences.remote} greeting={greeting} />}
+    {meeting && <MascotMeetingEffect key={meeting.source + '-' + meeting.id} kind={meeting.kind} point={meeting.point} />}
     <button ref={launcher} className={`assistant-launch${grabbed ? ' is-grabbed' : ''}${dragPoint ? ' is-dragging' : ''}${flight ? ' is-flying' : ''}${expression ? ' is-' + expression : ''}`}
       style={{ left: point.x, top: point.y }} aria-label={open ? 'Fechar assistente' : 'Abrir assistente de IA'}
       title="Assistente de IA · arraste para mover ou solte rápido para arremessar" aria-expanded={open} aria-controls={open ? 'assistant-dock' : undefined}
@@ -470,7 +502,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
         if (open) close()
         else setOpen(true)
       }}>
-      <JujubaMascot followPointer grabbed={grabbed} reaction={expression} flight={flight} hat={hat} />
+      <JujubaMascot followPointer grabbed={grabbed} reaction={expression} flight={flight} hat={hat} greeting={greeting} />
     </button>
   </>
 }

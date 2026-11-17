@@ -1,6 +1,7 @@
 
 import { ArrowLeft, Braces, Copy, FileDown, FilePlus2, FolderOpen, GitBranch, LayoutGrid, Link, LoaderCircle, Redo2, Save, Sparkles, Trash2, Undo2, Users } from 'lucide-react'
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
+import type { MascotRoom } from '../models/flowMascot'
 import type { Connection } from '../models/sql'
 import { appError, flowCollaboration, flowProjects, systemDiagram } from '../controllers/api'
 import type { FlowCommand, FlowProject, FlowProjectEntry, FlowSession } from '../models/flowWorkspace'
@@ -11,12 +12,17 @@ import {
 import { Header } from './Header'
 import { FlowOverview } from './FlowOverview'
 import { FlowProjectPreview } from './FlowProjectPreview'
+import { SidebarDivider } from './SidebarDivider'
 import { StatusBar } from './StatusBar'
 import { SystemFlowCanvas } from './SystemFlowCanvas'
 import { SystemFlowEditor } from './SystemFlowEditor'
 
 type History = { past: SystemDiagram[]; future: SystemDiagram[] }
 type SavedFlowAccess = { code: string; title: string; host: string; name: string }
+const inspectorKey = 'jujuba.flow.inspector.width'
+const inspectorMinimum = 236
+const inspectorDefault = 318
+
 const savedAccessKey = 'jujuba.flow.access'
 
 function readSavedAccess(): SavedFlowAccess[] {
@@ -33,12 +39,13 @@ function hasElement(diagram: SystemDiagram, id: string | null) {
 
 type Panel = 'create' | 'share' | 'join' | null
 
-export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagram, connection }: {
+export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagram, onMascotRoom, connection }: {
   exit: () => void
   connection?: Connection | null
   provider: AiProvider
   assistantDiagram: { diagram: SystemDiagram; revisionOf: SystemDiagram | null } | null
   onDiagram: (diagram: SystemDiagram | null) => void
+  onMascotRoom: (room: MascotRoom | null) => void
 }) {
   const [entries, setEntries] = useState<FlowProjectEntry[]>([])
   const [workspace, setWorkspace] = useState<string | null>(null)
@@ -52,6 +59,17 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
   const [savedAccess, setSavedAccess] = useState(readSavedAccess)
   const guestName = useRef('')
   const savedTicket = useRef<string | null>(null)
+  const [inspectorSizing, setInspectorSizing] = useState(false)
+  const [inspectorLimit, setInspectorLimit] = useState(() => Math.max(inspectorMinimum, Math.min(640, Math.floor(window.innerWidth * .54))))
+  const [inspectorWidth, setInspectorWidth] = useState(() => {
+    try {
+      const width = Number(localStorage.getItem(inspectorKey))
+      return width >= inspectorMinimum && Number.isFinite(width) ? width : inspectorDefault
+    } catch {
+      return inspectorDefault
+    }
+  })
+  const panelWidth = Math.min(inspectorLimit, inspectorWidth)
   const [diagram, setDiagram] = useState<SystemDiagram | null>(null)
   const [history, setHistory] = useState<History>({ past: [], future: [] })
   const [file, setFile] = useState<DiagramProject | null>(null)
@@ -77,6 +95,22 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
   const disabled = !!busy || (!!session && !session.canEdit && (guest || session.phase !== 'ended'))
 
   useEffect(() => { onDiagram(diagram) }, [diagram, onDiagram])
+
+  useEffect(() => {
+    if (!sessionId || session?.phase !== 'connected' || !session.peer || !session.mascotSupported) {
+      onMascotRoom(null)
+    } else {
+      onMascotRoom({ id: sessionId, peer: session.peer, mascot: session.mascot ?? null, meeting: session.mascotMeeting ?? null })
+    }
+  }, [sessionId, session?.phase, session?.peer, session?.mascotSupported, session?.mascotVersion, onMascotRoom])
+
+  useEffect(() => {
+    function resize() {
+      setInspectorLimit(Math.max(inspectorMinimum, Math.min(640, Math.floor(window.innerWidth * .54))))
+    }
+    window.addEventListener('resize', resize)
+    return () => window.removeEventListener('resize', resize)
+  }, [])
 
   useEffect(() => {
     if (workspace || sessionId) return
@@ -582,12 +616,21 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
               title="Esquecer acesso" onClick={() => forgetAccess(access.code)}><Trash2 size={15} /></button>
           </li>)}</ul>
         </section>}
-      </section> : <div className="system-design-body">
+      </section> : <div className={'system-design-body' + (inspectorSizing ? ' resizing' : '')}
+        style={{ '--flow-inspector-width': panelWidth + 'px' } as CSSProperties}>
         <SystemFlowCanvas key={fitKey} diagram={diagram} selected={selected}
           choose={(id) => { setSelected(id); if (id) setTab('flow') }} connect={addEdge}
           move={moveStep} rename={renameStep} disabled={disabled} sendCursor={session?.phase === 'connected' ? sendCursor : undefined}
           peerCursor={session?.cursor && session.peer ? { ...session.cursor, name: session.peer } : null} />
-        <aside className="system-design-panel system-inspector">
+        <SidebarDivider side="right" width={panelWidth} minimum={inspectorMinimum} maximum={inspectorLimit}
+          defaultWidth={inspectorDefault} label="Largura do painel de fluxograma" controls="flow-inspector"
+          onDrag={setInspectorSizing} onWidth={(next, settled) => {
+            setInspectorWidth(next)
+            if (settled) {
+              try { localStorage.setItem(inspectorKey, String(next)) } catch { /* A largura atual continua ativa. */ }
+            }
+          }} />
+        <aside id="flow-inspector" className="system-design-panel system-inspector">
           <div className="system-panel-tabs" aria-label="Detalhes do fluxograma">
             <button className="button" aria-pressed={tab === 'flow'} onClick={() => setTab('flow')}><GitBranch size={14} />Fluxo</button>
             <button className="button" aria-pressed={tab === 'code'} onClick={() => setTab('code')}><Braces size={14} />Código</button>

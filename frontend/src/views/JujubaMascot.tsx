@@ -1,13 +1,15 @@
 import { useEffect, useId, useRef } from 'react'
 import jujuba from '../assets/jujuba.png'
+import type { MascotMeetingKind } from '../models/flowMascot'
 import type { FlightFrame } from '../controllers/mascotMotion'
 import { MascotHat, type Hat } from './MascotHat'
 
-export function JujubaMascot({ hero = false, followPointer = false, grabbed = false, reaction, flight, hat = 'none' }: {
+export function JujubaMascot({ hero = false, followPointer = false, grabbed = false, reaction, flight, hat = 'none', greeting }: {
   hero?: boolean; followPointer?: boolean; grabbed?: boolean
   reaction?: 'protesting' | 'scared' | 'wary' | 'relieved' | null
   flight?: FlightFrame | null
   hat?: Hat
+  greeting?: MascotMeetingKind
 }) {
   const id = useId()
   const mascot = useRef<HTMLSpanElement>(null)
@@ -21,6 +23,7 @@ export function JujubaMascot({ hero = false, followPointer = false, grabbed = fa
   const protesting = reaction === 'protesting'
   const scared = reaction === 'scared' || reaction === 'wary' || !!flight
   const relieved = reaction === 'relieved'
+  const kissing = greeting === 'kiss' && !flight
   const squash = flight?.squash ?? 0
   const sideImpact = flight?.edge === 'left' || flight?.edge === 'right'
   const origins = { left: '8% 50%', right: '92% 50%', top: '50% 10%', bottom: '50% 91%' }
@@ -69,7 +72,7 @@ export function JujubaMascot({ hero = false, followPointer = false, grabbed = fa
     }
   }, [followPointer])
 
-  return <span ref={mascot} className={'jujuba-mascot' + (hero ? ' jujuba-hero' : '')} aria-hidden="true"
+  return <span ref={mascot} className={'jujuba-mascot' + (hero ? ' jujuba-hero' : '') + (greeting ? ' jujuba-greeting-' + greeting : '')} aria-hidden="true"
     style={flight ? {
       scale: sideImpact ? `${narrow} ${wide}` : `${wide} ${narrow}`,
       rotate: `${flight.velocity.x / 195 * (1 - squash)}deg`,
@@ -98,7 +101,7 @@ export function JujubaMascot({ hero = false, followPointer = false, grabbed = fa
           <clipPath id={leftPupil}><ellipse cx="435" cy="615" rx="82" ry="88" /></clipPath>
           <clipPath id={rightPupil}><path d="M717 614 843 584C865 646 827 694 784 694 743 694 717 659 717 614Z" /></clipPath>
         </>}
-        {(protesting || scared || relieved) && <linearGradient id={cheek} x1="0" y1="660" x2="0" y2="750" gradientUnits="userSpaceOnUse">
+        {(protesting || scared || relieved || kissing) && <linearGradient id={cheek} x1="0" y1="660" x2="0" y2="750" gradientUnits="userSpaceOnUse">
           <stop stopColor="#cc158b" />
           <stop offset=".47" stopColor="#d8188c" />
           <stop offset="1" stopColor="#d31487" />
@@ -134,10 +137,11 @@ export function JujubaMascot({ hero = false, followPointer = false, grabbed = fa
         <circle cx="442" cy="615" r="28" fill="#4e052c" /><circle cx="778" cy="620" r="27" fill="#4e052c" />
         <path d="M354 500q85-65 156-7m195 0q74-61 152-8" fill="none" stroke="#670741" strokeWidth="22" strokeLinecap="round" />
       </g>}
-      {(protesting || scared || relieved) && <g className="jujuba-mouth-reaction">
+      {(protesting || scared || relieved || kissing) && <g className="jujuba-mouth-reaction">
         <path fill={`url(#${cheek})`} d="M540 712C550 704 571 715 603 705 633 699 652 681 660 665 672 654 697 654 706 672 709 683 699 701 696 712 684 735 648 755 612 753 579 752 553 743 540 725Q536 719 540 712Z" />
-        <ellipse cx="618" cy="709" rx={relieved ? 35 : 39} ry={relieved ? 19 : 43} fill="#520133" />
-        {!relieved && <path d="M588 731Q616 704 648 730Q637 748 619 748 600 748 588 731Z" fill="#ef518f" />}
+        <ellipse cx="618" cy="709" rx={kissing ? 25 : relieved ? 35 : 39} ry={kissing ? 30 : relieved ? 19 : 43} fill="#520133" />
+        {kissing && <path d="M601 710q17-13 34-1-15 21-34 1Z" fill="#ff8dbb" />}
+        {!kissing && !relieved && <path d="M588 731Q616 704 648 730Q637 748 619 748 600 748 588 731Z" fill="#ef518f" />}
       </g>}
       <g className="jujuba-smile">
         <path d={smile} fill="#520133" />

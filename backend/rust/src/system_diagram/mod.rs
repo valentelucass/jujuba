@@ -2,6 +2,7 @@ mod ai;
 pub mod collaboration;
 mod files;
 mod flow_access;
+mod flow_mascot;
 mod flow_merge;
 mod model;
 pub mod workspaces;

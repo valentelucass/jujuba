@@ -77,7 +77,7 @@ export function SystemFlowEditor({ diagram, selected, select, update, addEdge, d
       <div className="flow-stage-list" aria-label="Selecionar nota">
         {notes.map((entry) => <button key={entry.id} type="button" className="button"
           aria-pressed={selected === entry.id} onClick={() => select(selected === entry.id ? null : entry.id)}>
-          <Type size={14} /><span>{entry.text.trim() || 'Nota sem texto'}</span>
+          <Type size={14} /><span title={entry.text}>{entry.text.trim() || 'Nota sem texto'}</span>
         </button>)}
       </div>
     </details>}

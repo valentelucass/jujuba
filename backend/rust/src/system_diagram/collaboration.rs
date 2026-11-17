@@ -1,5 +1,6 @@
 use super::{
     flow_access::{self, Guest, Sharing},
+    flow_mascot::{Mascot, Meeting},
     flow_merge::merge,
     model::{invalid, Diagram, Position},
     workspaces,
@@ -72,6 +73,10 @@ pub struct View {
     peer: Option<String>,
     can_edit: bool,
     cursor: Option<Position>,
+    mascot_supported: bool,
+    mascot_version: u64,
+    mascot: Option<Mascot>,
+    mascot_meeting: Option<Meeting>,
     diagram: Option<Diagram>,
     revision: u64,
     message: Option<String>,
@@ -86,11 +91,15 @@ enum Packet {
     Hello {
         name: String,
         token: [u8; 16],
+        #[serde(default)]
+        mascots: bool,
     },
     Accepted {
         name: String,
         diagram: Diagram,
         return_code: Option<String>,
+        #[serde(default)]
+        mascots: bool,
     },
     Rejected,
     Snapshot {
@@ -104,6 +113,12 @@ enum Packet {
     Cursor {
         position: Option<Position>,
     },
+    Mascot {
+        mascot: Option<Mascot>,
+    },
+    MascotMeeting {
+        meeting: Meeting,
+    },
 }
 
 #[derive(Deserialize)]
@@ -115,6 +130,8 @@ pub enum Command {
     Invite,
     Revoke,
     Cursor { position: Option<Position> },
+    Mascot { mascot: Option<Mascot> },
+    MascotMeeting { meeting: Meeting },
     Edit { before: Diagram, diagram: Diagram },
 }
 
@@ -150,6 +167,10 @@ impl FlowCollaboration {
             peer: None,
             can_edit: false,
             cursor: None,
+            mascot_supported: false,
+            mascot_version: 0,
+            mascot: None,
+            mascot_meeting: None,
             diagram: None,
             revision: 0,
             message: None,
@@ -167,6 +188,9 @@ impl FlowCollaboration {
                 view.can_edit = false;
                 view.code = None;
                 view.cursor = None;
+                view.mascot = None;
+                view.mascot_meeting = None;
+                view.mascot_supported = false;
                 view.message = Some(
                     result
                         .err()
@@ -285,7 +309,7 @@ async fn host(
                 }
             }
         };
-        let (connection, mut send, mut recv, peer, candidate) = attempt;
+        let (connection, mut send, mut recv, peer, candidate, mascots) = attempt;
         let peer_id = connection.remote_id();
         let saved = sharing
             .guest
@@ -342,6 +366,7 @@ async fn host(
                 name: sharing.name.clone(),
                 diagram: diagram.clone(),
                 return_code,
+                mascots,
             },
         )
         .await
@@ -356,6 +381,7 @@ async fn host(
             &state,
             &mut commands,
             &mut diagram,
+            mascots,
             Some((&project, &mut sharing)),
         )
         .await;
@@ -385,6 +411,9 @@ fn idle_view(
         view.code = invitation.map(|(token, _)| encode(endpoint.id(), token));
         view.peer = None;
         view.cursor = None;
+        view.mascot = None;
+        view.mascot_meeting = None;
+        view.mascot_supported = false;
         view.can_edit = true;
         view.trusted_peer = sharing.guest.as_ref().map(|guest| guest.name.clone());
     });
@@ -458,15 +487,20 @@ fn matches_token(candidate: [u8; 16], token: Uuid) -> bool {
 
 async fn incoming(
     endpoint: &Endpoint,
-) -> Result<(Connection, SendStream, RecvStream, String, [u8; 16])> {
+) -> Result<(Connection, SendStream, RecvStream, String, [u8; 16], bool)> {
     while let Some(incoming) = endpoint.accept().await {
         let attempt = timeout(IO_TIME, async {
             let connection = incoming.await.map_err(|_| unavailable())?;
             let (send, mut recv) = connection.accept_bi().await.map_err(|_| unavailable())?;
-            let Packet::Hello { name, token } = read_packet(&mut recv).await? else {
+            let Packet::Hello {
+                name,
+                token,
+                mascots,
+            } = read_packet(&mut recv).await?
+            else {
                 return Err(unavailable());
             };
-            Ok((connection, send, recv, alias(&name)?, token))
+            Ok((connection, send, recv, alias(&name)?, token, mascots))
         })
         .await;
         if let Ok(Ok(attempt)) = attempt {
@@ -490,19 +524,28 @@ async fn join(
             .await
             .map_err(|_| unavailable())?;
         let (mut send, recv) = connection.open_bi().await.map_err(|_| unavailable())?;
-        send_packet(&mut send, Packet::Hello { name, token }).await?;
+        send_packet(
+            &mut send,
+            Packet::Hello {
+                name,
+                token,
+                mascots: true,
+            },
+        )
+        .await?;
         Ok::<_, AppError>((connection, send, recv))
     })
     .await
     .map_err(|_| unavailable())??;
     change(&state, |view| view.phase = Phase::Joining);
-    let (name, mut diagram, return_code) =
+    let (name, mut diagram, return_code, mascots) =
         match timeout(APPROVAL_TIME, read_packet(&mut recv)).await {
             Ok(Ok(Packet::Accepted {
                 name,
                 diagram,
                 return_code,
-            })) => (alias(&name)?, diagram, return_code),
+                mascots,
+            })) => (alias(&name)?, diagram, return_code, mascots),
             Ok(Ok(Packet::Rejected)) => {
                 return Err(AppError::new(
                     "declined",
@@ -530,6 +573,7 @@ async fn join(
         &state,
         &mut commands,
         &mut diagram,
+        mascots,
         None,
     )
     .await;
@@ -543,10 +587,12 @@ async fn connected(
     state: &Mutex<View>,
     commands: &mut Inbox,
     diagram: &mut Diagram,
+    mascots: bool,
     mut owner: Option<(&SharedProject, &mut Sharing)>,
 ) -> Result<bool> {
     change(state, |view| {
         view.phase = Phase::Connected;
+        view.mascot_supported = mascots;
         view.can_edit = true;
         view.code = None;
     });
@@ -593,6 +639,10 @@ async fn connected(
                             Some((project, sharing)) => revoke(project, sharing, state),
                             None => Err(operation_unavailable()),
                         },
+                        Command::Mascot { mascot } if mascots && mascot.as_ref().is_none_or(Mascot::valid) =>
+                            send_packet(send, Packet::Mascot { mascot }).await,
+                        Command::MascotMeeting { meeting } if mascots && meeting.valid() =>
+                            send_packet(send, Packet::MascotMeeting { meeting }).await,
                         Command::Cursor { position } if valid_position(position) =>
                             send_packet(send, Packet::Cursor { position }).await,
                         _ => Err(operation_unavailable()),
@@ -607,6 +657,27 @@ async fn connected(
         };
         match received {
             Packet::Bye => return Ok(false),
+            Packet::Mascot { mascot } if mascots => {
+                if mascot.as_ref().is_none_or(Mascot::valid) {
+                    change(state, |view| {
+                        if mascot.is_none() {
+                            view.mascot_meeting = None;
+                        }
+                        view.mascot = mascot;
+                        view.mascot_version += 1;
+                    });
+                }
+            }
+            Packet::MascotMeeting { meeting } if mascots => {
+                if meeting.valid() {
+                    change(state, |view| {
+                        if view.mascot.is_some() {
+                            view.mascot_meeting = Some(meeting);
+                            view.mascot_version += 1;
+                        }
+                    });
+                }
+            }
             Packet::Cursor { position } if valid_position(position) => {
                 change(state, |view| view.cursor = position);
             }
@@ -892,6 +963,20 @@ mod tests {
         .unwrap()
     }
 
+    #[test]
+    fn cosmetic_capability_is_optional_in_existing_invitations() {
+        let hello = serde_json::json!({ "type": "hello", "name": "Bia", "token": vec![0; 16] });
+        assert!(matches!(
+            serde_json::from_value::<Packet>(hello).unwrap(),
+            Packet::Hello { mascots: false, .. }
+        ));
+        let accepted = serde_json::json!({ "type": "accepted", "name": "Ana", "diagram": diagram("Projeto"), "return_code": null });
+        assert!(matches!(
+            serde_json::from_value::<Packet>(accepted).unwrap(),
+            Packet::Accepted { mascots: false, .. }
+        ));
+    }
+
     async fn test_endpoint(secret: SecretKey, relay: bool, host: bool) -> Endpoint {
         let mut builder = if relay {
             Endpoint::builder(presets::N0).clear_ip_transports()
@@ -1025,6 +1110,70 @@ mod tests {
                 .await
                 .can_edit
         );
+
+        assert!(approved.mascot_supported);
+        assert!(
+            wait(&owner, |view| view.mascot_supported)
+                .await
+                .mascot_supported
+        );
+        let mascot = Mascot {
+            position: Position { x: 0.31, y: 0.72 },
+            hat: "leather".into(),
+            pose: super::super::flow_mascot::Pose::Idle,
+            flight: Some(super::super::flow_mascot::Flight {
+                velocity_x: -1040.0,
+                squash: 0.4,
+                edge: super::super::flow_mascot::Edge::Bottom,
+            }),
+        };
+        submit(
+            guest_tx.clone(),
+            Command::Mascot {
+                mascot: Some(mascot.clone()),
+            },
+        )
+        .await
+        .unwrap();
+        let remote = wait(&owner, |view| view.mascot.is_some())
+            .await
+            .mascot
+            .unwrap();
+        assert_eq!(remote.hat, "leather");
+        assert_eq!(remote.position, mascot.position);
+        assert_eq!(remote.flight.unwrap().velocity_x, -1040.0);
+        submit(
+            host_tx.clone(),
+            Command::Mascot {
+                mascot: Some(mascot),
+            },
+        )
+        .await
+        .unwrap();
+        wait(&guest, |view| view.mascot.is_some()).await;
+
+        let meeting = Meeting {
+            id: 1,
+            position: Position { x: 0.5, y: 0.5 },
+            kind: super::super::flow_mascot::MeetingKind::Kiss,
+        };
+        submit(guest_tx.clone(), Command::MascotMeeting { meeting })
+            .await
+            .unwrap();
+        assert_eq!(
+            wait(&owner, |view| view.mascot_meeting.is_some())
+                .await
+                .mascot_meeting
+                .unwrap()
+                .id,
+            1
+        );
+        submit(guest_tx.clone(), Command::Mascot { mascot: None })
+            .await
+            .unwrap();
+        let hidden = wait(&owner, |view| view.mascot.is_none()).await;
+        assert!(hidden.mascot_meeting.is_none());
+        assert!(hidden.mascot_version >= 3);
 
         let position = Some(Position { x: 21.0, y: -117.0 });
         submit(guest_tx.clone(), Command::Cursor { position })

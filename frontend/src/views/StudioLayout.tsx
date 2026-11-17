@@ -1,5 +1,6 @@
-import { useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
+import { useState, type CSSProperties, type ReactNode } from 'react'
 import { Explorer } from './Explorer'
+import { SidebarDivider } from './SidebarDivider'
 import type { TreeItem } from '../controllers/useExplorer'
 
 const minimum = 160
@@ -32,46 +33,14 @@ export function StudioLayout({ items, connected, children }: {
   const [width, setWidth] = useState(readWidth)
   const [dragging, setDragging] = useState(false)
 
-  function pointerWidth(event: PointerEvent<HTMLDivElement>) {
-    const bounds = event.currentTarget.parentElement?.getBoundingClientRect()
-    return clamp(Math.round(event.clientX - (bounds?.left ?? 0)))
-  }
-
-  function updateWidth(next: number) {
-    setWidth(next)
-    saveWidth(next)
-  }
-
-  function keyboardResize(event: KeyboardEvent<HTMLDivElement>) {
-    const bounds = event.currentTarget.parentElement?.getBoundingClientRect()
-    const current = Math.round(event.currentTarget.getBoundingClientRect().left - (bounds?.left ?? 0))
-    const step = event.shiftKey ? 50 : 16
-    const next = { ArrowLeft: current - step, ArrowRight: current + step, Home: minimum, End: maximum }[event.key]
-    if (next === undefined) return
-    event.preventDefault()
-    updateWidth(clamp(next))
-  }
-
   return <div className={dragging ? 'studio resizing' : 'studio'} style={{ '--explorer-width': width + 'px' } as CSSProperties}>
     <Explorer items={items} connected={connected} />
-    <div role="separator" tabIndex={0} aria-label="Largura do Explorador de objetos" aria-controls="object-explorer"
-      aria-orientation="vertical" aria-valuemin={minimum} aria-valuemax={maximum} aria-valuenow={width}
-      title="Arraste para ajustar. Clique duas vezes para restaurar."
-      className="explorer-divider" onKeyDown={keyboardResize} onDoubleClick={() => updateWidth(defaultWidth)}
-      onPointerDown={(event) => {
-        if (event.button !== 0) return
-        event.currentTarget.setPointerCapture(event.pointerId)
-        setDragging(true)
-      }}
-      onPointerMove={(event) => {
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) setWidth(pointerWidth(event))
-      }}
-      onPointerUp={(event) => {
-        if (!event.currentTarget.hasPointerCapture(event.pointerId)) return
-        updateWidth(pointerWidth(event))
-        event.currentTarget.releasePointerCapture(event.pointerId)
-      }}
-      onLostPointerCapture={() => setDragging(false)} />
+    <SidebarDivider side="left" width={width} minimum={minimum} maximum={maximum}
+      defaultWidth={defaultWidth} label="Largura do Explorador de objetos" controls="object-explorer"
+      onDrag={setDragging} onWidth={(next, settled) => {
+        setWidth(next)
+        if (settled) saveWidth(next)
+      }} />
     {children}
   </div>
 }

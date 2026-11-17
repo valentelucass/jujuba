@@ -23,6 +23,7 @@ import { Empty, Failure, Loading } from './States'
 import { Structure } from './Structure'
 import { StatusBar } from './StatusBar'
 import { AssistantDock, readProvider } from './AssistantDock'
+import type { MascotRoom } from '../models/flowMascot'
 import type { SystemDiagram } from '../models/systemDiagram'
 const SqlEditor = lazy(() => import('./SqlEditor').then((module) => ({ default: module.SqlEditor })))
 const DatabaseDashboard = lazy(() => import('./DatabaseDashboard'))
@@ -258,6 +259,7 @@ export function App() {
   const [assistantOpen, setAssistantOpen] = useState(false)
   const [provider, setProvider] = useState(readProvider)
   const [databaseScreen, setDatabaseScreen] = useState('Bancos de dados')
+  const [mascotRoom, setMascotRoom] = useState<MascotRoom | null>(null)
   const [currentDiagram, setCurrentDiagram] = useState<SystemDiagram | null>(null)
   const [assistantDiagram, setAssistantDiagram] = useState<{ diagram: SystemDiagram; revisionOf: SystemDiagram | null } | null>(null)
   const screen = diagrams ? 'Fluxogramas de sistema' : connection ? databaseScreen :
@@ -390,9 +392,10 @@ export function App() {
     </div>
     {openedDiagrams && <div className="app-screen" hidden={!diagrams}>
       <Suspense fallback={<Loading />}><SystemDiagramStudio exit={() => setDiagrams(false)} provider={provider}
-        assistantDiagram={assistantDiagram} onDiagram={setCurrentDiagram} connection={connection} /></Suspense>
+        assistantDiagram={assistantDiagram} onDiagram={setCurrentDiagram} onMascotRoom={setMascotRoom} connection={connection} /></Suspense>
     </div>}
     <AssistantDock open={assistantOpen} setOpen={setAssistantOpen} provider={provider} setProvider={setProvider}
-      screen={screen} diagram={diagrams ? currentDiagram : null} onDiagram={applyAssistantDiagram} />
+      screen={screen} diagram={diagrams ? currentDiagram : null} onDiagram={applyAssistantDiagram}
+      mascotRoom={diagrams ? mascotRoom : null} />
   </>
 }
