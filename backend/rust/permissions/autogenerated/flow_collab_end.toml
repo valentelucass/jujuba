@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-flow-collab-end"
+description = "Enables the flow_collab_end command without any pre-configured scope."
+commands.allow = ["flow_collab_end"]
+
+[[permission]]
+identifier = "deny-flow-collab-end"
+description = "Denies the flow_collab_end command without any pre-configured scope."
+commands.deny = ["flow_collab_end"]

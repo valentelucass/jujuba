@@ -39,6 +39,14 @@ Em **Código**, o assistente usa o fluxograma salvo para criar uma primeira impl
 
 Use o ícone do sol ou da lua na barra superior para trocar entre fundo branco e preto. O aplicativo lembra a sua escolha.
 
+## Compartilhar um fluxograma
+
+Em **Fluxogramas → Meus projetos**, crie um projeto ou importe um arquivo `.jujuba.json`. As edições ficam salvas no projeto, e **Salvar arquivo** permite manter uma cópia em arquivo.
+
+Abra o projeto, clique em **Compartilhar** e envie o código pelo canal de sua preferência. A outra pessoa abre **Entrar por código** no próprio JujubaSQL. Após a aprovação, vocês veem o fluxograma e o cursor um do outro. Use **Passar edição** para alternar quem pode editar. O acesso termina ao fechar a sessão. As alterações ficam no projeto do dono, e o convidado pode salvar uma cópia própria.
+
+A conexão criptografada usa [Iroh](https://github.com/n0-computer/iroh), com conexão direta quando possível e retransmissão do tráfego pelo serviço público do Iroh quando necessário. Os dois computadores precisam de conexão com a internet.
+
 ## Desenvolver e compilar
 
 Requisitos no Windows x64:

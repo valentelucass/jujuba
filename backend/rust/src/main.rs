@@ -32,6 +32,7 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(connection::Connections::default())
         .manage(system_diagram::SelectedWorkspace::default())
+        .manage(system_diagram::collaboration::FlowCollaboration::default())
         .invoke_handler(tauri::generate_handler![
             commands::connect,
             commands::choose_sqlite_file,
@@ -65,6 +66,17 @@ fn main() {
             system_diagram::diagram_markdown,
             system_diagram::diagram_scaffold,
             system_diagram::diagram_write_code,
+            system_diagram::workspaces::flow_projects,
+            system_diagram::workspaces::flow_project_load,
+            system_diagram::workspaces::flow_project_create,
+            system_diagram::workspaces::flow_project_link,
+            system_diagram::workspaces::flow_project_remove,
+            system_diagram::collaboration::flow_project_edit,
+            system_diagram::collaboration::flow_collab_host,
+            system_diagram::collaboration::flow_collab_join,
+            system_diagram::collaboration::flow_collab_view,
+            system_diagram::collaboration::flow_collab_command,
+            system_diagram::collaboration::flow_collab_end,
         ])
         .run(tauri::generate_context!())
         .expect("iniciar o JujubaSQL");

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-flow-project-load"
+description = "Enables the flow_project_load command without any pre-configured scope."
+commands.allow = ["flow_project_load"]
+
+[[permission]]
+identifier = "deny-flow-project-load"
+description = "Denies the flow_project_load command without any pre-configured scope."
+commands.deny = ["flow_project_load"]

@@ -783,3 +783,20 @@ dialog.connection-dialog {
 .assistant-files li button { display: grid; place-items: center; border: 0; padding: 2px; background: transparent; }
 .system-panel-tabs .button { padding-inline: 6px; gap: 4px; }
 .system-design-panel :is(input, select, textarea):focus-visible { outline: 2px solid var(--berry); outline-offset: -1px; }
+
+.flow-project-library { flex: 1; padding: 22px 18px; overflow: auto; }
+.flow-project-library p { color: var(--quiet); }
+.flow-project-library ul { display: grid; gap: 8px; max-width: 650px; margin: 0; padding: 0; list-style: none; }
+.flow-project-library li { display: flex; gap: 10px; align-items: center; padding-right: 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
+.flow-open-project { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 12px; border: 0; border-radius: inherit; background: transparent; color: var(--text); text-align: left; overflow-wrap: anywhere; }
+.flow-open-project:hover { background: var(--gold-surface); }
+.flow-open-project svg, .flow-share-bar > svg { color: var(--gold); flex: none; }
+.flow-share-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 9px 12px; padding: 10px 18px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.flow-share-bar label { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.flow-share-bar input { max-width: 100%; min-height: 32px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 5px; background: var(--workspace); color: var(--text); }
+.flow-share-bar input.flow-invite-code { width: min(440px, 74vw); font-family: monospace; font-size: 12px; }
+.flow-share-bar small { color: var(--quiet); }
+.flow-end-share { margin-left: auto; }
+.flow-peer-cursor { position: absolute; z-index: 1000; pointer-events: none; color: var(--berry); }
+.flow-peer-cursor svg { display: block; transform: translate(-3px, -3px); stroke: var(--surface); stroke-width: 1.5; }
+.flow-peer-cursor span { position: absolute; top: 12px; left: 12px; display: block; padding: 2px 6px; border-radius: 4px; background: var(--berry); color: var(--workspace); font-size: 12px; white-space: nowrap; }

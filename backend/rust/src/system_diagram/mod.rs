@@ -1,4 +1,6 @@
 mod ai;
+pub mod collaboration;
+pub mod workspaces;
 mod files;
 mod model;
 

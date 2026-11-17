@@ -1,10 +1,10 @@
 import {
-  Background, Controls, Handle, MarkerType, Position, ReactFlow, useNodesInitialized, useNodesState, useReactFlow,
-  type Connection, type Edge, type Node, type NodeProps,
+  Background, Controls, Handle, MarkerType, Position, ReactFlow, ViewportPortal, useNodesInitialized, useNodesState, useReactFlow,
+  type Connection, type Edge, type Node, type NodeProps, type ReactFlowInstance,
 } from '@xyflow/react'
-import { Workflow } from 'lucide-react'
+import { MousePointer2, Workflow } from 'lucide-react'
 import { FlowStageIcon } from './FlowStageIcon'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { nodeKinds, type NodeKind, type StagePosition, type SystemDiagram, type SystemEdge } from '../models/systemDiagram'
 
 import { useTheme } from './Theme'
@@ -66,14 +66,18 @@ function FitNewStages({ nodeIds }: { nodeIds: string }) {
   return null
 }
 
-export function SystemFlowCanvas({ diagram, selected, choose, connect, move, disabled }: {
+export function SystemFlowCanvas({ diagram, selected, choose, connect, move, disabled, peerCursor, sendCursor }: {
   diagram: SystemDiagram | null
   selected: string | null
   choose: (id: string | null) => void
   connect: (edge: SystemEdge) => void
   move: (id: string, position: StagePosition) => void
   disabled: boolean
+  peerCursor: (StagePosition & { name: string }) | null
+  sendCursor?: (position: StagePosition | null) => void
 }) {
+  const flow = useRef<ReactFlowInstance<FlowNode, Edge> | null>(null)
+  const lastCursor = useRef(0)
   const { theme } = useTheme()
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([])
   useEffect(() => {
@@ -97,8 +101,15 @@ export function SystemFlowCanvas({ diagram, selected, choose, connect, move, dis
     }
   }
 
-  return <section className="system-flow-canvas" aria-label="Fluxograma do sistema">
-    <ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange}
+  return <section className="system-flow-canvas" aria-label="Fluxograma do sistema"
+    onPointerMove={(event) => {
+      const now = performance.now()
+      if (!sendCursor || !flow.current || now - lastCursor.current < 60) return
+      lastCursor.current = now
+      sendCursor(flow.current.screenToFlowPosition({ x: event.clientX, y: event.clientY }))
+    }}
+    onPointerLeave={() => { lastCursor.current = 0; sendCursor?.(null) }}>
+    <ReactFlow onInit={(api) => { flow.current = api }} nodes={nodes} edges={edges} onNodesChange={onNodesChange}
       nodeTypes={nodeTypes} colorMode={theme} fitView fitViewOptions={{ padding: .18, maxZoom: 1.25 }}
       minZoom={.12} nodesDraggable={!disabled} nodesConnectable={!disabled} edgesReconnectable={false} deleteKeyCode={null}
       multiSelectionKeyCode={null} nodeExtent={[[-100_000, -100_000], [100_000, 100_000]]}
@@ -106,6 +117,13 @@ export function SystemFlowCanvas({ diagram, selected, choose, connect, move, dis
       onNodeClick={(_, node) => choose(node.id)} onPaneClick={() => choose(null)} onConnect={add}>
       <FitNewStages nodeIds={diagram?.nodes.map((node) => node.id).join(',') ?? ''} />
       <Background id="system-flow-dots" gap={20} size={1.4} color="var(--canvas-dot)" />
+      {peerCursor && <ViewportPortal>
+        <div className="flow-peer-cursor" style={{ left: peerCursor.x, top: peerCursor.y }}
+          aria-label={'Cursor de ' + peerCursor.name}>
+          <MousePointer2 size={19} fill="currentColor" />
+          <span>{peerCursor.name}</span>
+        </div>
+      </ViewportPortal>}
       {!!diagram?.nodes.length && <Controls showInteractive={false} />}
     </ReactFlow>
     {!diagram?.nodes.length && <div className="system-flow-empty">

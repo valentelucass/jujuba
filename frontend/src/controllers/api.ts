@@ -1,5 +1,6 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import type { AiProvider, AssistantReply, AssistantRequest, DiagramProject, GeneratedProject, OpenedDiagram, SystemDiagram } from '../models/systemDiagram'
+import type { FlowCommand, FlowProject, FlowProjectEntry, FlowSession } from '../models/flowWorkspace'
 import type { NoSqlEngine } from '../models/engines'
 import type { DocumentsPage, RedisEntry, RedisKeys } from '../models/noSql'
 import type { DatabaseFile, DashboardOverview, DashboardPerformance, EngineDashboardData, LiveActivity, TableStorage } from '../models/dashboard'
@@ -59,6 +60,23 @@ export const systemDiagram = {
   scaffold: (provider: AiProvider, project: DiagramProject, requirements: string) =>
     call<GeneratedProject>('diagram_scaffold', { provider, project, requirements }),
   writeCode: (code: GeneratedProject) => call<string | null>('diagram_write_code', { code }),
+}
+
+export const flowProjects = {
+  list: () => call<FlowProjectEntry[]>('flow_projects'),
+  load: (id: string) => call<FlowProject>('flow_project_load', { id }),
+  create: (diagram: SystemDiagram, file: DiagramProject | null) => call<FlowProject>('flow_project_create', { diagram, file }),
+  edit: (id: string, diagram: SystemDiagram) => call<void>('flow_project_edit', { id, diagram }),
+  link: (id: string, file: DiagramProject, diagram: SystemDiagram) => call<void>('flow_project_link', { id, file, diagram }),
+  remove: (id: string) => call<void>('flow_project_remove', { id }),
+}
+
+export const flowCollaboration = {
+  host: (id: string, name: string) => call<FlowSession>('flow_collab_host', { id, name }),
+  join: (code: string, name: string) => call<FlowSession>('flow_collab_join', { code, name }),
+  view: (id: string, seen: number) => call<FlowSession | null>('flow_collab_view', { id, seen }),
+  command: (id: string, command: FlowCommand) => call<void>('flow_collab_command', { id, command }),
+  end: (id: string) => call<void>('flow_collab_end', { id }),
 }
 
 export function appError(error: unknown): AppError {

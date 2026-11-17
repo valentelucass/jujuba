@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-flow-collab-join"
+description = "Enables the flow_collab_join command without any pre-configured scope."
+commands.allow = ["flow_collab_join"]
+
+[[permission]]
+identifier = "deny-flow-collab-join"
+description = "Denies the flow_collab_join command without any pre-configured scope."
+commands.deny = ["flow_collab_join"]

@@ -33,6 +33,17 @@ fn main() {
             "diagram_markdown",
             "diagram_scaffold",
             "diagram_write_code",
+            "flow_projects",
+            "flow_project_load",
+            "flow_project_create",
+            "flow_project_link",
+            "flow_project_remove",
+            "flow_project_edit",
+            "flow_collab_host",
+            "flow_collab_join",
+            "flow_collab_view",
+            "flow_collab_command",
+            "flow_collab_end",
         ]),
     ))
     .expect("preparar permissões e recursos do JujubaSQL");

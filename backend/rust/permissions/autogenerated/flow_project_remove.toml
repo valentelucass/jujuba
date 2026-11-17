@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-flow-project-remove"
+description = "Enables the flow_project_remove command without any pre-configured scope."
+commands.allow = ["flow_project_remove"]
+
+[[permission]]
+identifier = "deny-flow-project-remove"
+description = "Denies the flow_project_remove command without any pre-configured scope."
+commands.deny = ["flow_project_remove"]
