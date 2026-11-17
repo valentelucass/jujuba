@@ -1,10 +1,11 @@
 import {
-  Background, Controls, Handle, MarkerType, Position, ReactFlow, ViewportPortal, useNodesInitialized, useNodesState, useReactFlow,
-  type Connection, type Edge, type Node, type NodeProps, type ReactFlowInstance,
+  Background, BaseEdge, Controls, Handle, MarkerType, Position, ReactFlow, ViewportPortal, useNodesInitialized, useNodesState, useReactFlow,
+  type Connection, type Edge, type EdgeProps, type Node, type NodeProps, type ReactFlowInstance,
 } from '@xyflow/react'
 import { MousePointer2, Workflow } from 'lucide-react'
 import { FlowOutline } from './FlowStageIcon'
 import { arrangeStages, NOTE_WIDTH, type StageGeometry } from '../models/flowGeometry'
+import { routeFlowEdges, type FlowBox, type FlowRoute } from '../models/flowRoutes'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 import { MAX_FLOW_NOTE_TEXT, nodeKinds, type NodeKind, type StagePosition, type SystemDiagram, type SystemEdge } from '../models/systemDiagram'
 
@@ -12,6 +13,17 @@ import { useTheme } from './Theme'
 
 type FlowNode = Node<{ label: string; kind: NodeKind | 'note'; geometry: StageGeometry; rename?: (id: string, label: string) => void }, 'flowStep'>
 const nodeTypes = { flowStep: FlowStep }
+type RoutedFlowEdge = Edge<{ route: FlowRoute }, 'routed'>
+const edgeTypes = { routed: RoutedEdge }
+
+function RoutedEdge({ id, data, markerEnd, label, labelStyle, labelBgStyle, style }: EdgeProps<RoutedFlowEdge>) {
+  if (!data) return null
+  const { route } = data
+  return <BaseEdge id={id} path={route.path} markerEnd={markerEnd}
+    label={label} labelX={route.label.x} labelY={route.label.y}
+    labelStyle={labelStyle} labelBgStyle={labelBgStyle}
+    style={{ ...style, strokeDasharray: route.returning ? '6 4' : undefined }} />
+}
 
 function FlowStep({ id, data, selected }: NodeProps<FlowNode>) {
   const { kind, label, geometry, rename } = data
@@ -99,7 +111,7 @@ export function SystemFlowCanvas({ diagram, selected, choose, connect, move, ren
   peerCursor: (StagePosition & { name: string }) | null
   sendCursor?: (position: StagePosition | null) => void
 }) {
-  const flow = useRef<ReactFlowInstance<FlowNode, Edge> | null>(null)
+  const flow = useRef<ReactFlowInstance<FlowNode, RoutedFlowEdge> | null>(null)
   const lastCursor = useRef(0)
   const renameCurrent = useRef(rename)
   renameCurrent.current = rename
@@ -120,17 +132,23 @@ export function SystemFlowCanvas({ diagram, selected, choose, connect, move, ren
         })
     })
   }, [diagram, selected, disabled, setNodes])
-  const edges = useMemo<Edge[]>(() => (diagram?.edges ?? []).map((edge, index) => ({
-    id: 'edge-' + index,
-    source: edge.from,
-    target: edge.to,
-    type: 'smoothstep',
-    label: edge.label || undefined,
-    markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--gold-line)' },
-    style: { stroke: 'var(--gold-line)', strokeWidth: 1.7 },
-    labelStyle: { fill: 'var(--gold)', fontWeight: 600 },
-    labelBgStyle: { fill: 'var(--surface)', fillOpacity: 1 },
-  })), [diagram])
+  const edges = useMemo<RoutedFlowEdge[]>(() => {
+    const boxes = nodes.flatMap<FlowBox>(({ id, position, data }) => data.kind === 'note' ? [] : [
+      { id, kind: data.kind, ...position, ...data.geometry },
+    ])
+    return routeFlowEdges(diagram?.edges ?? [], boxes).map((route) => ({
+      id: route.id,
+      source: route.edge.from,
+      target: route.edge.to,
+      type: 'routed',
+      data: { route },
+      label: route.edge.label || undefined,
+      markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--gold-line)' },
+      style: { stroke: 'var(--gold-line)', strokeWidth: 1.7 },
+      labelStyle: { fill: 'var(--gold)', fontWeight: 600 },
+      labelBgStyle: { fill: 'var(--surface)', fillOpacity: 1 },
+    }))
+  }, [diagram?.edges, nodes])
 
   const elementIds = [...(diagram?.nodes ?? []), ...(diagram?.notes ?? [])].map(({ id }) => id).join(',')
 
@@ -149,7 +167,7 @@ export function SystemFlowCanvas({ diagram, selected, choose, connect, move, ren
     }}
     onPointerLeave={() => { lastCursor.current = 0; sendCursor?.(null) }}>
     <ReactFlow onInit={(api) => { flow.current = api }} nodes={nodes} edges={edges} onNodesChange={onNodesChange}
-      nodeTypes={nodeTypes} colorMode={theme} fitView fitViewOptions={{ padding: .18, maxZoom: 1.25 }}
+      nodeTypes={nodeTypes} edgeTypes={edgeTypes} colorMode={theme} fitView fitViewOptions={{ padding: .18, maxZoom: 1.25 }}
       minZoom={.12} zoomOnDoubleClick={false} nodeClickDistance={3} nodesDraggable={!disabled} nodesConnectable={!disabled} edgesReconnectable={false} deleteKeyCode={null}
       multiSelectionKeyCode={null} nodeExtent={[[-100_000, -100_000], [100_000, 100_000]]}
       onNodeDragStop={(_, node) => move(node.id, node.position)}

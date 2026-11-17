@@ -26,6 +26,14 @@ export type AiProvider = 'codex' | 'claude' | 'gemini'
 export type ChatMessage = { role: 'user' | 'assistant'; content: string }
 export type ReferenceDocument = { name: string; text: string }
 export type AssistantReply = { reply: string; diagram: SystemDiagram | null }
+export type AssistantFlowResult = { applied: boolean; message: string }
+export type AssistantFlowChange = {
+  diagram: SystemDiagram
+  revisionOf: SystemDiagram | null
+  createNew: boolean
+  complete: (result: AssistantFlowResult) => void
+}
+
 export interface AssistantRequest {
   prompt: string
   screen: string

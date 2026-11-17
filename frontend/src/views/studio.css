@@ -912,7 +912,8 @@ dialog.connection-dialog {
   box-shadow: 0 16px 55px var(--shadow); overflow: hidden;
 }
 .assistant-heading { display: flex; align-items: center; justify-content: space-between; padding: 12px; border-bottom: 1px solid var(--line); }
-.assistant-heading-actions { display: flex; align-items: center; gap: 6px; }
+.assistant-heading > div:first-child { min-width: 0; }
+.assistant-heading-actions { display: flex; flex: none; align-items: center; gap: 6px; }
 .assistant-hats-trigger .hat-miniature { flex: none; width: 22px; height: 18px; }
 .assistant-hats {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(min(97px, 100%), 1fr)); gap: 7px;
@@ -928,6 +929,7 @@ dialog.connection-dialog {
 .assistant-heading h2 { display: flex; align-items: center; gap: 7px; font-size: 15px; }
 .assistant-heading h2 svg { color: var(--berry); }
 .assistant-heading small, .assistant-workspace { display: block; color: var(--quiet); margin-top: 3px; }
+.assistant-heading small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .assistant-config { display: flex; gap: 6px; padding: 8px 12px; }
 .assistant-config select, .assistant-composer textarea {
   border: 1px solid var(--line-strong); border-radius: 7px; background: var(--workspace); color: var(--text); padding: 7px;
@@ -942,7 +944,8 @@ dialog.connection-dialog {
 .project-chat-history li.assistant { margin-right: 20px; }
 .project-chat-history strong { font-size: 11px; color: var(--quiet); }
 .project-chat-history p { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 5px; line-height: 1.48; }
-.project-chat-history .button { margin-top: 8px; }
+.assistant-change { display: block; margin-top: 8px; color: var(--gold); }
+.assistant-change.applied { color: var(--mint); }
 .project-chat-history .assistant-empty { color: var(--quiet); line-height: 1.5; }
 .project-chat-history .assistant-scroll-anchor { padding: 0; border: 0; }
 .assistant-status { display: flex; align-items: center; gap: 7px; padding: 7px 12px; color: var(--mint); background: var(--accent); font-size: 12px; }

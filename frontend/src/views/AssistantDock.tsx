@@ -8,7 +8,7 @@ import { makeSplat, MascotSplat, type Splat } from './MascotSplat'
 import { hats, MascotHat, readHat, saveHat, type Hat } from './MascotHat'
 import { appError, systemDiagram } from '../controllers/api'
 import { animateThrow, throwVelocity, type FlightBounds, type FlightFrame, type Point, type PointerSample } from '../controllers/mascotMotion'
-import type { AiProvider, ChatMessage, ReferenceDocument, SystemDiagram } from '../models/systemDiagram'
+import type { AiProvider, AssistantFlowResult, ChatMessage, ReferenceDocument, SystemDiagram } from '../models/systemDiagram'
 
 const assistants = {
   codex: { label: 'ChatGPT · Codex', login: 'Entre com sua conta do ChatGPT no Codex.' },
@@ -65,7 +65,7 @@ function edgeAt(x: number, width: number) {
   return x + launcherSize / 2 < width / 2 ? 'left' : 'right'
 }
 
-type Turn = ChatMessage & { diagram?: SystemDiagram; revisionOf?: SystemDiagram | null }
+type Turn = ChatMessage & { change?: AssistantFlowResult }
 
 export function readProvider(): AiProvider {
   try {
@@ -83,7 +83,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   screen: string
   diagram: SystemDiagram | null
   mascotRoom: MascotRoom | null
-  onDiagram: (diagram: SystemDiagram, revisionOf: SystemDiagram | null) => boolean
+  onDiagram: (diagram: SystemDiagram, revisionOf: SystemDiagram | null, screen: string) => Promise<AssistantFlowResult>
 }) {
   const [workspace, setWorkspace] = useState('')
   const [attachments, setAttachments] = useState<ReferenceDocument[]>([])
@@ -374,11 +374,11 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     if (!prompt) return
     void perform('Assistente trabalhando…', async () => {
       const history = chat.slice(-12).map(({ role, content }) => ({ role, content: content.slice(0, 2500) }))
-      const result = await systemDiagram.converse(provider, { prompt, screen, history, diagram, documents: attachments })
-      setChat([...chat, { role: 'user', content: prompt }, {
-        role: 'assistant', content: result.reply, diagram: result.diagram ?? undefined, revisionOf: diagram,
-      }])
+      setChat((turns) => [...turns, { role: 'user', content: prompt }])
       setDraft('')
+      const result = await systemDiagram.converse(provider, { prompt, screen, history, diagram, documents: attachments })
+      const change = result.diagram ? await onDiagram(result.diagram, diagram, screen) : undefined
+      setChat((turns) => [...turns, { role: 'assistant', content: result.reply, change }])
     })
   }
 
@@ -386,7 +386,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     {open && <section ref={dock} id="assistant-dock" className="assistant-dock" aria-label="Assistente de IA" style={panel}
       onKeyDown={(event) => { if (event.key === 'Escape' && !event.defaultPrevented) close() }}>
       <header className="assistant-heading">
-        <div><h2><Sparkles size={17} />Assistente de IA</h2><small>{screen}</small></div>
+        <div><h2><Sparkles size={17} />Assistente de IA</h2><small>{diagram?.title ? screen + ' · ' + diagram.title : screen}</small></div>
         <div className="assistant-heading-actions">
           <button className="button assistant-hats-trigger" type="button" aria-expanded={hatsOpen} aria-controls={hatsOpen ? 'assistant-hats' : undefined}
             onClick={() => { setHatsOpen(!hatsOpen); setMascotOptions(false) }}><MascotHat hat="topHat" miniature />Chapéus</button>
@@ -439,9 +439,9 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
         {chat.map((turn, index) => <li key={index} className={turn.role}>
           <strong>{turn.role === 'user' ? 'Você' : assistants[provider].label}</strong>
           <p>{turn.content}</p>
-          {turn.diagram && <button className="button design-accent" onClick={() => {
-            if (turn.diagram && onDiagram(turn.diagram, turn.revisionOf ?? null)) close()
-          }}>Abrir fluxograma no editor</button>}
+          {turn.change && <small className={turn.change.applied ? 'assistant-change applied' : 'assistant-change'}>
+            {turn.change.message}
+          </small>}
         </li>)}
         <li className="assistant-scroll-anchor" aria-hidden="true" ref={end} />
       </ol>
@@ -457,8 +457,12 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
           </li>)}
         </ul>}
         <textarea ref={composer} rows={3} aria-label="Mensagem para o assistente" placeholder="Ex. Construa o fluxograma do cadastro"
-          value={draft} maxLength={4000} disabled={!!busy} onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); send() } }} />
+          value={draft} maxLength={4000} onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
+            event.preventDefault()
+            if (!event.repeat) send()
+          }} />
         <div className="assistant-compose-actions">
           <label className="button assistant-attach" title="Anexar documentos de texto">
             <Paperclip size={15} />Anexar

@@ -6,7 +6,7 @@ import type { Connection } from '../models/sql'
 import { appError, flowCollaboration, flowProjects, systemDiagram } from '../controllers/api'
 import type { FlowCommand, FlowProject, FlowProjectEntry, FlowSession } from '../models/flowWorkspace'
 import {
-  emptyDiagram, type AiProvider, type DiagramProject, type GeneratedProject, type StagePosition,
+  emptyDiagram, type AiProvider, type AssistantFlowChange, type DiagramProject, type GeneratedProject, type StagePosition,
   type SystemDiagram, type SystemEdge,
 } from '../models/systemDiagram'
 import { Header } from './Header'
@@ -43,7 +43,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
   exit: () => void
   connection?: Connection | null
   provider: AiProvider
-  assistantDiagram: { diagram: SystemDiagram; revisionOf: SystemDiagram | null } | null
+  assistantDiagram: AssistantFlowChange | null
   onDiagram: (diagram: SystemDiagram | null) => void
   onMascotRoom: (room: MascotRoom | null) => void
 }) {
@@ -176,21 +176,36 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
   useEffect(() => {
     if (!assistantDiagram || appliedDiagram.current === assistantDiagram) return
     appliedDiagram.current = assistantDiagram
-    if (disabled) {
-      setError('Aguarde o projeto ficar disponível para edição e tente novamente.')
+    const { diagram: next, revisionOf, createNew, complete } = assistantDiagram
+    if (disabled || locking.current) {
+      complete({ applied: false, message: 'O editor está ocupado. Aguarde a operação atual e envie o pedido novamente.' })
       return
     }
-    if (diagram) {
-      if (assistantDiagram.revisionOf && assistantDiagram.revisionOf !== diagram) {
-        setError('O fluxograma mudou enquanto o assistente trabalhava. Envie o pedido novamente.')
+    if (!createNew && revisionOf !== diagramRef.current) {
+      complete({ applied: false, message: 'O projeto mudou durante a resposta. Envie o pedido novamente para usar a versão atual.' })
+      return
+    }
+    if (!createNew && diagram) {
+      const saved = edit(next)
+      if (!saved) {
+        complete({ applied: false, message: 'O projeto está indisponível para edição.' })
         return
       }
-      edit(assistantDiagram.diagram)
+      if (!hasElement(next, selected)) setSelected(null)
       setFitKey((value) => value + 1)
+      void saved.then(
+        () => complete({ applied: true, message: 'Alterações aplicadas neste projeto.' }),
+        (error) => complete({ applied: false, message: appError(error).message }),
+      )
     } else {
       void perform('Criando projeto…', async () => {
-        const next = assistantDiagram.diagram
-        await openWorkspace(await flowProjects.create({ ...next, title: next.title.trim() || emptyDiagram.title }, null))
+        try {
+          await openWorkspace(await flowProjects.create({ ...next, title: next.title.trim() || emptyDiagram.title }, null))
+          complete({ applied: true, message: 'Novo fluxograma aberto no editor.' })
+        } catch (error) {
+          complete({ applied: false, message: appError(error).message })
+          throw error
+        }
       })
     }
   }, [assistantDiagram, diagram, disabled])
@@ -229,19 +244,21 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
     editGeneration.current += 1
     pendingEdits.current += 1
     const id = workspace
-    edits.current = edits.current.then(async () => {
+    const saved = edits.current.then(async () => {
       if (current) {
         await flowCollaboration.command(current.id, { type: 'edit', before, diagram: next })
       } else if (id) {
         await flowProjects.edit(id, next)
       }
-    }).catch((failure) => setError(appError(failure).message)).finally(() => { pendingEdits.current -= 1 })
+    }).finally(() => { pendingEdits.current -= 1 })
+    edits.current = saved.catch((failure) => setError(appError(failure).message))
+    return saved
   }
 
   function edit(next: SystemDiagram) {
     if (locking.current || disabled || !diagram) return
     setHistory(({ past }) => ({ past: [...past.slice(-39), diagram], future: [] }))
-    showEdit(diagram, next)
+    return showEdit(diagram, next)
   }
 
   function setCurrentDiagram(next: SystemDiagram | null) {
@@ -254,7 +271,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
     setDirty(true)
     setCode(null)
     setNotice('')
-    persist(before, next)
+    return persist(before, next)
   }
 
   function restore(direction: 'past' | 'future') {
@@ -395,6 +412,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
   function closeSharing() {
     void perform('Encerrando conexão…', async () => {
       await endSession()
+      setPanel(null)
       if (guest) replace(null, null, false)
     })
   }
@@ -504,7 +522,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
           {hasProject ? <>
             <button className="icon-button" disabled={!!busy} onClick={library}
               aria-label="Voltar para Meus projetos" title="Voltar para Meus projetos"><ArrowLeft size={17} /></button>
-            {workspace && !session && <button className="button design-accent" disabled={!!busy}
+            {workspace && (!session || session.phase === 'available') && <button className="button design-accent" disabled={!!busy}
               onClick={() => setPanel(panel === 'share' ? null : 'share')}><Users size={15} />Compartilhar</button>}
             {guest ? <button className="icon-button" disabled={!!busy} onClick={saveCopy}
               aria-label="Salvar cópia" title="Salvar cópia"><Copy size={17} /></button> : null}
@@ -541,7 +559,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
         <button className="button design-accent" disabled={!!busy || !title.trim()}>Criar projeto</button>
         <button type="button" className="button" disabled={!!busy} onClick={() => setPanel(null)}>Cancelar</button>
       </form>}
-      {(panel === 'share' || panel === 'join') && <form className="flow-share-bar" onSubmit={openSession}>
+      {((panel === 'share' && !session) || panel === 'join') && <form className="flow-share-bar" onSubmit={openSession}>
         <label>Seu nome <input autoFocus maxLength={32} value={name} onChange={(event) => setName(event.target.value)} required /></label>
         {panel === 'join' && <label>Código do convite <input className="flow-invite-code"
           value={invite} onChange={(event) => setInvite(event.target.value)} spellCheck={false} autoComplete="off" required /></label>}
@@ -550,13 +568,13 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
         </button>
         <button type="button" className="button" disabled={!!busy} onClick={() => setPanel(null)}>Cancelar</button>
       </form>}
-      {session && session.phase !== 'connected' && <div className="flow-share-bar" aria-label="Compartilhamento do fluxograma">
+      {session && session.phase !== 'connected' && (session.phase !== 'available' || panel === 'share') && <div className="flow-share-bar" aria-label="Compartilhamento do fluxograma">
         <Users size={17} />
         {session.phase === 'starting' && <span role="status">Estabelecendo conexão…</span>}
         {session.phase === 'available' && <>
-          <span>{session.trustedPeer ? <><strong>{session.trustedPeer}</strong> tem acesso salvo</> : 'Compartilhamento ativo'}</span>
+          {session.trustedPeer && <span><strong>{session.trustedPeer}</strong> tem acesso salvo</span>}
           <button className="button design-accent" disabled={!!busy}
-            onClick={() => sessionCommand({ type: 'invite' }, 'Gerando convite…')}>Gerar convite</button>
+            onClick={() => { setPanel(null); sessionCommand({ type: 'invite' }, 'Gerando convite…') }}>Gerar convite</button>
           {session.trustedPeer && <button className="button" disabled={!!busy}
             onClick={() => sessionCommand({ type: 'revoke' }, 'Revogando acesso…')}>Revogar acesso salvo</button>}
         </>}

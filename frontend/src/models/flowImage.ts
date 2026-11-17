@@ -1,4 +1,4 @@
-import { getSmoothStepPath, Position } from '@xyflow/react'
+import { routeFlowEdges } from './flowRoutes'
 import { arrangeStages, NOTE_LINE_HEIGHT, NOTE_WIDTH, stageOutline } from './flowGeometry'
 import { nodeKinds, type NodeKind, type SystemDiagram } from './systemDiagram'
 
@@ -46,7 +46,9 @@ export async function flowImage(diagram: SystemDiagram): Promise<Uint8Array> {
   await document.fonts.ready
 
   const stages = arrangeStages(diagram)
-  const boxes = new Map(stages.map((stage) => [stage.node.id, stage]))
+  const routes = routeFlowEdges(diagram.edges, stages.map(({ node, position, geometry }) => ({
+    id: node.id, kind: node.kind, ...position, ...geometry,
+  })))
   context.font = '15px ' + font
   const notes = (diagram.notes ?? []).filter(({ text }) => text.trim()).map(({ position, text }) => ({
     position, rows: wrap(context, text, NOTE_WIDTH - notePadding * 2),
@@ -54,6 +56,11 @@ export async function flowImage(diagram: SystemDiagram): Promise<Uint8Array> {
   const items = [
     ...stages.map(({ position, geometry }) => ({ ...position, width: geometry.width, height: geometry.height })),
     ...notes.map(({ position, rows }) => ({ ...position, width: NOTE_WIDTH, height: rows.length * NOTE_LINE_HEIGHT + notePadding * 2 })),
+    ...routes.flatMap((route) => route.points.map((point) => ({ ...point, width: 0, height: 0 }))),
+    ...routes.filter(({ edge }) => edge.label.trim()).map(({ edge, label }) => {
+      const width = edge.label.length * 7
+      return { x: label.x - width / 2, y: label.y - 10, width, height: 20 }
+    }),
   ]
   const left = Math.min(0, ...items.map(({ x }) => x)) - 38
   const top = Math.min(0, ...items.map(({ y }) => y)) - 38
@@ -95,26 +102,23 @@ export async function flowImage(diagram: SystemDiagram): Promise<Uint8Array> {
     context.save()
     context.translate((width - graphWidth) / 2 - left * zoom, graphTop - top * zoom)
     context.scale(zoom, zoom)
-    for (const edge of diagram.edges) {
-      const source = boxes.get(edge.from)
-      const target = boxes.get(edge.to)
-      if (!source || !target) continue
-      const endX = target.position.x + target.geometry.width / 2
-      const endY = target.position.y
-      const [path, labelX, labelY] = getSmoothStepPath({
-        sourceX: source.position.x + source.geometry.width / 2,
-        sourceY: source.position.y + source.geometry.height - (source.node.kind === 'document' ? 12 : 0),
-        targetX: endX, targetY: endY,
-        sourcePosition: Position.Bottom, targetPosition: Position.Top,
-      })
+    for (const { edge, path, points, label, returning } of routes) {
+      const { x: endX, y: endY } = points.at(-1)!
+      const previous = points.at(-2)!
+      const distance = Math.hypot(endX - previous.x, endY - previous.y)
+      const x = (endX - previous.x) / distance
+      const y = (endY - previous.y) / distance
+      const { x: labelX, y: labelY } = label
       context.strokeStyle = '#80642d'
       context.fillStyle = '#80642d'
       context.lineWidth = 1.6
+      context.setLineDash(returning ? [6, 4] : [])
       context.stroke(new Path2D(path))
+      context.setLineDash([])
       const arrow = new Path2D()
       arrow.moveTo(endX, endY)
-      arrow.lineTo(endX - 4.5, endY - 8)
-      arrow.lineTo(endX + 4.5, endY - 8)
+      arrow.lineTo(endX - x * 8 + y * 4.5, endY - y * 8 - x * 4.5)
+      arrow.lineTo(endX - x * 8 - y * 4.5, endY - y * 8 + x * 4.5)
       arrow.closePath()
       context.fill(arrow)
       if (edge.label.trim()) {

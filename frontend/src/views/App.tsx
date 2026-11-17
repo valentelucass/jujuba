@@ -24,7 +24,7 @@ import { Structure } from './Structure'
 import { StatusBar } from './StatusBar'
 import { AssistantDock, readProvider } from './AssistantDock'
 import type { MascotRoom } from '../models/flowMascot'
-import type { SystemDiagram } from '../models/systemDiagram'
+import type { AssistantFlowChange, AssistantFlowResult, SystemDiagram } from '../models/systemDiagram'
 const SqlEditor = lazy(() => import('./SqlEditor').then((module) => ({ default: module.SqlEditor })))
 const DatabaseDashboard = lazy(() => import('./DatabaseDashboard'))
 const SystemDiagramStudio = lazy(() => import('./SystemDiagramStudio').then((module) => ({ default: module.SystemDiagramStudio })))
@@ -261,9 +261,11 @@ export function App() {
   const [databaseScreen, setDatabaseScreen] = useState('Bancos de dados')
   const [mascotRoom, setMascotRoom] = useState<MascotRoom | null>(null)
   const [currentDiagram, setCurrentDiagram] = useState<SystemDiagram | null>(null)
-  const [assistantDiagram, setAssistantDiagram] = useState<{ diagram: SystemDiagram; revisionOf: SystemDiagram | null } | null>(null)
+  const [assistantDiagram, setAssistantDiagram] = useState<AssistantFlowChange | null>(null)
   const screen = diagrams ? 'Fluxogramas de sistema' : connection ? databaseScreen :
     step === 'intro' ? 'Tela inicial' : step === 'picker' ? 'Seleção de banco' : 'Conexão · ' + engines[step].name
+  const assistantContext = useRef({ screen, diagrams, diagram: currentDiagram })
+  assistantContext.current = { screen, diagrams, diagram: currentDiagram }
   const openPicker = () => { setRestoreError(null); setStep('picker') }
 
   useEffect(() => {
@@ -277,11 +279,21 @@ export function App() {
     setDiagrams(true)
   }
 
-  function applyAssistantDiagram(diagram: SystemDiagram, revisionOf: SystemDiagram | null) {
-    if (currentDiagram && currentDiagram !== revisionOf && !window.confirm('Abrir o fluxograma do assistente e substituir o fluxo atual no editor?')) return false
-    setAssistantDiagram({ diagram, revisionOf })
-    openDiagrams()
-    return true
+  function applyAssistantDiagram(diagram: SystemDiagram, revisionOf: SystemDiagram | null, origin: string): Promise<AssistantFlowResult> {
+    const context = assistantContext.current
+    if (context.screen !== origin) {
+      return Promise.resolve({ applied: false, message: 'A tela mudou durante a resposta. Envie o pedido na tela onde deseja aplicar o fluxograma.' })
+    }
+    if (context.diagrams && context.diagram !== revisionOf) {
+      return Promise.resolve({ applied: false, message: 'O projeto mudou durante a resposta. Envie o pedido novamente para usar a versão atual.' })
+    }
+    return new Promise((resolve) => {
+      setAssistantDiagram({ diagram, revisionOf, createNew: !context.diagrams, complete: (result) => {
+        setAssistantDiagram(null)
+        resolve(result)
+      } })
+      if (!context.diagrams) openDiagrams()
+    })
   }
 
   function chooseEngine(engine: Engine) {
