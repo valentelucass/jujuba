@@ -33,6 +33,16 @@ fn main() {
         .manage(connection::Connections::default())
         .manage(system_diagram::SelectedWorkspace::default())
         .manage(system_diagram::collaboration::FlowCollaboration::default())
+        .setup(|app| {
+            let app = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                if let Ok(directory) = system_diagram::workspaces::directory(&app) {
+                    app.state::<system_diagram::collaboration::FlowCollaboration>()
+                        .restore_hosts(&directory);
+                }
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::connect,
             commands::choose_sqlite_file,
@@ -73,7 +83,7 @@ fn main() {
             system_diagram::workspaces::flow_project_load,
             system_diagram::workspaces::flow_project_create,
             system_diagram::workspaces::flow_project_link,
-            system_diagram::workspaces::flow_project_remove,
+            system_diagram::collaboration::flow_project_remove,
             system_diagram::collaboration::flow_project_edit,
             system_diagram::collaboration::flow_collab_host,
             system_diagram::collaboration::flow_collab_join,
@@ -81,6 +91,24 @@ fn main() {
             system_diagram::collaboration::flow_collab_command,
             system_diagram::collaboration::flow_collab_end,
         ])
-        .run(tauri::generate_context!())
-        .expect("iniciar o JujubaSQL");
+        .build(tauri::generate_context!())
+        .expect("iniciar o JujubaSQL")
+        .run(|app, event| {
+            if let tauri::RunEvent::ExitRequested {
+                code: None, api, ..
+            } = event
+            {
+                let sessions = app.state::<system_diagram::collaboration::FlowCollaboration>();
+                api.prevent_exit();
+                if sessions.begin_shutdown() {
+                    let app = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        app.state::<system_diagram::collaboration::FlowCollaboration>()
+                            .shutdown()
+                            .await;
+                        app.exit(0);
+                    });
+                }
+            }
+        });
 }

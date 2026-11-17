@@ -13,9 +13,10 @@ use iroh::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::VecDeque,
+    collections::{HashMap, VecDeque},
+    fs,
     future::Future,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -23,7 +24,7 @@ use tauri::{AppHandle, State};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     sync::{mpsc, oneshot, watch},
-    task::AbortHandle,
+    task::{AbortHandle, JoinSet},
     time::{sleep_until, timeout, Instant},
 };
 use uuid::Uuid;
@@ -34,13 +35,21 @@ const INVITATION_LIFETIME: Duration = Duration::from_secs(600);
 const APPROVAL_TIME: Duration = Duration::from_secs(120);
 const DIAL_TIME: Duration = Duration::from_secs(25);
 const IO_TIME: Duration = Duration::from_secs(8);
+const CLOSE_TIME: Duration = Duration::from_millis(1200);
 const MAX_FRAME: usize = 256 * 1024;
 const MAX_PENDING: usize = 128;
 
 #[derive(Default)]
-pub struct FlowCollaboration(Mutex<Option<Session>>);
+pub struct FlowCollaboration(Mutex<Sessions>);
+
+#[derive(Default)]
+struct Sessions {
+    entries: HashMap<Option<Uuid>, Session>,
+    closing: bool,
+}
 
 struct Session {
+    id: Uuid,
     view: Arc<Mutex<View>>,
     tx: mpsc::Sender<Request>,
     task: AbortHandle,
@@ -192,15 +201,28 @@ enum Approval {
     Interrupted,
 }
 
-impl FlowCollaboration {
-    fn start<F, Fut>(&self, project: Option<Uuid>, run: F) -> Result<View>
+impl Sessions {
+    fn active_host(&self, project: Uuid) -> Result<Option<View>> {
+        let Some(session) = self.entries.get(&Some(project)) else {
+            return Ok(None);
+        };
+        let view = session.view.lock().map_err(|_| unavailable())?;
+        Ok((view.phase != Phase::Ended).then(|| view.clone()))
+    }
+
+    fn start<F, Fut>(&mut self, project: Option<Uuid>, run: F) -> Result<View>
     where
         F: FnOnce(Arc<Mutex<View>>, Inbox) -> Fut,
         Fut: Future<Output = Result<()>> + Send + 'static,
     {
-        let mut session = self.0.lock().map_err(|_| unavailable())?;
-        if session.is_some() {
-            return Err(invalid("Encerre a sessão atual antes de iniciar outra."));
+        if self.closing {
+            return Err(disconnected());
+        }
+        if let Some(session) = self.entries.get(&project) {
+            let view = session.view.lock().map_err(|_| unavailable())?;
+            if view.phase != Phase::Ended {
+                return Err(invalid("Encerre a sessão atual antes de iniciar outra."));
+            }
         }
 
         let initial = View {
@@ -249,43 +271,78 @@ impl FlowCollaboration {
                 );
             });
         });
-        *session = Some(Session {
-            view,
-            tx,
-            task: task.abort_handle(),
-        });
+        self.entries.insert(
+            project,
+            Session {
+                id: initial.id,
+                view,
+                tx,
+                task: task.abort_handle(),
+            },
+        );
         Ok(initial)
+    }
+
+    fn find(&self, id: Uuid) -> Option<&Session> {
+        self.entries.values().find(|session| session.id == id)
+    }
+}
+
+impl FlowCollaboration {
+    fn start<F, Fut>(&self, project: Option<Uuid>, run: F) -> Result<View>
+    where
+        F: FnOnce(Arc<Mutex<View>>, Inbox) -> Fut,
+        Fut: Future<Output = Result<()>> + Send + 'static,
+    {
+        self.0
+            .lock()
+            .map_err(|_| unavailable())?
+            .start(project, run)
     }
 
     fn sender(&self, id: Uuid) -> Result<mpsc::Sender<Request>> {
         let guard = self.0.lock().map_err(|_| unavailable())?;
-        let session = guard.as_ref().ok_or_else(disconnected)?;
-        if session.view.lock().map_err(|_| unavailable())?.id != id {
-            return Err(disconnected());
-        }
+        let session = guard.find(id).ok_or_else(disconnected)?;
         Ok(session.tx.clone())
     }
 
     fn end(&self, id: Uuid) -> Result<()> {
         let mut guard = self.0.lock().map_err(|_| unavailable())?;
-        if let Some(session) = guard.as_ref() {
-            let matches = session.view.lock().map_err(|_| unavailable())?.id == id;
-            if matches {
-                *guard = None;
-            }
-        }
+        guard.entries.retain(|_, session| session.id != id);
         Ok(())
     }
 
     fn view(&self, id: Uuid) -> Result<Option<Arc<Mutex<View>>>> {
         let guard = self.0.lock().map_err(|_| unavailable())?;
-        let Some(session) = guard.as_ref() else {
-            return Ok(None);
+        Ok(guard.find(id).map(|session| session.view.clone()))
+    }
+
+    pub fn begin_shutdown(&self) -> bool {
+        let Ok(mut sessions) = self.0.lock() else {
+            return true;
         };
-        if session.view.lock().map_err(|_| unavailable())?.id != id {
-            return Ok(None);
+        let first = !sessions.closing;
+        sessions.closing = true;
+        first
+    }
+
+    pub async fn shutdown(&self) {
+        let mut requests = JoinSet::new();
+        if let Ok(sessions) = self.0.lock() {
+            for session in sessions.entries.values() {
+                let sender = session.tx.clone();
+                requests.spawn(async move {
+                    let _ = submit(sender, Command::End).await;
+                });
+            }
         }
-        Ok(Some(session.view.clone()))
+        let _ = timeout(CLOSE_TIME, async {
+            while requests.join_next().await.is_some() {}
+        })
+        .await;
+        if let Ok(mut sessions) = self.0.lock() {
+            sessions.entries.clear();
+        }
     }
 
     async fn next_view(
@@ -407,6 +464,10 @@ async fn host(
                             })
                         }
                         Command::Revoke => revoke(&project, &mut sharing, &state),
+                        Command::End => {
+                            let _ = request.response.send(Ok(()));
+                            return Ok(());
+                        }
                         Command::Edit { before, diagram: after } =>
                             apply_edit(&state, Some(&project), &mut diagram, &before, &after),
                         _ => Err(operation_unavailable()),
@@ -1047,6 +1108,117 @@ fn disconnected() -> AppError {
     AppError::new("collaboration", "A conexão do fluxograma foi encerrada.")
 }
 
+impl FlowCollaboration {
+    fn host_project(
+        &self,
+        directory: &Path,
+        id: Uuid,
+        name: Option<String>,
+        resume_invite: bool,
+    ) -> Result<Option<View>> {
+        let mut sessions = self.0.lock().map_err(|_| unavailable())?;
+        if sessions.closing {
+            return Err(disconnected());
+        }
+        if let Some(view) = sessions.active_host(id)? {
+            return Ok(Some(view));
+        }
+        let name = name.as_deref().map(alias).transpose()?;
+        let saved = flow_access::read(directory, id)?;
+        let project = SharedProject {
+            directory: directory.to_path_buf(),
+            id,
+        };
+        let (mut sharing, mut invitation) = if let Some(name) = &name {
+            let mut sharing = saved.unwrap_or_else(|| Sharing::new(name.clone()));
+            sharing.name.clone_from(name);
+            (sharing, Some(new_invitation()))
+        } else {
+            let invitation = saved
+                .as_ref()
+                .filter(|_| resume_invite)
+                .and_then(restore_invitation);
+            match saved {
+                Some(sharing) if invitation.is_some() || sharing.guest.is_some() => {
+                    (sharing, invitation)
+                }
+                _ if resume_invite => {
+                    return Err(AppError::new(
+                        "expired",
+                        "O convite anterior expirou. Gere um novo convite neste projeto.",
+                    ))
+                }
+                _ => return Ok(None),
+            }
+        };
+        let diagram = workspaces::load(directory, id)?.diagram;
+        if name.is_some() {
+            invitation = record_invitation(&project, &mut sharing, invitation)?;
+        }
+        sessions
+            .start(Some(id), |state, commands| async move {
+                let endpoint = endpoint(true, SecretKey::from_bytes(&sharing.key)).await?;
+                timeout(DIAL_TIME, endpoint.online())
+                    .await
+                    .map_err(|_| unavailable())?;
+                let result = host(
+                    endpoint.clone(),
+                    sharing,
+                    diagram,
+                    project,
+                    invitation,
+                    state,
+                    commands,
+                )
+                .await;
+                endpoint.close().await;
+                result
+            })
+            .map(Some)
+    }
+
+    pub fn restore_hosts(&self, directory: &Path) {
+        let Ok(entries) = fs::read_dir(directory) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path
+                .extension()
+                .is_none_or(|extension| extension != "sharing")
+            {
+                continue;
+            }
+            let Some(id) = path
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .and_then(|stem| Uuid::parse_str(stem).ok())
+            else {
+                continue;
+            };
+            if flow_access::read(directory, id)
+                .is_ok_and(|saved| saved.is_some_and(|sharing| sharing.guest.is_some()))
+            {
+                let _ = self.host_project(directory, id, None, true);
+            }
+        }
+    }
+
+    async fn close(&self, id: Uuid) -> Result<()> {
+        let connected = if let Some(view) = self.view(id)? {
+            view.lock().map_err(|_| unavailable())?.phase == Phase::Connected
+        } else {
+            false
+        };
+        if connected {
+            if let Ok(sender) = self.sender(id) {
+                let _ = timeout(CLOSE_TIME, submit(sender, Command::End)).await;
+            }
+        }
+        self.end(id)
+    }
+}
+
 #[tauri::command]
 pub async fn flow_collab_host(
     app: AppHandle,
@@ -1054,49 +1226,13 @@ pub async fn flow_collab_host(
     id: Uuid,
     name: Option<String>,
     resume_invite: Option<bool>,
-) -> Result<View> {
-    let directory = workspaces::directory(&app)?;
-    let diagram = workspaces::load(&directory, id)?.diagram;
-    let saved = flow_access::read(&directory, id)?;
-    let project = SharedProject { directory, id };
-    let (sharing, invitation) = if let Some(name) = name {
-        let name = alias(&name)?;
-        let mut sharing = saved.unwrap_or_else(|| Sharing::new(name.clone()));
-        sharing.name = name;
-        let invitation = record_invitation(&project, &mut sharing, Some(new_invitation()))?;
-        (sharing, invitation)
-    } else {
-        let sharing = saved.ok_or_else(operation_unavailable)?;
-        let invitation = resume_invite
-            .unwrap_or(false)
-            .then(|| restore_invitation(&sharing))
-            .flatten();
-        if invitation.is_none() && sharing.guest.is_none() {
-            return Err(AppError::new(
-                "expired",
-                "O convite anterior expirou. Gere um novo convite neste projeto.",
-            ));
-        }
-        (sharing, invitation)
-    };
-    sessions.start(Some(id), |state, commands| async move {
-        let endpoint = endpoint(true, SecretKey::from_bytes(&sharing.key)).await?;
-        timeout(DIAL_TIME, endpoint.online())
-            .await
-            .map_err(|_| unavailable())?;
-        let result = host(
-            endpoint.clone(),
-            sharing,
-            diagram,
-            project,
-            invitation,
-            state,
-            commands,
-        )
-        .await;
-        endpoint.close().await;
-        result
-    })
+) -> Result<Option<View>> {
+    sessions.host_project(
+        &workspaces::directory(&app)?,
+        id,
+        name,
+        resume_invite.unwrap_or(false),
+    )
 }
 
 #[tauri::command]
@@ -1153,15 +1289,7 @@ pub async fn flow_collab_command(
 
 #[tauri::command]
 pub async fn flow_collab_end(sessions: State<'_, FlowCollaboration>, id: Uuid) -> Result<()> {
-    let connected = if let Some(view) = sessions.view(id)? {
-        view.lock().map_err(|_| unavailable())?.phase == Phase::Connected
-    } else {
-        false
-    };
-    if connected {
-        let _ = submit(sessions.sender(id)?, Command::End).await;
-    }
-    sessions.end(id)
+    sessions.close(id).await
 }
 
 #[tauri::command]
@@ -1172,15 +1300,36 @@ pub fn flow_project_edit(
     diagram: Diagram,
 ) -> Result<()> {
     let guard = sessions.0.lock().map_err(|_| unavailable())?;
-    if let Some(session) = guard.as_ref() {
-        let view = session.view.lock().map_err(|_| unavailable())?;
-        if view.project_id == Some(id) && view.phase != Phase::Ended {
-            return Err(invalid(
-                "Este projeto está em uma sessão de compartilhamento.",
-            ));
-        }
+    if guard.active_host(id)?.is_some() {
+        return Err(invalid(
+            "Este projeto está em uma sessão de compartilhamento.",
+        ));
     }
     workspaces::update(&workspaces::directory(&app)?, id, diagram)
+}
+
+#[tauri::command]
+pub async fn flow_project_remove(
+    app: AppHandle,
+    sessions: State<'_, FlowCollaboration>,
+    id: Uuid,
+) -> Result<()> {
+    let view = sessions
+        .0
+        .lock()
+        .map_err(|_| unavailable())?
+        .active_host(id)?;
+    if let Some(view) = view {
+        sessions.close(view.id).await?;
+    }
+    let mut guard = sessions.0.lock().map_err(|_| unavailable())?;
+    if guard.active_host(id)?.is_some() {
+        return Err(invalid(
+            "Este projeto está em uma sessão de compartilhamento.",
+        ));
+    }
+    guard.entries.remove(&Some(id));
+    workspaces::remove(&workspaces::directory(&app)?, id)
 }
 
 #[cfg(test)]
@@ -1199,14 +1348,15 @@ mod tests {
         }
     }
 
-    async fn wait(session: &FlowCollaboration, check: impl Fn(&View) -> bool) -> View {
+    async fn wait(
+        session: &FlowCollaboration,
+        project: Option<Uuid>,
+        check: impl Fn(&View) -> bool,
+    ) -> View {
+        let state = session.0.lock().unwrap().entries[&project].view.clone();
         timeout(Duration::from_secs(12), async {
             loop {
-                let view = {
-                    let guard = session.0.lock().unwrap();
-                    let view = guard.as_ref().unwrap().view.lock().unwrap().clone();
-                    view
-                };
+                let view = state.lock().unwrap().clone();
                 if check(&view) {
                     return view;
                 }
@@ -1355,7 +1505,10 @@ mod tests {
                 async move { operation.await }
             })
             .unwrap();
-        let invite = wait(&owner, |view| view.phase == Phase::Inviting).await;
+        let invite = wait(&owner, Some(project.id), |view| {
+            view.phase == Phase::Inviting
+        })
+        .await;
         let (id, token) = decode(&invite.code.unwrap()).unwrap();
         assert_eq!(destination.id, id);
 
@@ -1373,10 +1526,13 @@ mod tests {
             })
             .unwrap();
 
-        let request = wait(&owner, |view| view.phase == Phase::Approval).await;
+        let request = wait(&owner, Some(project.id), |view| {
+            view.phase == Phase::Approval
+        })
+        .await;
         assert_eq!(request.peer.as_deref(), Some("Bia"));
         assert_eq!(request.peer_version.as_deref(), Some(APP_VERSION));
-        let before_approval = wait(&guest, |view| {
+        let before_approval = wait(&guest, None, |view| {
             view.phase == Phase::Joining && view.peer_version.is_some()
         })
         .await;
@@ -1389,20 +1545,30 @@ mod tests {
         submit(host_tx.clone(), Command::Accept { remember: true })
             .await
             .unwrap();
-        let approved = wait(&guest, |view| view.phase == Phase::Connected).await;
+        let approved = wait(&guest, None, |view| view.phase == Phase::Connected).await;
         assert!(approved.can_edit);
         assert_eq!(approved.diagram.unwrap().title, "Projeto");
         assert_eq!(approved.peer.as_deref(), Some("Ana"));
         let code = approved.return_code.unwrap();
         assert!(
-            wait(&owner, |view| view.phase == Phase::Connected)
-                .await
-                .can_edit
+            wait(&owner, Some(project.id), |view| view.phase
+                == Phase::Connected)
+            .await
+            .can_edit
         );
+        let other = owner
+            .start(Some(Uuid::new_v4()), |_, _| std::future::pending())
+            .unwrap();
+        let attached = owner
+            .host_project(&project.directory, project.id, None, false)
+            .unwrap()
+            .unwrap();
+        assert_eq!(attached.id, host.id);
+        assert!(attached.phase == Phase::Connected);
 
         assert!(approved.mascot_supported);
         assert!(
-            wait(&owner, |view| view.mascot_supported)
+            wait(&owner, Some(project.id), |view| view.mascot_supported)
                 .await
                 .mascot_supported
         );
@@ -1437,7 +1603,7 @@ mod tests {
         )
         .await
         .unwrap();
-        let remote = wait(&owner, |view| view.mascot.is_some())
+        let remote = wait(&owner, Some(project.id), |view| view.mascot.is_some())
             .await
             .mascot
             .unwrap();
@@ -1458,7 +1624,7 @@ mod tests {
         )
         .await
         .unwrap();
-        wait(&guest, |view| view.mascot.is_some()).await;
+        wait(&guest, None, |view| view.mascot.is_some()).await;
 
         let splat = Splat {
             id: 1,
@@ -1470,9 +1636,11 @@ mod tests {
         submit(guest_tx.clone(), Command::MascotSplat { splat })
             .await
             .unwrap();
-        let splats = wait(&owner, |view| !view.mascot_splats.is_empty())
-            .await
-            .mascot_splats;
+        let splats = wait(&owner, Some(project.id), |view| {
+            !view.mascot_splats.is_empty()
+        })
+        .await
+        .mascot_splats;
         assert_eq!(splats[0].strength, 0.7);
 
         let meeting = Meeting {
@@ -1488,17 +1656,19 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(
-            wait(&owner, |view| view.mascot_meeting.is_some())
-                .await
+            wait(&owner, Some(project.id), |view| view
                 .mascot_meeting
-                .unwrap()
-                .id,
+                .is_some())
+            .await
+            .mascot_meeting
+            .unwrap()
+            .id,
             1
         );
         submit(guest_tx.clone(), Command::Mascot { mascot: None })
             .await
             .unwrap();
-        let hidden = wait(&owner, |view| view.mascot.is_none()).await;
+        let hidden = wait(&owner, Some(project.id), |view| view.mascot.is_none()).await;
         assert!(hidden.mascot_meeting.is_none());
         assert!(hidden.mascot_splats.is_empty());
         assert!(hidden.mascot_version >= 3);
@@ -1507,8 +1677,8 @@ mod tests {
         submit(guest_tx.clone(), Command::Cursor { position })
             .await
             .unwrap();
-        wait(&owner, |view| view.cursor == position).await;
-        let current = wait(&guest, |view| view.phase == Phase::Connected).await;
+        wait(&owner, Some(project.id), |view| view.cursor == position).await;
+        let current = wait(&guest, None, |view| view.phase == Phase::Connected).await;
         let (update, sent) = tokio::join!(
             guest.next_view(visitor.id, current.revision, Some(current.live_version)),
             submit(host_tx.clone(), Command::Cursor { position }),
@@ -1559,8 +1729,8 @@ mod tests {
                     && diagram.notes[0].position == (Position { x: 320.0, y: 42.0 })
             })
         };
-        wait(&owner, merged).await;
-        wait(&guest, merged).await;
+        wait(&owner, Some(project.id), merged).await;
+        wait(&guest, None, merged).await;
         assert_eq!(
             workspaces::load(&project.directory, project.id)
                 .unwrap()
@@ -1569,39 +1739,58 @@ mod tests {
                 .label,
             "Bia editou"
         );
+        let reattached = owner
+            .host_project(&project.directory, project.id, None, false)
+            .unwrap()
+            .unwrap();
+        assert_eq!(reattached.id, host.id);
+        assert!(merged(&reattached));
 
         submit(guest_tx, Command::End).await.unwrap();
         guest.end(visitor.id).unwrap();
-        wait(&owner, |view| {
+        wait(&owner, Some(project.id), |view| {
             view.phase == Phase::Available && view.cursor.is_none()
         })
         .await;
         owner.end(host.id).unwrap();
+        assert!(owner.view(other.id).unwrap().is_some());
+        owner.end(other.id).unwrap();
         server.close().await;
 
         let sharing = flow_access::read(&project.directory, project.id)
             .unwrap()
             .unwrap();
-        let reopened = test_endpoint(SecretKey::from_bytes(&sharing.key), relay, true).await;
-        let destination = address(&reopened, relay);
         let (host_id, token) = decode(&code).unwrap();
-        assert_eq!(host_id, reopened.id());
-        let diagram = workspaces::load(&project.directory, project.id)
-            .unwrap()
-            .diagram;
-        let resumed = owner
-            .start(Some(project.id), |state, commands| {
-                super::host(
-                    reopened,
-                    sharing,
-                    diagram,
-                    project.clone(),
-                    None,
-                    state,
-                    commands,
-                )
-            })
-            .unwrap();
+        let destination = if relay {
+            // The native startup path listens for saved guests before an editor attaches.
+            owner.restore_hosts(&project.directory);
+            EndpointAddr::new(host_id)
+        } else {
+            let reopened = test_endpoint(SecretKey::from_bytes(&sharing.key), false, true).await;
+            let destination = address(&reopened, false);
+            assert_eq!(host_id, reopened.id());
+            let diagram = workspaces::load(&project.directory, project.id)
+                .unwrap()
+                .diagram;
+            owner
+                .start(Some(project.id), |state, commands| {
+                    super::host(
+                        reopened,
+                        sharing,
+                        diagram,
+                        project.clone(),
+                        None,
+                        state,
+                        commands,
+                    )
+                })
+                .unwrap();
+            destination
+        };
+        let resumed = wait(&owner, Some(project.id), |view| {
+            view.phase == Phase::Available
+        })
+        .await;
 
         let stranger = test_endpoint(SecretKey::generate(), relay, false).await;
         let attempt = guest
@@ -1616,7 +1805,7 @@ mod tests {
                 )
             })
             .unwrap();
-        let denied = wait(&guest, |view| view.phase == Phase::Ended).await;
+        let denied = wait(&guest, None, |view| view.phase == Phase::Ended).await;
         assert!(denied.diagram.is_none());
         guest.end(attempt.id).unwrap();
 
@@ -1627,11 +1816,11 @@ mod tests {
             })
             .unwrap();
         assert!(
-            wait(&guest, |view| view.phase == Phase::Connected)
+            wait(&guest, None, |view| view.phase == Phase::Connected)
                 .await
                 .can_edit
         );
-        wait(&guest, merged).await;
+        wait(&guest, None, merged).await;
         submit(owner.sender(resumed.id).unwrap(), Command::Revoke)
             .await
             .unwrap();
@@ -1640,8 +1829,11 @@ mod tests {
             .unwrap()
             .guest
             .is_none());
-        submit(guest.sender(visitor.id).unwrap(), Command::End)
-            .await
-            .unwrap();
+        assert!(owner.begin_shutdown());
+        assert!(!owner.begin_shutdown());
+        owner.shutdown().await;
+        wait(&guest, None, |view| view.phase == Phase::Ended).await;
+        assert!(owner.view(resumed.id).unwrap().is_none());
+        assert!(guest.view(visitor.id).unwrap().is_some());
     }
 }

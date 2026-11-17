@@ -173,12 +173,10 @@ pub fn flow_project_link(
     persist(&directory, &workspace)
 }
 
-#[tauri::command]
-pub fn flow_project_remove(app: AppHandle, id: Uuid) -> Result<()> {
+pub(super) fn remove(directory: &Path, id: Uuid) -> Result<()> {
     let _guard = CATALOG.lock().map_err(|_| catalog_error())?;
-    let directory = directory(&app)?;
-    flow_access::remove(&directory, id)?;
-    match fs::remove_file(path(&directory, id)) {
+    flow_access::remove(directory, id)?;
+    match fs::remove_file(path(directory, id)) {
         Err(error) if error.kind() != ErrorKind::NotFound => Err(catalog_error()),
         _ => Ok(()),
     }

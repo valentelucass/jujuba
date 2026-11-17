@@ -141,10 +141,6 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
     return () => { disposed = true }
   }, [workspace, sessionId])
 
-  useEffect(() => () => {
-    if (active.current) void flowCollaboration.end(active.current.id).catch(() => {})
-  }, [])
-
   useEffect(() => {
     if (!sessionId) return
     const id = sessionId
@@ -267,6 +263,21 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
     setActive(null)
   }
 
+  async function leaveProject() {
+    const current = active.current
+    if (current?.projectId === null) {
+      await endSession()
+    } else if (current) {
+      if (current.phase === 'connected') {
+        void flowCollaboration.command(current.id, { type: 'cursor', position: null }).catch(() => {})
+      }
+      setActive(null)
+    }
+    setWorkspace(null)
+    setPanel(null)
+    replace(null, null, false)
+  }
+
   function persist(before: SystemDiagram, next: SystemDiagram) {
     const current = active.current?.phase === 'ended' ? null : active.current
     editGeneration.current += 1
@@ -332,10 +343,12 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
   }
 
   async function openWorkspace(next: FlowProject, resumeInvite = false) {
+    const host = await flowCollaboration.host(next.id, undefined, resumeInvite)
+    const current = host?.diagram ?? next.diagram
     setWorkspace(next.id)
     setPanel(null)
-    replace(next.diagram, next.file, next.fileDirty)
-    if (next.returningGuest || resumeInvite) setActive(await flowCollaboration.host(next.id, undefined, resumeInvite))
+    replace(current, next.file, next.fileDirty || JSON.stringify(current) !== JSON.stringify(next.diagram))
+    setActive(host)
   }
 
   function addEdge(edge: SystemEdge) {
@@ -363,12 +376,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
   }
 
   function library() {
-    void perform('Abrindo projetos…', async () => {
-      await endSession()
-      setWorkspace(null)
-      setPanel(null)
-      replace(null, null, false)
-    })
+    void perform('Abrindo projetos…', leaveProject)
   }
 
   function create(event: FormEvent) {
@@ -477,10 +485,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
       return
     }
     void perform('Fechando projeto…', async () => {
-      await endSession()
-      setWorkspace(null)
-      setPanel(null)
-      replace(null, null, false)
+      await leaveProject()
       exit()
     })
   }
@@ -659,7 +664,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
           <span role="status"><strong>{session.peer}</strong> quer entrar neste projeto.</span>
           <label>
             <input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} />
-            Permitir que volte enquanto este projeto estiver aberto
+            Permitir que volte enquanto o JujubaSQL estiver aberto
           </label>
           {remember && session.trustedPeer && session.trustedPeer !== session.peer &&
             <small>Substitui o acesso salvo de {session.trustedPeer}.</small>}
