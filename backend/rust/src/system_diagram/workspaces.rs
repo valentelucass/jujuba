@@ -1,7 +1,7 @@
 use super::{
     files::ProjectRef,
     flow_access,
-    model::{invalid, Diagram, Edge, Node},
+    model::{invalid, Diagram, Edge, Node, Note},
 };
 use crate::error::{AppError, Result};
 use serde::{Deserialize, Serialize};
@@ -38,6 +38,7 @@ pub struct WorkspaceEntry {
 struct Preview {
     nodes: Vec<Node>,
     edges: Vec<Edge>,
+    notes: Vec<Note>,
 }
 
 pub fn directory(app: &AppHandle) -> Result<PathBuf> {
@@ -113,6 +114,7 @@ pub fn flow_projects(app: AppHandle) -> Result<Vec<WorkspaceEntry>> {
                 preview: Preview {
                     nodes: workspace.diagram.nodes,
                     edges: workspace.diagram.edges,
+                    notes: workspace.diagram.notes,
                 },
             });
         }
@@ -194,6 +196,7 @@ mod tests {
             edges: Vec::new(),
             requirements: Vec::new(),
             open_questions: Vec::new(),
+            notes: Vec::new(),
         }
     }
 

@@ -7,6 +7,8 @@ use std::{
 
 pub const MAX_NODES: usize = 24;
 pub const MAX_EDGES: usize = 48;
+pub const MAX_NOTES: usize = 16;
+const MAX_NOTE_LENGTH: usize = 480;
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -19,6 +21,8 @@ pub struct Diagram {
     pub requirements: Vec<String>,
     #[serde(default)]
     pub open_questions: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<Note>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,6 +48,13 @@ pub struct Node {
     pub detail: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub position: Option<Position>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct Note {
+    pub id: String,
+    pub text: String,
+    pub position: Position,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -75,6 +86,7 @@ impl Diagram {
             || self.summary.len() > 2400
             || self.nodes.len() > MAX_NODES
             || self.edges.len() > MAX_EDGES
+            || self.notes.len() > MAX_NOTES
             || !list(&self.requirements)
             || !list(&self.open_questions)
         {
@@ -86,16 +98,10 @@ impl Diagram {
         let mut ends = Vec::new();
         for node in &self.nodes {
             let id = node.id.as_str();
-            if id.is_empty()
-                || id.len() > 40
-                || !id
-                    .bytes()
-                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-'))
+            if !valid_id(id)
                 || node.label.len() > 140
                 || (complete && node.label.trim().is_empty())
-                || node
-                    .position
-                    .is_some_and(|p| !([-p.x, p.x, -p.y, p.y].iter().all(|n| *n <= 100_000.0)))
+                || node.position.is_some_and(|p| !valid_position(p))
                 || node.detail.len() > 900
                 || kinds.insert(id, node.kind).is_some()
             {
@@ -109,6 +115,23 @@ impl Diagram {
                 }
                 Kind::End => ends.push(id),
                 _ => {}
+            }
+        }
+        let mut note_ids = HashSet::new();
+        for note in &self.notes {
+            if !valid_id(&note.id)
+                || kinds.contains_key(note.id.as_str())
+                || !note_ids.insert(&note.id)
+                || note.text.encode_utf16().count() > MAX_NOTE_LENGTH
+                || note
+                    .text
+                    .chars()
+                    .any(|c| c.is_control() && !matches!(c, '\n' | '\r' | '\t'))
+                || !valid_position(note.position)
+            {
+                return Err(invalid(
+                    "Confira o texto e a posição das notas do fluxograma.",
+                ));
             }
         }
         let mut forward: HashMap<&str, Vec<&str>> = HashMap::new();
@@ -235,12 +258,38 @@ impl Diagram {
                 }
             }
         }
+        let mut notes = self
+            .notes
+            .iter()
+            .filter(|note| !note.text.trim().is_empty())
+            .peekable();
+        if notes.peek().is_some() {
+            out.push_str("\n## Notas\n");
+            for note in notes {
+                out.push('\n');
+                for line in note.text.lines() {
+                    let _ = writeln!(out, "    {line}");
+                }
+            }
+        }
         out
     }
 }
 
 pub fn invalid(message: &'static str) -> AppError {
     AppError::new("input", message)
+}
+
+fn valid_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 40
+        && id
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-'))
+}
+
+fn valid_position(position: Position) -> bool {
+    position.x.abs() <= 100_000.0 && position.y.abs() <= 100_000.0
 }
 
 fn text(value: &str, max: usize) -> bool {

@@ -31,7 +31,22 @@ export function stageGeometry(kind: NodeKind, label = ''): StageGeometry {
   return { width, height, labelWidth, labelY: height * frame.textCenter }
 }
 
-export type FlowPreview = Pick<SystemDiagram, 'nodes' | 'edges'>
+export type FlowPreview = Pick<SystemDiagram, 'nodes' | 'edges' | 'notes'>
+export const NOTE_WIDTH = 260
+export const NOTE_LINE_HEIGHT = 21
+
+export function noteHeight(text: string) {
+  const lines = text.split('\n').reduce((count, line) => count + Math.max(1, Math.ceil(line.length / 29)), 0)
+  return Math.max(38, lines * NOTE_LINE_HEIGHT + 16)
+}
+
+export function nextNotePosition(diagram: FlowPreview): StagePosition {
+  const stages = arrangeStages(diagram)
+  const x = Math.min(99_600, Math.max(260, ...stages.map(({ position, geometry }) => position.x + geometry.width + 48)))
+  const bottom = (diagram.notes ?? []).filter((note) => Math.abs(note.position.x - x) < NOTE_WIDTH + 16)
+    .map((note) => note.position.y + noteHeight(note.text) + 30)
+  return { x, y: Math.min(99_000, Math.max(0, ...bottom)) }
+}
 
 export function arrangeStages(diagram: FlowPreview) {
   const start = diagram.nodes.find((node) => node.kind === 'start')?.id
@@ -75,4 +90,36 @@ export function arrangeStages(diagram: FlowPreview) {
   }
 
   return layout.map((stage) => ({ ...stage, position: positions.get(stage.node.id)! }))
+}
+
+export function stageOutline(kind: NodeKind, { width, height }: StageGeometry) {
+  const right = width - 1
+  const bottom = height - 1
+  const center = width / 2
+  const middle = height / 2
+  switch (kind) {
+    case 'start':
+    case 'end': {
+      const radius = middle - 1
+      return { outline: `M${middle} 1H${width - middle}a${radius} ${radius} 0 0 1 0 ${radius * 2}H${middle}a${radius} ${radius} 0 0 1 0 ${-radius * 2}Z` }
+    }
+    case 'connector': {
+      const radius = center - 1
+      return { outline: `M${center} 1a${radius} ${radius} 0 1 1 0 ${radius * 2}a${radius} ${radius} 0 1 1 0 ${-radius * 2}Z` }
+    }
+    case 'decision':
+      return { outline: `M${center} 1 ${right} ${middle} ${center} ${bottom} 1 ${middle}Z` }
+    case 'inputOutput':
+      return { outline: `M24 1H${right}L${width - 24} ${bottom}H1Z` }
+    case 'document': {
+      const base = height - 12
+      return { outline: `M1 1H${right}V${base}C${width * .6} ${base - 33} ${width * .38} ${base + 34} 1 ${base}Z` }
+    }
+    case 'extract':
+      return { outline: `M${center} 1 ${right} ${bottom}H1Z` }
+    case 'subprocess':
+      return { outline: `M1 1H${right}V${bottom}H1Z`, detail: `M16 1V${bottom}M${width - 16} 1V${bottom}` }
+    default:
+      return { outline: `M1 1H${right}V${bottom}H1Z` }
+  }
 }

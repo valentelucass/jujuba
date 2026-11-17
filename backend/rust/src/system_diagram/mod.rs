@@ -61,6 +61,7 @@ pub async fn diagram_open(app: AppHandle) -> Result<Option<Opened>> {
     let dialog = app
         .dialog()
         .file()
+        .set_title("Importar projeto editável (.jujuba.json)")
         .add_filter("Fluxograma do JujubaSQL", &["json"]);
     let path = choose(dialog, FileDialogBuilder::pick_file).await?;
     path.as_deref().map(files::open).transpose()
@@ -95,6 +96,29 @@ pub async fn diagram_save(
         path.with_extension("jujuba.json")
     };
     files::save(&path, None, diagram).map(Some)
+}
+
+#[tauri::command]
+pub async fn diagram_png(
+    app: AppHandle,
+    request: tauri::ipc::Request<'_>,
+) -> Result<Option<String>> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err(model::invalid(
+            "Não foi possível receber a imagem do fluxograma.",
+        ));
+    };
+    files::validate_png(bytes)?;
+    let dialog = app
+        .dialog()
+        .file()
+        .add_filter("Imagem PNG", &["png"])
+        .set_file_name("fluxograma.png");
+    let Some(path) = choose(dialog, FileDialogBuilder::save_file).await? else {
+        return Ok(None);
+    };
+    files::export_png(&path, bytes)?;
+    Ok(Some(path.to_string_lossy().into_owned()))
 }
 
 #[tauri::command]

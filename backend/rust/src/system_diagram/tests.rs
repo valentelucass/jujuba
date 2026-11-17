@@ -1,6 +1,6 @@
 use super::{
     files::{self, CodeFile, ProjectCode},
-    model::{Diagram, Edge, Kind, Node, Position},
+    model::{Diagram, Edge, Kind, Node, Note, Position},
 };
 
 fn example() -> Diagram {
@@ -33,6 +33,7 @@ fn example() -> Diagram {
         ],
         requirements: vec!["Validar os campos".into()],
         open_questions: vec![],
+        notes: Vec::new(),
     }
 }
 
@@ -58,11 +59,21 @@ fn opens_saved_file_and_detects_external_edits() {
         files::open_current(&first).unwrap().diagram.title,
         "Cadastro"
     );
+    assert!(files::open_current(&first)
+        .unwrap()
+        .diagram
+        .notes
+        .is_empty());
     assert!(files::save(&path, None, example()).is_err());
     let mut revised = example();
     revised.title = "Cadastro v2".into();
     revised.nodes[1].position = Some(Position { x: -75.5, y: 240.0 });
     revised.edges.clear();
+    revised.notes.push(Note {
+        id: "nota-a".into(),
+        text: "Revisar após aprovação\nProcurar histórico".into(),
+        position: Position { x: 243.0, y: -31.0 },
+    });
     assert!(revised.validate().is_err());
     let second = files::save(&path, Some(first.clone()), revised).unwrap();
     assert!(files::open_current(&first).is_err());
@@ -73,6 +84,14 @@ fn opens_saved_file_and_detects_external_edits() {
         Some(Position { x: -75.5, y: 240.0 })
     );
     assert!(reopened.edges.is_empty());
+    assert_eq!(reopened.notes[0].position, Position { x: 243.0, y: -31.0 });
+    assert_eq!(
+        reopened.notes[0].text,
+        "Revisar após aprovação\nProcurar histórico"
+    );
+    assert!(reopened
+        .markdown()
+        .contains("## Notas\n\n    Revisar após aprovação"));
 }
 
 #[test]

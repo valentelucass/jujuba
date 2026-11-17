@@ -66,6 +66,7 @@ fn main() {
             system_diagram::diagram_open,
             system_diagram::diagram_save,
             system_diagram::diagram_markdown,
+            system_diagram::diagram_png,
             system_diagram::diagram_scaffold,
             system_diagram::diagram_write_code,
             system_diagram::workspaces::flow_projects,

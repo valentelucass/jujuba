@@ -33,6 +33,7 @@ fn main() {
             "diagram_open",
             "diagram_save",
             "diagram_markdown",
+            "diagram_png",
             "diagram_scaffold",
             "diagram_write_code",
             "flow_projects",

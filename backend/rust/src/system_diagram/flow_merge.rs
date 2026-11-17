@@ -1,4 +1,4 @@
-use super::model::{Diagram, MAX_EDGES, MAX_NODES};
+use super::model::{Diagram, MAX_EDGES, MAX_NODES, MAX_NOTES};
 
 pub(super) fn merge(current: &mut Diagram, before: &Diagram, after: &Diagram) {
     update(&mut current.title, &before.title, &after.title);
@@ -35,6 +35,23 @@ pub(super) fn merge(current: &mut Diagram, before: &Diagram, after: &Diagram) {
         }
     }
 
+    current.notes.retain(|note| {
+        !before.notes.iter().any(|previous| previous.id == note.id)
+            || after.notes.iter().any(|edited| edited.id == note.id)
+    });
+    for edited in &after.notes {
+        let previous = before.notes.iter().find(|note| note.id == edited.id);
+        let has_room = current.notes.len() < MAX_NOTES;
+        let target = current.notes.iter_mut().find(|note| note.id == edited.id);
+        match (previous, target) {
+            (Some(previous), Some(target)) => {
+                update(&mut target.text, &previous.text, &edited.text);
+                update(&mut target.position, &previous.position, &edited.position);
+            }
+            (None, None) if has_room => current.notes.push(edited.clone()),
+            _ => {}
+        }
+    }
     let exists = |id: &str| current.nodes.iter().any(|node| node.id == id);
     current.edges.retain(|edge| {
         exists(&edge.from)

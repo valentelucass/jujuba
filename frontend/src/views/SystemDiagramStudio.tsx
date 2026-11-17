@@ -9,6 +9,7 @@ import {
   type SystemDiagram, type SystemEdge,
 } from '../models/systemDiagram'
 import { Header } from './Header'
+import { FlowOverview } from './FlowOverview'
 import { FlowProjectPreview } from './FlowProjectPreview'
 import { StatusBar } from './StatusBar'
 import { SystemFlowCanvas } from './SystemFlowCanvas'
@@ -26,6 +27,10 @@ function readSavedAccess(): SavedFlowAccess[] {
   }
 }
 
+function hasElement(diagram: SystemDiagram, id: string | null) {
+  return diagram.nodes.some((node) => node.id === id) || diagram.notes?.some((note) => note.id === id)
+}
+
 type Panel = 'create' | 'share' | 'join' | null
 
 export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagram, connection }: {
@@ -38,6 +43,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
   const [entries, setEntries] = useState<FlowProjectEntry[]>([])
   const [workspace, setWorkspace] = useState<string | null>(null)
   const [session, setSession] = useState<FlowSession | null>(null)
+  const [exportOpen, setExportOpen] = useState(false)
   const [panel, setPanel] = useState<Panel>(null)
   const [name, setName] = useState('')
   const [title, setTitle] = useState('')
@@ -115,7 +121,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
           } else if (JSON.stringify(diagramRef.current) !== JSON.stringify(view.diagram)) {
             setHistory({ past: [], future: [] })
             setCurrentDiagram(view.diagram)
-            setSelected((id) => view.diagram?.nodes.some((node) => node.id === id) ? id : null)
+            setSelected((id) => view.diagram && hasElement(view.diagram, id) ? id : null)
             setDirty(true)
             setCode(null)
           }
@@ -224,7 +230,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
     if (!next) return
     setHistory(direction === 'past' ? { past: past.slice(0, -1), future: [...future, diagram] } :
       { past: [...past, diagram], future: future.slice(0, -1) })
-    if (!next.nodes.some((node) => node.id === selected)) setSelected(null)
+    if (!hasElement(next, selected)) setSelected(null)
     showEdit(diagram, next)
   }
 
@@ -237,6 +243,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
   function replace(next: SystemDiagram | null, source: DiagramProject | null, modified: boolean) {
     setHistory({ past: [], future: [] })
     setCurrentDiagram(next)
+    setExportOpen(false)
     setFile(source)
     setSelected(null)
     setDirty(modified)
@@ -260,12 +267,20 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
 
   function moveStep(id: string, position: StagePosition) {
     if (!diagram) return
-    edit({ ...diagram, nodes: diagram.nodes.map((node) => node.id === id ? { ...node, position } : node) })
+    if (diagram.notes?.some((note) => note.id === id)) {
+      edit({ ...diagram, notes: diagram.notes.map((note) => note.id === id ? { ...note, position } : note) })
+    } else {
+      edit({ ...diagram, nodes: diagram.nodes.map((node) => node.id === id ? { ...node, position } : node) })
+    }
   }
 
   function renameStep(id: string, label: string) {
     if (!diagram) return
-    edit({ ...diagram, nodes: diagram.nodes.map((node) => node.id === id ? { ...node, label } : node) })
+    if (diagram.notes?.some((note) => note.id === id)) {
+      edit({ ...diagram, notes: diagram.notes.map((note) => note.id === id ? { ...note, text: label } : note) })
+    } else {
+      edit({ ...diagram, nodes: diagram.nodes.map((node) => node.id === id ? { ...node, label } : node) })
+    }
   }
 
   function library() {
@@ -397,11 +412,18 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
     })
   }
 
-  function exportMarkdown() {
+  function exportDiagram(format: 'png' | 'markdown') {
+    setExportOpen(false)
     if (!diagram) return
-    void perform('Exportando Markdown…', async () => {
-      const path = await systemDiagram.markdown(diagram)
-      if (path) setNotice('Markdown exportado em ' + path)
+    void perform('Exportando fluxograma…', async () => {
+      let path
+      if (format === 'png') {
+        const { flowImage } = await import('../models/flowImage')
+        path = await systemDiagram.png(await flowImage(diagram))
+      } else {
+        path = await systemDiagram.markdown(diagram)
+      }
+      if (path) setNotice('Fluxograma exportado em ' + path)
     })
   }
 
@@ -454,13 +476,27 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
               aria-label="Salvar cópia" title="Salvar cópia"><Copy size={17} /></button> : null}
             <button className="icon-button" disabled={!diagram || !!busy} onClick={save}
               aria-label="Salvar arquivo" title="Salvar arquivo"><Save size={17} /></button>
-            <button className="icon-button" disabled={!diagram || !!busy} onClick={exportMarkdown}
-              aria-label="Exportar Markdown" title="Exportar Markdown"><FileDown size={17} /></button>
+            <div className="flow-export" onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) setExportOpen(false)
+            }} onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                setExportOpen(false)
+                event.currentTarget.querySelector('button')?.focus()
+              }
+            }}>
+              <button className="icon-button" disabled={!diagram || !!busy} aria-expanded={exportOpen}
+                onClick={() => setExportOpen((open) => !open)} aria-label="Exportar fluxograma"
+                title="Exportar fluxograma"><FileDown size={17} /></button>
+              {exportOpen && <div className="flow-export-options" aria-label="Formato de exportação">
+                <button type="button" className="button" onClick={() => exportDiagram('png')}>Imagem PNG</button>
+                <button type="button" className="button" onClick={() => exportDiagram('markdown')}>Markdown</button>
+              </div>}
+            </div>
           </> : <>
             <button className="button design-accent" disabled={!!busy || !!session}
               onClick={() => setPanel(panel === 'create' ? null : 'create')}><FilePlus2 size={15} />Novo projeto</button>
             <button className="button" disabled={!!busy || !!session}
-              onClick={importDiagram}><FolderOpen size={15} />Importar</button>
+              onClick={importDiagram} title="Importar um projeto .jujuba.json"><FolderOpen size={15} />Importar</button>
             <button className="button" disabled={!!busy || !!session}
               onClick={() => setPanel(panel === 'join' ? null : 'join')}><Link size={15} />Entrar por código</button>
           </>}
@@ -522,6 +558,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
       {(busy || error || notice || (session?.phase === 'connected' && session.message)) && <div className={'system-message' + (error ? ' is-error' : '')} role={error ? 'alert' : 'status'}>
         {busy && <LoaderCircle size={15} className="spin" />}{error || busy || notice || session?.message}
       </div>}
+      {diagram && <FlowOverview key={fitKey} diagram={diagram} />}
       {!hasProject ? <section className="flow-project-library" aria-label="Projetos de fluxograma">
         {entries.length ? <ul>
           {entries.map((entry) => <li key={entry.id}>

@@ -9,7 +9,7 @@ import type {
   Schema, Scope, Structure, Table, TableScope,
 } from '../models/sql'
 
-async function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+async function call<T>(command: string, args?: Record<string, unknown> | Uint8Array): Promise<T> {
   if (!isTauri()) {
     throw { kind: 'desktop', message: 'Abra o JujubaSQL pelo aplicativo instalado no Windows.' }
   }
@@ -59,6 +59,7 @@ export const systemDiagram = {
   open: () => call<OpenedDiagram | null>('diagram_open'),
   save: (diagram: SystemDiagram, project: DiagramProject | null) =>
     call<DiagramProject | null>('diagram_save', { diagram, project }),
+  png: (bytes: Uint8Array) => call<string | null>('diagram_png', bytes),
   markdown: (diagram: SystemDiagram) => call<string | null>('diagram_markdown', { diagram }),
   scaffold: (provider: AiProvider, project: DiagramProject, requirements: string) =>
     call<GeneratedProject>('diagram_scaffold', { provider, project, requirements }),

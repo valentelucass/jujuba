@@ -27,7 +27,7 @@ use tokio::{
 };
 use uuid::Uuid;
 
-const ALPN: &[u8] = b"jujubasql/flow/3";
+const ALPN: &[u8] = b"jujubasql/flow/4";
 const INVITATION_LIFETIME: Duration = Duration::from_secs(600);
 const APPROVAL_TIME: Duration = Duration::from_secs(120);
 const DIAL_TIME: Duration = Duration::from_secs(25);
@@ -869,6 +869,7 @@ mod tests {
             edges: Vec::new(),
             requirements: Vec::new(),
             open_questions: Vec::new(),
+            notes: Vec::new(),
         }
     }
 
@@ -948,6 +949,11 @@ mod tests {
                 position: None,
             });
         }
+        base.notes.push(super::super::model::Note {
+            id: "nota".into(),
+            text: "Revisar".into(),
+            position: Position { x: 260.0, y: 0.0 },
+        });
         let workspace = workspaces::Workspace {
             id: project.id,
             diagram: base.clone(),
@@ -1032,9 +1038,11 @@ mod tests {
 
         let mut host_edit = base.clone();
         host_edit.nodes[0].label = "Ana editou".into();
+        host_edit.notes[0].text = "Confirmar com a equipe".into();
         let mut guest_edit = base.clone();
         guest_edit.nodes[0].position = position;
         guest_edit.nodes[1].label = "Bia editou".into();
+        guest_edit.notes[0].position = Position { x: 320.0, y: 42.0 };
         let (sent_host, sent_guest) = tokio::join!(
             submit(
                 host_tx,
@@ -1058,6 +1066,8 @@ mod tests {
                 diagram.nodes[0].label == "Ana editou"
                     && diagram.nodes[0].position == position
                     && diagram.nodes[1].label == "Bia editou"
+                    && diagram.notes[0].text == "Confirmar com a equipe"
+                    && diagram.notes[0].position == (Position { x: 320.0, y: 42.0 })
             })
         };
         wait(&owner, merged).await;

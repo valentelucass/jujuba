@@ -1,6 +1,10 @@
 export type NodeKind = 'start' | 'action' | 'decision' | 'inputOutput' | 'document' | 'subprocess' | 'connector' | 'extract' | 'end'
 export type StagePosition = { x: number; y: number }
 export interface SystemNode { id: string; kind: NodeKind; label: string; detail: string; position?: StagePosition }
+export interface FlowNote { id: string; text: string; position: StagePosition }
+export const MAX_FLOW_NOTES = 16
+export const MAX_FLOW_NOTE_TEXT = 480
+
 export interface SystemEdge { from: string; to: string; label: string }
 
 export interface SystemDiagram {
@@ -10,6 +14,7 @@ export interface SystemDiagram {
   edges: SystemEdge[]
   requirements: string[]
   openQuestions: string[]
+  notes?: FlowNote[]
 }
 
 export interface DiagramProject { path: string; revision: string }

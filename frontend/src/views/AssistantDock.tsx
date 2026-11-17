@@ -1,9 +1,10 @@
 import { FolderOpen, LoaderCircle, Paperclip, Send, Sparkles, X } from 'lucide-react'
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { JujubaMascot } from './JujubaMascot'
+import { makeSplat, MascotSplat, type Splat } from './MascotSplat'
 import { hats, MascotHat, readHat, saveHat, type Hat } from './MascotHat'
 import { appError, systemDiagram } from '../controllers/api'
-import { animateThrow, verticalFlick, type FlightFrame, type ImpactEdge } from '../controllers/mascotMotion'
+import { animateThrow, throwVelocity, type FlightBounds, type FlightFrame, type Point, type PointerSample } from '../controllers/mascotMotion'
 import type { AiProvider, ChatMessage, ReferenceDocument, SystemDiagram } from '../models/systemDiagram'
 
 const assistants = {
@@ -20,14 +21,19 @@ const launcherSize = 66
 const launcherMargin = 20
 const sideGesture = 24
 
-type Point = { x: number; y: number }
-type LauncherPosition = { side: 'left' | 'right'; y: number }
-type Reaction = 'protesting' | 'scared' | 'relieved'
-type Splat = Point & { id: number; edge: ImpactEdge; strength: number }
+type Side = 'left' | 'right'
+type LauncherPosition = { side: Side; y: number } | { side: 'bottom'; ratio: number }
+type Reaction = 'protesting' | 'relieved'
+type Trail = Point & { id: number; angle: number; strength: number; width: number }
+
+function pointerDistance(pointer: Point, position: Point) {
+  return Math.hypot(pointer.x - position.x - launcherSize / 2, pointer.y - position.y - launcherSize / 2)
+}
 
 function readLauncherPosition(): LauncherPosition | null {
   try {
     const point = JSON.parse(localStorage.getItem(launcherPreference) ?? 'null')
+    if (point?.side === 'bottom' && Number.isFinite(point.ratio)) return { side: 'bottom', ratio: clamp(point.ratio, 1, 0) }
     if (!Number.isFinite(point?.y)) return null
     if (point.side === 'left' || point.side === 'right') return point
     if (Number.isFinite(point.x)) {
@@ -90,12 +96,14 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const [grabbed, setGrabbed] = useState(false)
   const [reaction, setReaction] = useState<Reaction | null>(null)
   const [dragPoint, setDragPoint] = useState<Point | null>(null)
+  const [frightened, setFrightened] = useState(false)
+  const [pointerNear, setPointerNear] = useState(false)
+  const [trail, setTrail] = useState<Trail[]>([])
   const [flight, setFlight] = useState<FlightFrame | null>(null)
   const [splats, setSplats] = useState<Splat[]>([])
-  const drag = useRef<{ id: number; origin: Point; offset: Point; moved: boolean; samples: (Point & { time: number })[] } | null>(null)
+  const drag = useRef<{ id: number; origin: Point; offset: Point; moved: boolean; samples: PointerSample[] } | null>(null)
   const cancelFlight = useRef<(() => void) | null>(null)
   const nextSplat = useRef(0)
-  const recall = useRef<{ armed: boolean } | null>(null)
   const lastPointer = useRef<Point | null>(null)
   const moved = useRef(false)
   const lock = useRef(false)
@@ -107,7 +115,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   useEffect(() => { if (open) end.current?.scrollIntoView({ block: 'nearest' }) }, [chat, busy, open])
   useEffect(() => {
     if (!reaction) return
-    const timer = window.setTimeout(() => setReaction(null), reaction === 'scared' ? 850 : 650)
+    const timer = window.setTimeout(() => setReaction(null), 650)
     return () => window.clearTimeout(timer)
   }, [reaction])
   useEffect(() => {
@@ -119,33 +127,30 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     function approach(event: globalThis.PointerEvent) {
       if (event.pointerType === 'touch') return
       lastPointer.current = { x: event.clientX, y: event.clientY }
-      if (!recall.current || cancelFlight.current || drag.current || !launcher.current) return
-      const rect = launcher.current.getBoundingClientRect()
-      const distance = Math.hypot(event.clientX - rect.x - rect.width / 2, event.clientY - rect.y - rect.height / 2)
-      if (distance > 110) recall.current.armed = true
-      if (distance < 82 && recall.current.armed) {
-        recall.current = null
-        setReaction('scared')
-      }
+      if (!frightened || cancelFlight.current || drag.current || !launcher.current) return
+      const { x, y } = launcher.current.getBoundingClientRect()
+      const distance = pointerDistance(lastPointer.current, { x, y })
+      setPointerNear((near) => distance < (near ? 112 : 87))
     }
     window.addEventListener('pointermove', approach, { passive: true })
-    return () => {
-      window.removeEventListener('pointermove', approach)
-      cancelFlight.current?.()
-    }
-  }, [])
+    return () => window.removeEventListener('pointermove', approach)
+  }, [frightened])
+  useEffect(() => () => cancelFlight.current?.(), [])
 
   const { width, height, header, footer } = screenSize
-  const side = placement?.side ?? 'right'
-  const endX = width - launcherSize - launcherMargin
+  const endX = Math.max(launcherMargin, width - launcherSize - launcherMargin)
   const startY = header + launcherMargin
   const endY = Math.max(startY, height - footer - launcherSize - 6)
-  const floorY = Math.max(startY, height - footer - launcherSize + 5)
-  const resting = {
-    x: side === 'left' ? launcherMargin : endX,
-    y: clamp(placement?.y ?? endY, endY, startY),
-  }
-  const point = dragPoint ?? (flight ? { x: resting.x, y: clamp(flight.y, floorY, startY) } : resting)
+  const floor = Math.max(startY, height - footer - launcherSize)
+  const bounds: FlightBounds = { left: 6, top: header + 5, right: Math.max(6, width - launcherSize - 6), bottom: floor }
+  const boundsRef = useRef(bounds)
+  boundsRef.current = bounds
+  const resting = placement?.side === 'bottom'
+    ? { x: bounds.left + placement.ratio * (bounds.right - bounds.left), y: floor }
+    : { x: placement?.side === 'left' ? launcherMargin : endX, y: clamp(placement?.y ?? endY, endY, startY) }
+  const side = placement?.side === 'bottom' ? edgeAt(resting.x, width) : placement?.side ?? 'right'
+  const point = dragPoint ?? flight ?? resting
+  const expression = grabbed ? null : frightened && !flight ? (pointerNear ? 'scared' : 'wary') : reaction
   const dockAnchor = flight ? resting : point
   const dockWidth = Math.min(415, width - 28)
   const dockHeight = Math.min(615, height - 28)
@@ -159,10 +164,13 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     else if (dockAnchor.x + launcherSize + dockWidth + 22 <= width) panel.left = dockAnchor.x + launcherSize + 8
   }
 
-  function place(side: LauncherPosition['side'], y: number) {
-    const next = { side, y: clamp(y, endY, startY) }
+  function savePosition(next: LauncherPosition) {
     setPlacement(next)
     try { localStorage.setItem(launcherPreference, JSON.stringify(next)) } catch { /* Placement remains active. */ }
+  }
+
+  function place(side: Side, y: number) {
+    savePosition({ side, y: clamp(y, endY, startY) })
   }
 
   function grab(event: PointerEvent<HTMLButtonElement>) {
@@ -170,7 +178,8 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     if (cancelFlight.current) {
       cancelFlight.current()
       cancelFlight.current = null
-      place(side, point.y)
+      // Freeze in place while held so the next release starts under the pointer.
+      setDragPoint({ x: point.x, y: point.y })
       setFlight(null)
     }
     moved.current = false
@@ -189,65 +198,93 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   function move(event: PointerEvent<HTMLButtonElement>) {
     const active = drag.current
     if (!active || active.id !== event.pointerId) return
-    active.samples.push({ x: event.clientX, y: event.clientY, time: event.timeStamp })
-    if (active.samples.length > 20) active.samples.shift()
+    const samples = event.nativeEvent.getCoalescedEvents?.() ?? []
+    for (const sample of samples.length ? samples : [event.nativeEvent]) {
+      active.samples.push({ x: sample.clientX, y: sample.clientY, time: sample.timeStamp })
+    }
+    active.samples = active.samples.slice(-32)
     if (!active.moved && Math.hypot(event.clientX - active.origin.x, event.clientY - active.origin.y) < 4) return
     active.moved = true
-    setDragPoint({
-      x: clamp(event.clientX - active.offset.x, endX),
-      y: clamp(event.clientY - active.offset.y, endY, startY),
-    })
+    setDragPoint(releasePoint(event.clientX, event.clientY, active.offset))
+  }
+
+  function releasePoint(x: number, y: number, offset: Point): Point {
+    return {
+      x: clamp(x - offset.x, bounds.right, bounds.left),
+      y: clamp(y - offset.y, bounds.bottom, bounds.top),
+    }
   }
 
   function release(event: PointerEvent<HTMLButtonElement>) {
     const active = drag.current
     if (!active || active.id !== event.pointerId) return
+    const intercepted = !active.moved && !!dragPoint
     drag.current = null
     setGrabbed(false)
     setDragPoint(null)
     moved.current = active.moved
+    const from = releasePoint(event.clientX, event.clientY, active.offset)
+    if (intercepted) {
+      settle({ x: from.x, y: bounds.bottom })
+      return
+    }
     if (!active.moved || event.type !== 'pointerup') return
     const shiftX = event.clientX - active.origin.x
     const shiftY = event.clientY - active.origin.y
     const other = side === 'left' ? 'right' : 'left'
     const inward = side === 'left' ? shiftX : -shiftX
-    const sideChange = inward >= Math.max(sideGesture, Math.abs(shiftY) / 3)
-      || edgeAt(event.clientX - active.offset.x, width) !== side
-    const y = event.clientY - active.offset.y
+    const sideChange = inward >= Math.max(sideGesture, Math.abs(shiftY) / 3) || edgeAt(from.x, width) !== side
+    const nextSide = sideChange ? other : side
     lastPointer.current = { x: event.clientX, y: event.clientY }
-    const velocity = verticalFlick(active.samples, { x: event.clientX, y: event.clientY, time: event.timeStamp })
-    if (velocity && floorY - startY > 72 && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      throwMascot(y, velocity)
+    const velocity = throwVelocity(active.samples, { ...lastPointer.current, time: event.timeStamp })
+    if (velocity && bounds.bottom - bounds.top > 72 && bounds.right - bounds.left > 72
+      && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      throwMascot(from, velocity)
       return
     }
-    place(sideChange ? other : side, y)
-    if (sideChange) {
-      const x = (other === 'left' ? launcherMargin : endX) + launcherSize / 2
-      setSplats((previous) => previous.filter((mark) => Math.hypot(mark.x - x, mark.y - clamp(y, endY, startY)) > 86))
-    }
-    setReaction(sideChange ? 'relieved' : 'protesting')
+    place(nextSide, from.y)
+    const docked = { x: nextSide === 'left' ? launcherMargin : endX, y: clamp(from.y, endY, startY) }
+    if (frightened) setPointerNear(pointerDistance(lastPointer.current, docked) < 87)
+    else if (sideChange) {
+      setSplats((previous) => previous.filter((mark) => pointerDistance(mark, docked) > 86))
+      setReaction('relieved')
+    } else setReaction('protesting')
   }
 
-  function throwMascot(y: number, velocity: number) {
-    const center = resting.x + launcherSize / 2
-    const from = clamp(y, floorY, startY)
-    recall.current = null
-    setFlight({ y: from, squash: 0, edge: velocity < 0 ? 'top' : 'bottom' })
-    cancelFlight.current = animateThrow(from, velocity, startY, floorY, setFlight, (edge, strength) => {
+  function settle(rest: Point) {
+    const { left, right } = boundsRef.current
+    const ratio = clamp((rest.x - left) / Math.max(1, right - left), 1, 0)
+    savePosition({ side: 'bottom', ratio })
+    setPointerNear(!!lastPointer.current && pointerDistance(lastPointer.current, rest) < 87)
+  }
+
+  function throwMascot(from: Point, velocity: Point) {
+    setFrightened(true)
+    setFlight({ ...from, velocity, squash: 0, edge: 'bottom' })
+    let lastTrail = -Infinity
+    cancelFlight.current = animateThrow(from, velocity, () => boundsRef.current, (frame) => {
+      setFlight(frame)
+      const speed = Math.hypot(frame.velocity.x, frame.velocity.y)
+      const now = performance.now()
+      const strength = clamp(speed / 2650, 1, 0)
+      if (speed < 650 || now - lastTrail < 69 - strength * 45) return
+      lastTrail = now
       const mark = {
-        id: ++nextSplat.current, edge, strength, x: center,
-        y: edge === 'top' ? startY + 12 : height - footer - 2,
+        id: ++nextSplat.current,
+        x: frame.x + launcherSize / 2 - frame.velocity.x / speed * 24,
+        y: frame.y + launcherSize / 2 - frame.velocity.y / speed * 24,
+        angle: Math.atan2(frame.velocity.y, frame.velocity.x) * 180 / Math.PI,
+        strength,
+        width: 11 + strength * (14 + Math.random() * 13),
       }
-      setSplats((previous) => [...previous.slice(-8), mark])
-    }, (end, hit) => {
+      setTrail((previous) => [...previous.slice(-17), mark])
+    }, (impact) => {
+      const mark = makeSplat(impact, launcherSize, ++nextSplat.current)
+      setSplats((previous) => [...previous.slice(-23), mark])
+    }, (rest) => {
       cancelFlight.current = null
       setFlight(null)
-      place(side, end)
-      const pointer = lastPointer.current
-      if (hit && pointer) {
-        const landing = clamp(end, endY, startY) + launcherSize / 2
-        recall.current = { armed: Math.hypot(pointer.x - center, pointer.y - landing) > 110 }
-      }
+      settle(rest)
     })
   }
 
@@ -338,7 +375,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
         {(Object.keys(hats) as Hat[]).map((option) => <button key={option} className="button" type="button"
           aria-pressed={hat === option} onClick={() => { setHat(option); saveHat(option) }}>
           {option === 'none' ? <span className="hat-miniature" aria-hidden="true">—</span> : <MascotHat hat={option} miniature />}
-          {hats[option]}
+          <span>{hats[option]}</span>
         </button>)}
       </div>}
       <div className="assistant-config">
@@ -391,20 +428,19 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
         </div>
       </form>
     </section>}
-    {splats.map((mark) => <svg key={mark.id} className={`jujuba-splat is-${mark.edge}`} aria-hidden="true" viewBox="0 0 104 48"
-      style={{ left: mark.x, top: mark.y, width: 53 + mark.strength * 36 }}
-      onAnimationEnd={() => setSplats((previous) => previous.filter((entry) => entry.id !== mark.id))}>
-      <path d="M9 39c1-5 13-2 21-7s23-5 31-1 13 2 21 4 16 1 15 6c-2 6-17 1-26 2-14 0-27 4-40 1s-23 2-22-5z" fill="#e73898" />
-      <path d="M25 36q11 2 23-1t25 3" fill="none" stroke="#ff9ace" strokeWidth="3" strokeLinecap="round" />
-      <path d="M8 23c-4-4-1-6 2-4s6 8 3 8-4-2-5-4zm74-4c4-5 8-4 7-1s-8 9-10 7 1-4 3-6Z" fill="#fb70b7" />
-      <circle cx="34" cy="15" r="2.4" fill="#ed5da6" /><circle cx="71" cy="7" r="3" fill="#f478b9" />
-    </svg>)}
-    <button ref={launcher} className={`assistant-launch${grabbed ? ' is-grabbed' : ''}${dragPoint ? ' is-dragging' : ''}${flight ? ' is-flying' : ''}${reaction ? ' is-' + reaction : ''}`}
+    {splats.map((mark) => <MascotSplat key={mark.id} mark={mark}
+      remove={() => setSplats((previous) => previous.filter((entry) => entry.id !== mark.id))} />)}
+    {trail.map((mark) => <span key={mark.id} className="jujuba-trail" aria-hidden="true" style={{
+      left: mark.x, top: mark.y, width: mark.width, height: 3 + mark.strength * 7,
+      transform: `translate(-50%, -50%) rotate(${mark.angle}deg)`,
+      animationDuration: `${250 + mark.strength * 390}ms`,
+    }} onAnimationEnd={() => setTrail((previous) => previous.filter((entry) => entry.id !== mark.id))} />)}
+    <button ref={launcher} className={`assistant-launch${grabbed ? ' is-grabbed' : ''}${dragPoint ? ' is-dragging' : ''}${flight ? ' is-flying' : ''}${expression ? ' is-' + expression : ''}`}
       style={{ left: point.x, top: point.y }} aria-label={open ? 'Fechar assistente' : 'Abrir assistente de IA'}
-      title="Assistente de IA · arraste na vertical ou deslize para trocar de borda" aria-expanded={open} aria-controls={open ? 'assistant-dock' : undefined}
+      title="Assistente de IA · arraste para mover ou solte rápido para arremessar" aria-expanded={open} aria-controls={open ? 'assistant-dock' : undefined}
       onPointerDown={grab} onPointerMove={move} onPointerUp={release} onPointerCancel={release} onLostPointerCapture={release}
       onKeyDown={(event) => {
-        const locations: Record<string, LauncherPosition> = {
+        const locations: Record<string, { side: Side; y: number }> = {
           ArrowLeft: { side: 'left', y: point.y }, ArrowRight: { side: 'right', y: point.y },
           ArrowUp: { side, y: point.y - 12 }, ArrowDown: { side, y: point.y + 12 },
         }
@@ -417,10 +453,12 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
       }}
       onClick={(event) => {
         if (event.detail && moved.current) return
+        setFrightened(false)
+        setPointerNear(false)
         if (open) close()
         else setOpen(true)
       }}>
-      <JujubaMascot followPointer grabbed={grabbed} reaction={reaction} flight={flight} hat={hat} />
+      <JujubaMascot followPointer grabbed={grabbed} reaction={expression} flight={flight} hat={hat} />
     </button>
   </>
 }

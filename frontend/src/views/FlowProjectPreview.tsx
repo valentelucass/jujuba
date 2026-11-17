@@ -1,16 +1,17 @@
 
 import { Workflow } from 'lucide-react'
-import { arrangeStages, type FlowPreview } from '../models/flowGeometry'
+import { arrangeStages, NOTE_WIDTH, noteHeight, type FlowPreview } from '../models/flowGeometry'
 import { nodeKinds } from '../models/systemDiagram'
 import { FlowOutline } from './FlowStageIcon'
 
 export function FlowProjectPreview({ preview }: { preview: FlowPreview }) {
-  if (!preview.nodes.length) return <span className="flow-card-empty"><Workflow size={28} />Sem etapas</span>
+  const notes = preview.notes ?? []
+  if (!preview.nodes.length && !notes.length) return <span className="flow-card-empty"><Workflow size={28} />Projeto vazio</span>
   const layout = arrangeStages(preview)
   const boxes = new Map(layout.map(({ node, position, geometry }) => [
     node.id, { ...position, ...geometry, kind: node.kind },
   ]))
-  const values = [...boxes.values()]
+  const values = [...boxes.values(), ...notes.map(({ position, text }) => ({ ...position, width: NOTE_WIDTH, height: noteHeight(text) }))]
   const left = Math.min(...values.map(({ x }) => x)) - 30
   const top = Math.min(...values.map(({ y }) => y)) - 28
   const right = Math.max(...values.map(({ x, width }) => x + width)) + 30
@@ -36,5 +37,9 @@ export function FlowProjectPreview({ preview }: { preview: FlowPreview }) {
         </foreignObject>
       </g>
     })}
+    {notes.map(({ id, position, text }) => <foreignObject key={id} x={position.x} y={position.y}
+      width={NOTE_WIDTH} height={noteHeight(text)}>
+      <div className="flow-card-note">{text.trim() || 'Nota'}</div>
+    </foreignObject>)}
   </svg>
 }

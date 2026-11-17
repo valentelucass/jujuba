@@ -11,6 +11,8 @@ use std::{
 };
 
 const FORMAT: u32 = 1;
+const FORMAT_WITH_NOTES: u32 = 2;
+const MAX_IMAGE_SIZE: usize = 16 * 1024 * 1024;
 const MAX_FILE: u64 = 512 * 1024;
 const SUFFIX: &str = ".jujuba.json";
 static SAVE: Mutex<()> = Mutex::new(());
@@ -53,7 +55,7 @@ pub fn open(path: &Path) -> Result<Opened> {
     let bytes = read(&path)?;
     let contents: FileDiagram = serde_json::from_slice(&bytes)
         .map_err(|_| invalid("O arquivo não é um fluxograma do JujubaSQL válido."))?;
-    if contents.format != FORMAT {
+    if !matches!(contents.format, FORMAT | FORMAT_WITH_NOTES) {
         return Err(invalid(
             "O formato deste arquivo precisa de outra versão do JujubaSQL.",
         ));
@@ -80,7 +82,11 @@ pub fn save(path: &Path, expected: Option<ProjectRef>, diagram: Diagram) -> Resu
     diagram.validate_draft()?;
     let path = diagram_path(path)?;
     let bytes = serde_json::to_vec_pretty(&FileDiagram {
-        format: FORMAT,
+        format: if diagram.notes.is_empty() {
+            FORMAT
+        } else {
+            FORMAT_WITH_NOTES
+        },
         diagram,
     })
     .map_err(|_| file_error())?;
@@ -107,6 +113,24 @@ pub fn export(path: &Path, diagram: Diagram) -> Result<()> {
         return Err(invalid("Escolha um arquivo .md para a exportação."));
     }
     write(path, diagram.markdown().as_bytes(), true)
+}
+
+pub fn validate_png(bytes: &[u8]) -> Result<()> {
+    if bytes.len() > MAX_IMAGE_SIZE || !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return Err(invalid("Não foi possível gerar uma imagem PNG válida."));
+    }
+    Ok(())
+}
+
+pub fn export_png(path: &Path, bytes: &[u8]) -> Result<()> {
+    if !path.is_absolute()
+        || !path
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("png"))
+    {
+        return Err(invalid("Escolha um arquivo .png para a exportação."));
+    }
+    write(path, bytes, true)
 }
 
 fn diagram_path(path: &Path) -> Result<PathBuf> {

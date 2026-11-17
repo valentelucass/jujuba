@@ -1,7 +1,8 @@
-import { ChevronRight, Info, Link2, ListTree, Trash2 } from 'lucide-react'
+import { ChevronRight, Info, Link2, ListTree, Trash2, Type } from 'lucide-react'
+import { nextNotePosition } from '../models/flowGeometry'
 import { FlowStageIcon } from './FlowStageIcon'
 import { useState, type FormEvent } from 'react'
-import { nodeKinds, type NodeKind, type SystemDiagram, type SystemEdge, type SystemNode } from '../models/systemDiagram'
+import { MAX_FLOW_NOTES, MAX_FLOW_NOTE_TEXT, nodeKinds, type NodeKind, type SystemDiagram, type SystemEdge, type SystemNode } from '../models/systemDiagram'
 
 export function SystemFlowEditor({ diagram, selected, select, update, addEdge, disabled }: {
   diagram: SystemDiagram
@@ -12,6 +13,8 @@ export function SystemFlowEditor({ diagram, selected, select, update, addEdge, d
   disabled: boolean
 }) {
   const node = diagram.nodes.find((entry) => entry.id === selected)
+  const notes = diagram.notes ?? []
+  const note = notes.find((entry) => entry.id === selected)
   const hasStart = diagram.nodes.some((entry) => entry.kind === 'start')
 
   function patchNode(change: Partial<SystemNode>) {
@@ -23,6 +26,16 @@ export function SystemFlowEditor({ diagram, selected, select, update, addEdge, d
     const id = 'step-' + crypto.randomUUID().slice(0, 12)
     update({ ...diagram, nodes: [...diagram.nodes, { id, label: nodeKinds[kind], detail: '', kind }] })
     select(id)
+  }
+
+  function createNote() {
+    const id = 'note-' + crypto.randomUUID().slice(0, 12)
+    update({ ...diagram, notes: [...notes, { id, text: '', position: nextNotePosition(diagram) }] })
+    select(id)
+  }
+
+  function updateNote(text: string) {
+    update({ ...diagram, notes: notes.map((entry) => entry.id === note?.id ? { ...entry, text } : entry) })
   }
 
   function removeStep() {
@@ -40,6 +53,8 @@ export function SystemFlowEditor({ diagram, selected, select, update, addEdge, d
           disabled={diagram.nodes.length >= 24 || (kind === 'start' && hasStart)}
           onClick={() => createStep(kind)}><FlowStageIcon kind={kind} size={25} /><span>{label}</span></button>)}
     </div>
+    <button type="button" className="button flow-add-note" disabled={notes.length >= MAX_FLOW_NOTES}
+      onClick={createNote}><Type size={16} />Adicionar texto</button>
     <details className="flow-inspector-section">
       <summary><Info size={15} />Informações do sistema<ChevronRight size={13} /></summary>
       <label>Título<input value={diagram.title} maxLength={120} onChange={(event) => update({ ...diagram, title: event.target.value })} /></label>
@@ -57,6 +72,23 @@ export function SystemFlowEditor({ diagram, selected, select, update, addEdge, d
         </button>)}
       </div> : <small className="system-hint">Adicione uma forma para criar a primeira etapa.</small>}
     </details>
+    {!!notes.length && <details className="flow-inspector-section" open>
+      <summary><Type size={15} />Notas <span className="flow-stage-count">{notes.length}</span><ChevronRight size={13} /></summary>
+      <div className="flow-stage-list" aria-label="Selecionar nota">
+        {notes.map((entry) => <button key={entry.id} type="button" className="button"
+          aria-pressed={selected === entry.id} onClick={() => select(selected === entry.id ? null : entry.id)}>
+          <Type size={14} /><span>{entry.text.trim() || 'Nota sem texto'}</span>
+        </button>)}
+      </div>
+    </details>}
+    {note && <div className="stage-fields">
+      <label>Texto da nota<textarea key={note.id} value={note.text} rows={4} maxLength={MAX_FLOW_NOTE_TEXT}
+        onChange={(event) => updateNote(event.target.value)} /></label>
+      <button type="button" className="button system-remove" onClick={() => {
+        update({ ...diagram, notes: notes.filter((entry) => entry.id !== note.id) })
+        select(null)
+      }}><Trash2 size={14} />Remover nota</button>
+    </div>}
     {node && <div className="stage-fields">
       <label>Nome<input value={node.label} maxLength={140} onChange={(event) => patchNode({ label: event.target.value })} /></label>
       <label>Tipo<select value={node.kind} onChange={(event) => patchNode({ kind: event.target.value as NodeKind })}>
@@ -67,12 +99,12 @@ export function SystemFlowEditor({ diagram, selected, select, update, addEdge, d
         onChange={(event) => patchNode({ detail: event.target.value })} /></label>
       <button type="button" className="button system-remove" onClick={removeStep}><Trash2 size={14} />Remover etapa</button>
     </div>}
-    <details className="flow-inspector-section" open={diagram.nodes.length >= 2 && !node ? true : undefined}>
+    <details className="flow-inspector-section" open={diagram.nodes.length >= 2 && !selected ? true : undefined}>
       <summary><Link2 size={15} />Conexões<ChevronRight size={13} /></summary>
-      <ConnectionEditor key={selected ?? ''} diagram={diagram} selected={selected} add={addEdge} />
+      <ConnectionEditor key={selected ?? ''} diagram={diagram} selected={node?.id ?? null} add={addEdge} />
       <div className="system-edge-list">
         {diagram.edges.map((edge, index) => {
-          if (selected && selected !== edge.from && selected !== edge.to) return null
+          if (node && node.id !== edge.from && node.id !== edge.to) return null
           const from = diagram.nodes.find((entry) => entry.id === edge.from)?.label ?? edge.from
           const to = diagram.nodes.find((entry) => entry.id === edge.to)?.label ?? edge.to
           return <div key={index}>

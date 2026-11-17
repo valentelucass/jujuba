@@ -210,6 +210,7 @@ pub async fn converse(
     let mut result: AssistantReply = generate(provider, &system, &data.to_string(), schema).await?;
     if let Some(next) = &mut result.diagram {
         if let Some(previous) = &diagram {
+            next.notes.clone_from(&previous.notes);
             for node in &mut next.nodes {
                 node.position = previous
                     .nodes

@@ -5,7 +5,7 @@ import { MascotHat, type Hat } from './MascotHat'
 
 export function JujubaMascot({ hero = false, followPointer = false, grabbed = false, reaction, flight, hat = 'none' }: {
   hero?: boolean; followPointer?: boolean; grabbed?: boolean
-  reaction?: 'protesting' | 'scared' | 'relieved' | null
+  reaction?: 'protesting' | 'scared' | 'wary' | 'relieved' | null
   flight?: FlightFrame | null
   hat?: Hat
 }) {
@@ -19,9 +19,13 @@ export function JujubaMascot({ hero = false, followPointer = false, grabbed = fa
   const rightPupil = id + '-right-pupil'
   const smile = 'M547 709C587 726 638 705 665 673Q690 644 704 666C715 706 684 747 650 762C610 779 560 756 543 729Q534 715 547 709Z'
   const protesting = reaction === 'protesting'
-  const scared = reaction === 'scared' || !!flight
+  const scared = reaction === 'scared' || reaction === 'wary' || !!flight
   const relieved = reaction === 'relieved'
   const squash = flight?.squash ?? 0
+  const sideImpact = flight?.edge === 'left' || flight?.edge === 'right'
+  const origins = { left: '8% 50%', right: '92% 50%', top: '50% 10%', bottom: '50% 91%' }
+  const narrow = 1 - squash * .58
+  const wide = 1 + squash * .48
 
   useEffect(() => {
     const element = mascot.current
@@ -66,7 +70,11 @@ export function JujubaMascot({ hero = false, followPointer = false, grabbed = fa
   }, [followPointer])
 
   return <span ref={mascot} className={'jujuba-mascot' + (hero ? ' jujuba-hero' : '')} aria-hidden="true"
-    style={flight ? { scale: `${1 + squash * .45} ${1 - squash * .55}`, transformOrigin: flight.edge === 'top' ? '50% 16%' : '50% 90%' } : undefined}>
+    style={flight ? {
+      scale: sideImpact ? `${narrow} ${wide}` : `${wide} ${narrow}`,
+      rotate: `${flight.velocity.x / 195 * (1 - squash)}deg`,
+      transformOrigin: origins[flight.edge],
+    } : undefined}>
     {(grabbed || scared) && <svg className="jujuba-arms" viewBox="0 0 1254 1254" aria-hidden="true">
       <path className="jujuba-arm jujuba-arm-left" d="M235 685Q152 670 101 544L72 465" />
       <path className="jujuba-arm jujuba-arm-right" d="M1018 695Q1116 661 1151 539L1181 468" />
