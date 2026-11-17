@@ -1,4 +1,4 @@
-import { Link2, Trash2 } from 'lucide-react'
+import { ChevronRight, Info, Link2, ListTree, Trash2 } from 'lucide-react'
 import { FlowStageIcon } from './FlowStageIcon'
 import { useState, type FormEvent } from 'react'
 import { nodeKinds, type NodeKind, type SystemDiagram, type SystemEdge, type SystemNode } from '../models/systemDiagram'
@@ -38,20 +38,25 @@ export function SystemFlowEditor({ diagram, selected, select, update, addEdge, d
       {(Object.entries(nodeKinds) as [NodeKind, string][]).map(([kind, label]) =>
         <button key={kind} type="button" className={'button flow-tool flow-tool-' + kind}
           disabled={diagram.nodes.length >= 24 || (kind === 'start' && hasStart)}
-          onClick={() => createStep(kind)}><FlowStageIcon kind={kind} />{label}</button>)}
+          onClick={() => createStep(kind)}><FlowStageIcon kind={kind} size={25} /><span>{label}</span></button>)}
     </div>
-    <details>
-      <summary>Informações do sistema</summary>
+    <details className="flow-inspector-section">
+      <summary><Info size={15} />Informações do sistema<ChevronRight size={13} /></summary>
       <label>Título<input value={diagram.title} maxLength={120} onChange={(event) => update({ ...diagram, title: event.target.value })} /></label>
       <label>Resumo<textarea value={diagram.summary} maxLength={2400} rows={3}
         onChange={(event) => update({ ...diagram, summary: event.target.value })} /></label>
       <LineList title="Requisitos" values={diagram.requirements} change={(requirements) => update({ ...diagram, requirements })} />
       <LineList title="Questões em aberto" values={diagram.openQuestions} change={(openQuestions) => update({ ...diagram, openQuestions })} />
     </details>
-    <label>Editar etapa<select disabled={!diagram.nodes.length} value={selected ?? ''} onChange={(event) => select(event.target.value || null)}>
-      <option value="">Selecione uma etapa</option>
-      {diagram.nodes.map((entry) => <option key={entry.id} value={entry.id}>{entry.label || 'Sem nome'}</option>)}
-    </select></label>
+    <details className="flow-inspector-section" open>
+      <summary><ListTree size={15} />Etapas <span className="flow-stage-count">{diagram.nodes.length}</span><ChevronRight size={13} /></summary>
+      {diagram.nodes.length ? <div className="flow-stage-list" aria-label="Editar etapa">
+        {diagram.nodes.map((entry) => <button key={entry.id} type="button" className="button"
+          aria-pressed={selected === entry.id} onClick={() => select(selected === entry.id ? null : entry.id)}>
+          <FlowStageIcon kind={entry.kind} /><span>{entry.label || 'Sem nome'}</span>
+        </button>)}
+      </div> : <small className="system-hint">Adicione uma forma para criar a primeira etapa.</small>}
+    </details>
     {node && <div className="stage-fields">
       <label>Nome<input value={node.label} maxLength={140} onChange={(event) => patchNode({ label: event.target.value })} /></label>
       <label>Tipo<select value={node.kind} onChange={(event) => patchNode({ kind: event.target.value as NodeKind })}>
@@ -62,8 +67,8 @@ export function SystemFlowEditor({ diagram, selected, select, update, addEdge, d
         onChange={(event) => patchNode({ detail: event.target.value })} /></label>
       <button type="button" className="button system-remove" onClick={removeStep}><Trash2 size={14} />Remover etapa</button>
     </div>}
-    <details open={diagram.nodes.length >= 2 && !node ? true : undefined}>
-      <summary>Conexões</summary>
+    <details className="flow-inspector-section" open={diagram.nodes.length >= 2 && !node ? true : undefined}>
+      <summary><Link2 size={15} />Conexões<ChevronRight size={13} /></summary>
       <ConnectionEditor key={selected ?? ''} diagram={diagram} selected={selected} add={addEdge} />
       <div className="system-edge-list">
         {diagram.edges.map((edge, index) => {

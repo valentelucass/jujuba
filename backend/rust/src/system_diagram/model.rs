@@ -31,6 +31,7 @@ pub enum Kind {
     Document,
     Subprocess,
     Connector,
+    Extract,
     End,
 }
 
@@ -199,6 +200,7 @@ impl Diagram {
                 Kind::Document => format!("@{{ shape: doc, label: \"{label}\" }}"),
                 Kind::Subprocess => format!("[[\"{label}\"]]"),
                 Kind::Connector => format!("((\"{label}\"))"),
+                Kind::Extract => format!("@{{ shape: tri, label: \"{label}\" }}"),
             };
             let _ = writeln!(out, "  n{index}{shape}");
         }

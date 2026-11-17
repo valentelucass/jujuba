@@ -3,7 +3,8 @@ import {
   type Connection, type Edge, type Node, type NodeProps, type ReactFlowInstance,
 } from '@xyflow/react'
 import { MousePointer2, Workflow } from 'lucide-react'
-import { FlowStageIcon } from './FlowStageIcon'
+import { FlowOutline } from './FlowStageIcon'
+import { arrangeStages, stageGeometry } from '../models/flowGeometry'
 import { useEffect, useMemo, useRef } from 'react'
 import { nodeKinds, type NodeKind, type StagePosition, type SystemDiagram, type SystemEdge } from '../models/systemDiagram'
 
@@ -13,47 +14,25 @@ type FlowNode = Node<{ label: string; kind: NodeKind }, 'flowStep'>
 const nodeTypes = { flowStep: FlowStep }
 
 function FlowStep({ data, selected }: NodeProps<FlowNode>) {
-  return <div className={'flow-node flow-' + data.kind + (selected ? ' selected' : '')}>
+  const { width, height } = stageGeometry[data.kind]
+  return <div className={'flow-node flow-' + data.kind + (selected ? ' selected' : '')}
+    style={{ width, height }} title={data.label || nodeKinds[data.kind]}>
+    <svg className="flow-node-geometry" viewBox={`0 0 ${width} ${height}`} aria-hidden="true"><FlowOutline kind={data.kind} /></svg>
     {data.kind !== 'start' && <Handle type="target" position={Position.Top} />}
-    <small><FlowStageIcon kind={data.kind} size={15} />{nodeKinds[data.kind]}</small>
-    <strong>{data.label || 'Sem nome'}</strong>
+    <div className="flow-node-label">
+      <small>{nodeKinds[data.kind]}</small>
+      <strong>{data.label || 'Sem nome'}</strong>
+    </div>
     {data.kind !== 'end' && <Handle type="source" position={Position.Bottom} />}
   </div>
 }
 
 function arrange(diagram: SystemDiagram): FlowNode[] {
-  const start = diagram.nodes.find((node) => node.kind === 'start')?.id
-  const distance = new Map<string, number>()
-  if (start) {
-    const pending = [start]
-    distance.set(start, 0)
-    for (let i = 0; i < pending.length; i++) {
-      const id = pending[i]
-      for (const edge of diagram.edges) {
-        if (edge.from === id && !distance.has(edge.to)) {
-          distance.set(edge.to, distance.get(id)! + 1)
-          pending.push(edge.to)
-        }
-      }
-    }
-  }
-  const later = Math.max(-1, ...distance.values()) + 1
-  const rows = new Map<number, string[]>()
-  let unconnected = 0
-  for (const node of diagram.nodes) {
-    if (!distance.has(node.id)) distance.set(node.id, later + Math.floor(unconnected++ / 4))
-    const row = distance.get(node.id)!
-    rows.set(row, [...(rows.get(row) ?? []), node.id])
-  }
-  return diagram.nodes.map((node) => {
-    const y = distance.get(node.id)!
-    const row = rows.get(y)!
-    return {
-      id: node.id, type: 'flowStep', position: node.position ?? { x: (row.indexOf(node.id) - (row.length - 1) / 2) * 244, y: y * 116 },
-      data: { label: node.label, kind: node.kind },
-      ariaLabel: nodeKinds[node.kind] + ' · ' + node.label,
-    }
-  })
+  const positions = arrangeStages(diagram)
+  return diagram.nodes.map(({ id, kind, label }) => ({
+    id, type: 'flowStep', position: positions.get(id)!,
+    data: { label, kind }, ariaLabel: nodeKinds[kind] + ' · ' + label,
+  }))
 }
 
 function FitNewStages({ nodeIds }: { nodeIds: string }) {

@@ -1,6 +1,6 @@
 use super::{
     files::ProjectRef,
-    model::{invalid, Diagram},
+    model::{invalid, Diagram, Edge, Node},
 };
 use crate::error::{AppError, Result};
 use serde::{Deserialize, Serialize};
@@ -28,6 +28,13 @@ pub struct Workspace {
 pub struct WorkspaceEntry {
     id: Uuid,
     title: String,
+    preview: Preview,
+}
+
+#[derive(Serialize)]
+struct Preview {
+    nodes: Vec<Node>,
+    edges: Vec<Edge>,
 }
 
 pub fn directory(app: &AppHandle) -> Result<PathBuf> {
@@ -100,6 +107,10 @@ pub fn flow_projects(app: AppHandle) -> Result<Vec<WorkspaceEntry>> {
             entries.push(WorkspaceEntry {
                 id,
                 title: workspace.diagram.title,
+                preview: Preview {
+                    nodes: workspace.diagram.nodes,
+                    edges: workspace.diagram.edges,
+                },
             });
         }
     }

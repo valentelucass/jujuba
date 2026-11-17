@@ -1,13 +1,13 @@
 use crate::{
     error::{AppError, Result},
-    models::{Authentication, ConnectInput, Transport},
+    models::{Authentication, ConnectInput, Engine, Transport},
 };
 use std::{fmt::Write, ptr};
 use windows_sys::Win32::{
     Foundation::{GetLastError, ERROR_NOT_FOUND},
     Security::Credentials::{
-        CredDeleteW, CredFree, CredReadW, CredWriteW, CREDENTIALW, CRED_PERSIST_LOCAL_MACHINE,
-        CRED_TYPE_GENERIC,
+        CredDeleteW, CredFree, CredReadW, CredWriteW, CREDENTIALW, CRED_MAX_CREDENTIAL_BLOB_SIZE,
+        CRED_PERSIST_LOCAL_MACHINE, CRED_TYPE_GENERIC,
     },
 };
 use zeroize::{Zeroize, Zeroizing};
@@ -16,9 +16,15 @@ pub struct PasswordKey(Vec<u16>);
 
 impl PasswordKey {
     pub fn for_input(input: &ConnectInput) -> Option<Self> {
-        if input.engine != crate::models::Engine::SqlServer || !matches!(input.authentication, Authentication::Sql) {
+        if !matches!(input.authentication, Authentication::Sql) {
             return None;
         }
+        let service = match input.engine {
+            Engine::SqlServer => "sql",
+            Engine::Mysql => "mysql",
+            Engine::Postgres => "postgres",
+            _ => return None,
+        };
         let user = input.username.as_deref()?.trim();
         if user.is_empty() || user.encode_utf16().count() > 128 || user.contains('\0') {
             return None;
@@ -31,7 +37,7 @@ impl PasswordKey {
                 }
                 format!("tcp/{host}/{}", input.port)
             }
-            Transport::Local => {
+            Transport::Local if input.engine == Engine::SqlServer => {
                 let mut instance = input.instance.as_deref().unwrap_or("").trim();
                 if instance.eq_ignore_ascii_case("MSSQLSERVER") {
                     instance = "";
@@ -41,14 +47,28 @@ impl PasswordKey {
                 }
                 format!("local/{}", instance.to_ascii_lowercase())
             }
+            Transport::Local => return None,
         };
         // Credential Manager compares target names case-insensitively. Encode the
         // SQL login so accounts that differ only by case still have distinct keys.
-        let mut target = format!("JujubaSQL/sql/{endpoint}/");
+        let mut target = format!("JujubaSQL/{service}/{endpoint}/");
         for byte in user.as_bytes() {
             write!(target, "{byte:02x}").expect("write into String");
         }
-        Some(Self(target.encode_utf16().chain([0]).collect()))
+        Some(Self::target(&target))
+    }
+
+    pub fn for_uri(engine: Engine) -> Option<Self> {
+        let target = match engine {
+            Engine::Mongodb => "JujubaSQL/mongodb/last-uri",
+            Engine::Redis => "JujubaSQL/redis/last-uri",
+            _ => return None,
+        };
+        Some(Self::target(target))
+    }
+
+    fn target(value: &str) -> Self {
+        Self(value.encode_utf16().chain([0]).collect())
     }
 
     pub fn exists(&self) -> Result<bool> {
@@ -59,7 +79,7 @@ impl PasswordKey {
         self.read_entry()?
             .map(|entry| {
                 let bytes = entry.blob();
-                if bytes.is_empty() || bytes.len() > 512 {
+                if bytes.is_empty() || bytes.len() > CRED_MAX_CREDENTIAL_BLOB_SIZE as usize {
                     return Err(vault_error());
                 }
                 String::from_utf8(bytes.to_vec())
@@ -73,6 +93,12 @@ impl PasswordKey {
     }
 
     pub fn save(&self, password: &str) -> Result<()> {
+        if password.is_empty() {
+            return self.forget();
+        }
+        if password.len() > CRED_MAX_CREDENTIAL_BLOB_SIZE as usize {
+            return Err(vault_error());
+        }
         let mut blob = Zeroizing::new(password.as_bytes().to_vec());
         let mut target = self.0.clone();
         let credential = CREDENTIALW {
@@ -187,5 +213,41 @@ mod tests {
         assert!(!other_port_exists.unwrap());
         assert!(!other_login_exists.unwrap());
         assert!(!key.exists().unwrap());
+    }
+
+    #[test]
+    fn separates_engines_and_round_trips_a_long_uri() {
+        let profile = |engine| ConnectInput {
+            engine,
+            database: None,
+            path: None,
+            host: "credential-test.example".into(),
+            port: 3306,
+            transport: Transport::Network,
+            instance: None,
+            authentication: Authentication::Sql,
+            username: Some("sample".into()),
+            password: None,
+        };
+        let mysql = PasswordKey::for_input(&profile(Engine::Mysql)).unwrap();
+        let postgres = PasswordKey::for_input(&profile(Engine::Postgres)).unwrap();
+        let sql_server = PasswordKey::for_input(&profile(Engine::SqlServer)).unwrap();
+        assert_ne!(mysql.0, postgres.0);
+        assert_ne!(mysql.0, sql_server.0);
+        assert!(PasswordKey::for_input(&profile(Engine::Sqlite)).is_none());
+        assert_ne!(
+            PasswordKey::for_uri(Engine::Mongodb).unwrap().0,
+            PasswordKey::for_uri(Engine::Redis).unwrap().0,
+        );
+
+        let key = PasswordKey::target(&format!("JujubaSQL/tests/uri/{}", std::process::id()));
+        let uri = format!("mongodb://sample:{}@localhost", "x".repeat(600));
+        key.save(&uri).unwrap();
+        let value = key.read();
+        key.forget().unwrap();
+        assert_eq!(
+            value.unwrap().as_deref().map(String::as_str),
+            Some(uri.as_str())
+        );
     }
 }

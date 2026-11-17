@@ -78,10 +78,28 @@ pub async fn connect(
 #[tauri::command]
 pub async fn connect_nosql(
     engine: Engine,
-    uri: String,
+    uri: Option<String>,
+    use_saved: Option<bool>,
+    remember: Option<bool>,
     state: State<'_, Connections>,
 ) -> Result<Connected> {
-    state.connect_nosql(engine, uri).await
+    state.connect_nosql(engine, uri, use_saved.unwrap_or(false), remember.unwrap_or(false)).await
+}
+
+#[tauri::command]
+pub fn has_saved_uri(engine: Engine) -> Result<bool> {
+    match crate::credentials::PasswordKey::for_uri(engine) {
+        Some(key) => key.exists(),
+        None => Ok(false),
+    }
+}
+
+#[tauri::command]
+pub fn forget_uri(engine: Engine) -> Result<()> {
+    if let Some(key) = crate::credentials::PasswordKey::for_uri(engine) {
+        key.forget()?;
+    }
+    Ok(())
 }
 
 #[tauri::command]

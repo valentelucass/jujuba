@@ -121,7 +121,7 @@ pub async fn check(provider: Provider) -> Result<()> {
 const FLOW_GUIDE: &str = "Você desenha fluxos para implementação de sistemas. Responda em português do Brasil. \
         Faça um fluxograma compacto, geralmente 5 a 12 nós. Inclua o que a pessoa faz, o que o sistema faz \
         e caminhos de erro e recuperação pertinentes à descrição. Use exatamente um start, pelo menos um end, \
-        ids ASCII curtos sem espaços e conexões from/to com ids existentes. O start e as etapas de processo, entrada e saída, documento, subprocesso e conector têm \
+        ids ASCII curtos sem espaços e conexões from/to com ids existentes. O start e as etapas de processo, entrada e saída, documento, subprocesso, conector e extração têm \
         exatamente uma saída. Cada decision tem pelo menos duas saídas com rótulos distintos (como Sim e Não). \
         end não tem saídas. Todo nó é alcançável e pode chegar a um end. Evite auto-conexões. \
         Use detail para descrever regras importantes. Registre dúvidas em openQuestions. Em uma revisão, preserve as regras \
@@ -664,7 +664,7 @@ fn diagram_schema() -> Value {
             "title": string, "summary": string, "requirements": list, "openQuestions": list,
             "nodes": { "type": "array", "minItems": 2, "maxItems": MAX_NODES, "items": {
                 "type": "object", "additionalProperties": false, "required": ["id", "kind", "label", "detail"],
-                "properties": { "id": string, "kind": { "enum": ["start", "action", "decision", "inputOutput", "document", "subprocess", "connector", "end"] },
+                "properties": { "id": string, "kind": { "enum": ["start", "action", "decision", "inputOutput", "document", "subprocess", "connector", "extract", "end"] },
                     "label": string, "detail": string }
             }},
             "edges": { "type": "array", "minItems": 1, "maxItems": MAX_EDGES, "items": {

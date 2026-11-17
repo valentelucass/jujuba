@@ -12,6 +12,7 @@ use crate::{
 };
 use std::{collections::HashSet, sync::Arc};
 use tokio::sync::RwLock;
+use zeroize::Zeroizing;
 
 #[derive(Default)]
 pub struct Connections {
@@ -44,7 +45,7 @@ impl Connections {
         remember: bool,
     ) -> Result<Connected> {
         if input.engine != Engine::SqlServer {
-            return self.connect_other(input).await;
+            return self.connect_other(input, use_saved, remember).await;
         }
         let key = PasswordKey::for_input(&input);
         let saved = if use_saved && input.password.is_none() {
@@ -99,8 +100,22 @@ impl Connections {
         })
     }
 
-    async fn connect_other(&self, input: ConnectInput) -> Result<Connected> {
+    async fn connect_other(
+        &self,
+        mut input: ConnectInput,
+        use_saved: bool,
+        remember: bool,
+    ) -> Result<Connected> {
         let engine = input.engine;
+        let key = PasswordKey::for_input(&input);
+        if use_saved && input.password.is_none() && engine != Engine::Sqlite {
+            input.password = Some(read_secret(key.as_ref())?.to_string());
+        }
+        let secret = if remember && key.is_some() {
+            Some(Zeroizing::new(input.password.clone().unwrap_or_default()))
+        } else {
+            None
+        };
         let revision = self.clear().await;
         let (other, endpoint, transport, databases) =
             deadline(OtherSession::connect(input)).await?;
@@ -112,13 +127,31 @@ impl Connections {
             databases,
             password_save_failed: false,
         };
-        self.activate(connected, SessionProfile::Other(Arc::new(other)))
-            .await
+        self.activate(
+            connected,
+            SessionProfile::Other(Arc::new(other)),
+            key.as_ref(),
+            secret.as_deref().map(String::as_str),
+        )
+        .await
     }
 
-    pub async fn connect_nosql(&self, engine: Engine, uri: String) -> Result<Connected> {
+    pub async fn connect_nosql(
+        &self,
+        engine: Engine,
+        uri: Option<String>,
+        use_saved: bool,
+        remember: bool,
+    ) -> Result<Connected> {
+        let key = PasswordKey::for_uri(engine);
+        let uri = match uri {
+            Some(value) => Zeroizing::new(value),
+            None if use_saved => read_secret(key.as_ref())?,
+            None => return Err(AppError::new("input", "Digite a URI de conexão.")),
+        };
         let revision = self.clear().await;
-        let (session, endpoint, databases) = deadline(NoSqlSession::open(engine, uri)).await?;
+        let (session, endpoint, databases) =
+            deadline(NoSqlSession::open(engine, uri.to_string())).await?;
         let connected = Connected {
             engine,
             session: revision,
@@ -127,11 +160,22 @@ impl Connections {
             databases,
             password_save_failed: false,
         };
-        self.activate(connected, SessionProfile::NoSql(Arc::new(session)))
-            .await
+        self.activate(
+            connected,
+            SessionProfile::NoSql(Arc::new(session)),
+            key.as_ref(),
+            remember.then_some(uri.as_str()),
+        )
+        .await
     }
 
-    async fn activate(&self, connected: Connected, profile: SessionProfile) -> Result<Connected> {
+    async fn activate(
+        &self,
+        mut connected: Connected,
+        profile: SessionProfile,
+        key: Option<&PasswordKey>,
+        secret: Option<&str>,
+    ) -> Result<Connected> {
         let mut state = self.state.write().await;
         if state.revision != connected.session {
             return Err(AppError::new(
@@ -139,6 +183,9 @@ impl Connections {
                 "A conexão foi substituída ou encerrada.",
             ));
         }
+        connected.password_save_failed = key
+            .zip(secret)
+            .is_some_and(|(key, value)| key.save(value).is_err());
         state.active = Some(Session {
             profile,
             databases: connected.databases.iter().cloned().collect(),
@@ -177,14 +224,16 @@ impl Connections {
                 SessionProfile::Other(session) => {
                     engine_dashboard::sql(session.client(&scope.database).await?).await
                 }
-                SessionProfile::NoSql(session) =>
-                    engine_dashboard::no_sql(&session, &scope.database).await,
+                SessionProfile::NoSql(session) => {
+                    engine_dashboard::no_sql(&session, &scope.database).await
+                }
                 SessionProfile::SqlServer(_) => Err(AppError::new(
                     "unsupported",
                     "Use os painéis de monitoramento do SQL Server.",
                 )),
             }
-        }).await
+        })
+        .await
     }
 
     pub async fn no_sql(&self, scope: &Scope) -> Result<Arc<NoSqlSession>> {
@@ -213,6 +262,18 @@ impl Connections {
         };
         profile.open(&scope.database).await
     }
+}
+
+fn read_secret(key: Option<&PasswordKey>) -> Result<Zeroizing<String>> {
+    key.map(PasswordKey::read)
+        .transpose()?
+        .flatten()
+        .ok_or_else(|| {
+            AppError::new(
+                "credentials",
+                "A credencial salva não está disponível. Digite os dados da conexão.",
+            )
+        })
 }
 
 impl ConnectionState {

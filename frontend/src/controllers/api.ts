@@ -41,7 +41,10 @@ export const sql = {
 }
 
 export const noSql = {
-  connect: (engine: NoSqlEngine, uri: string) => call<Connection>('connect_nosql', { engine, uri }),
+  connect: (engine: NoSqlEngine, uri: string | undefined, useSaved: boolean, remember: boolean) =>
+    call<Connection>('connect_nosql', { engine, uri, useSaved, remember }),
+  hasSavedUri: (engine: NoSqlEngine) => call<boolean>('has_saved_uri', { engine }),
+  forgetUri: (engine: NoSqlEngine) => call<void>('forget_uri', { engine }),
   collections: (scope: Scope) => call<string[]>('mongo_collections', { scope }),
   documents: (scope: Scope, collection: string, filter: string, page: number) =>
     call<DocumentsPage>('mongo_documents', { scope, collection, filter, page }),

@@ -4,6 +4,8 @@ fn main() {
             "connect",
             "choose_sqlite_file",
             "connect_nosql",
+            "has_saved_uri",
+            "forget_uri",
             "mongo_collections",
             "mongo_documents",
             "redis_keys",

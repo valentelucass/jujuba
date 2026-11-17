@@ -24,7 +24,7 @@ use tokio::{
 };
 use uuid::Uuid;
 
-const ALPN: &[u8] = b"jujubasql/flow/1";
+const ALPN: &[u8] = b"jujubasql/flow/2";
 const INVITATION_LIFETIME: Duration = Duration::from_secs(600);
 const APPROVAL_TIME: Duration = Duration::from_secs(120);
 const DIAL_TIME: Duration = Duration::from_secs(25);

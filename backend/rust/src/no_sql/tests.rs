@@ -39,7 +39,7 @@ fn opens_mongodb_and_filters_a_collection() {
 
         let connections = Connections::default();
         let active = connections
-            .connect_nosql(Engine::Mongodb, uri)
+            .connect_nosql(Engine::Mongodb, Some(uri), false, false)
             .await
             .unwrap();
         assert!(active.databases.contains(&name));
@@ -79,7 +79,7 @@ fn opens_redis_and_reads_keys_values_and_expiration() {
         let uri = std::env::var("JUJUBA_TEST_REDIS_URI").unwrap();
         assert!(uri.starts_with("redis://127.0.0.1:"));
         let connections = Connections::default();
-        let active = connections.connect_nosql(Engine::Redis, uri).await.unwrap();
+        let active = connections.connect_nosql(Engine::Redis, Some(uri), false, false).await.unwrap();
         let scope = Scope {
             session: active.session,
             database: active.databases[0].clone(),

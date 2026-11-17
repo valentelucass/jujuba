@@ -37,6 +37,8 @@ fn main() {
             commands::connect,
             commands::choose_sqlite_file,
             commands::connect_nosql,
+            commands::has_saved_uri,
+            commands::forget_uri,
             commands::mongo_collections,
             commands::mongo_documents,
             commands::redis_keys,

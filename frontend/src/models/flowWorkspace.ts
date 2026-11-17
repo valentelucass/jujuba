@@ -1,7 +1,7 @@
 
 import type { DiagramProject, StagePosition, SystemDiagram } from './systemDiagram'
 
-export type FlowProjectEntry = { id: string; title: string }
+export type FlowProjectEntry = { id: string; title: string; preview: Pick<SystemDiagram, "nodes" | "edges"> }
 export interface FlowProject {
   id: string
   diagram: SystemDiagram

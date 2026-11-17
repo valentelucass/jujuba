@@ -108,7 +108,7 @@ export function NoSqlStudio({ connection, disconnect, openDiagrams, onScreen }: 
         </div>
       </aside>
     </StudioLayout>
-    <StatusBar engine={connection.engine} endpoint={connection.endpoint} database={database} />
+    <StatusBar engine={connection.engine} endpoint={connection.endpoint} database={database} passwordSaveFailed={connection.passwordSaveFailed} />
   </>
 }
 

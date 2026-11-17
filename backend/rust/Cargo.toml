@@ -1,6 +1,6 @@
 [package]
 name = "jujubasql"
-version = "0.1.24"
+version = "0.1.25"
 description = "Explorador local de SQL Server"
 edition = "2021"
 build = "build.rs"

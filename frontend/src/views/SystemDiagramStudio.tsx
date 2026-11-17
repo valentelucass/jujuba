@@ -9,6 +9,7 @@ import {
   type SystemDiagram, type SystemEdge,
 } from '../models/systemDiagram'
 import { Header } from './Header'
+import { FlowProjectPreview } from './FlowProjectPreview'
 import { StatusBar } from './StatusBar'
 import { SystemFlowCanvas } from './SystemFlowCanvas'
 import { SystemFlowEditor } from './SystemFlowEditor'
@@ -429,7 +430,8 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
           {entries.map((entry) => <li key={entry.id}>
             <button className="flow-open-project" disabled={!!busy || !!session}
               onClick={() => void perform('Abrindo projeto…', async () => openWorkspace(await flowProjects.load(entry.id)))}>
-              <GitBranch size={18} />{entry.title || 'Projeto sem título'}
+              <span className="flow-card-preview"><FlowProjectPreview preview={entry.preview} /></span>
+              <span className="flow-card-title"><GitBranch size={15} />{entry.title || 'Projeto sem título'}</span>
             </button>
             <button className="icon-button" disabled={!!busy || !!session} aria-label={'Excluir ' + (entry.title || 'projeto sem título')}
               onClick={() => remove(entry)}><Trash2 size={15} /></button>

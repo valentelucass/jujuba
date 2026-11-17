@@ -1,6 +1,8 @@
-import { useState, type FormEvent } from 'react'
-import { ArrowLeft, ArrowRight, Eye, EyeOff, LoaderCircle } from 'lucide-react'
+
+import { useMemo, useState, type FormEvent } from 'react'
+import { ArrowLeft, ArrowRight, Eye, EyeOff, LoaderCircle, LockKeyhole } from 'lucide-react'
 import { appError, noSql } from '../controllers/api'
+import { useRemote } from '../controllers/useRemote'
 import { engines, type NoSqlEngine } from '../models/engines'
 import type { AppError, Connection } from '../models/sql'
 
@@ -13,7 +15,25 @@ export function NoSqlConnectionForm({ engine, loading, setLoading, onClose, onCo
 }) {
   const [visible, setVisible] = useState(false)
   const [error, setError] = useState<AppError | null>(null)
+  const [manual, setManual] = useState(false)
+  const [remember, setRemember] = useState(false)
+  const [credentialRevision, setCredentialRevision] = useState(0)
   const info = engines[engine]
+  const lookup = useMemo(() => () => noSql.hasSavedUri(engine), [engine, credentialRevision])
+  const credential = useRemote(lookup)
+  const hasSaved = credential.status === 'ready' && credential.data
+  const useSaved = hasSaved && !manual
+
+  async function forget() {
+    try {
+      await noSql.forgetUri(engine)
+      setManual(true)
+      setRemember(false)
+      setCredentialRevision((value) => value + 1)
+    } catch (failure) {
+      setError(appError(failure))
+    }
+  }
 
   async function connect(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -21,11 +41,12 @@ export function NoSqlConnectionForm({ engine, loading, setLoading, onClose, onCo
     setLoading(true)
     setError(null)
     const data = new FormData(event.currentTarget)
-    const uri = String(data.get('uri') ?? '')
+    const uri = useSaved ? undefined : String(data.get('uri') ?? '')
     data.delete('uri')
     try {
-      onConnected(await noSql.connect(engine, uri))
+      onConnected(await noSql.connect(engine, uri, useSaved, !useSaved && (remember || hasSaved)))
     } catch (failure) {
+      if (useSaved) setManual(true)
       setError(appError(failure))
     } finally {
       setLoading(false)
@@ -40,14 +61,22 @@ export function NoSqlConnectionForm({ engine, loading, setLoading, onClose, onCo
       </div>
       <h2 id="connection-title">Conectar ao {info.name}</h2>
       <fieldset disabled={loading}>
-        <div className="password-group"><label htmlFor="nosql-uri">URI de conexão</label>
-          <div className="password-field">
-            <input id="nosql-uri" name="uri" type={visible ? 'text' : 'password'} autoFocus required maxLength={8192}
-              placeholder={engine + '://localhost:' + info.port} autoComplete="off" spellCheck={false} />
-            <button type="button" className="icon-button" aria-label={visible ? 'Ocultar URI' : 'Mostrar URI'}
-              onClick={() => setVisible(!visible)}>{visible ? <EyeOff size={16} /> : <Eye size={16} />}</button>
-          </div>
-        </div>
+        {useSaved ? <p className="saved-password"><LockKeyhole size={15} />URI salva neste PC</p> :
+          <div className="password-group"><label htmlFor="nosql-uri">URI de conexão</label>
+            <div className="password-field">
+              <input id="nosql-uri" name="uri" type={visible ? 'text' : 'password'} autoFocus required maxLength={8192}
+                placeholder={engine + '://localhost:' + info.port} autoComplete="off" spellCheck={false} onChange={() => setManual(true)} />
+              <button type="button" className="icon-button" aria-label={visible ? 'Ocultar URI' : 'Mostrar URI'}
+                onClick={() => setVisible(!visible)}>{visible ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+            </div>
+          </div>}
+        {hasSaved ? <div className="saved-password-actions">
+          {useSaved && <button type="button" className="detail-link" onClick={() => setManual(true)}>Digitar outra URI</button>}
+          <button type="button" className="detail-link" onClick={() => void forget()}>Esquecer URI salva</button>
+        </div> : <label className="remember-password">
+          <input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} />
+          Lembrar URI neste PC
+        </label>}
         <p className="tls-note">{engine === 'mongodb' ? 'Aceita mongodb:// e mongodb+srv://.' : 'Aceita redis:// e rediss://.'}</p>
       </fieldset>
       {error && <div className="form-error" role="alert">{error.message}</div>}

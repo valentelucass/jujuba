@@ -43,7 +43,7 @@ export function StatusBar({ engine, endpoint, database, passwordSaveFailed }: {
     </nav>
     {error && <span className="status-error" role="alert">Não foi possível abrir o link.</span>}
     {passwordSaveFailed && !error && <span className="status-error" role="alert">
-      Conectado. O Windows não conseguiu salvar a senha.
+      Conectado. O Windows não conseguiu salvar a credencial.
     </span>}
   </footer>
 }

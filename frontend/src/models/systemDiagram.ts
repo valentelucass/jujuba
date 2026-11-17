@@ -1,4 +1,4 @@
-export type NodeKind = 'start' | 'action' | 'decision' | 'inputOutput' | 'document' | 'subprocess' | 'connector' | 'end'
+export type NodeKind = 'start' | 'action' | 'decision' | 'inputOutput' | 'document' | 'subprocess' | 'connector' | 'extract' | 'end'
 export type StagePosition = { x: number; y: number }
 export interface SystemNode { id: string; kind: NodeKind; label: string; detail: string; position?: StagePosition }
 export interface SystemEdge { from: string; to: string; label: string }
@@ -37,6 +37,7 @@ export const nodeKinds: Record<NodeKind, string> = {
   document: 'Documento',
   subprocess: 'Subprocesso',
   connector: 'Conector',
+  extract: 'Extração',
   end: 'Fim',
 }
 

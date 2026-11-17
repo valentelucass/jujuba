@@ -43,7 +43,7 @@ Use o ícone do sol ou da lua na barra superior para trocar entre fundo branco e
 
 Em **Fluxogramas → Meus projetos**, crie um projeto ou importe um arquivo `.jujuba.json`. As edições ficam salvas no projeto, e **Salvar arquivo** permite manter uma cópia em arquivo.
 
-Abra o projeto, clique em **Compartilhar** e envie o código pelo canal de sua preferência. A outra pessoa abre **Entrar por código** no próprio JujubaSQL. Após a aprovação, vocês veem o fluxograma e o cursor um do outro. Use **Passar edição** para alternar quem pode editar. O acesso termina ao fechar a sessão. As alterações ficam no projeto do dono, e o convidado pode salvar uma cópia própria.
+Abra o projeto, clique em **Compartilhar** e envie o código pelo canal de sua preferência. A outra pessoa abre **Entrar por código** no próprio JujubaSQL. Após a aprovação, vocês veem o fluxograma e o cursor um do outro. Use a mesma versão do JujubaSQL nos dois computadores. Use **Passar edição** para alternar quem pode editar. O acesso termina ao fechar a sessão. As alterações ficam no projeto do dono, e o convidado pode salvar uma cópia própria.
 
 A conexão criptografada usa [Iroh](https://github.com/n0-computer/iroh), com conexão direta quando possível e retransmissão do tráfego pelo serviço público do Iroh quando necessário. Os dois computadores precisam de conexão com a internet.
 
@@ -99,9 +99,11 @@ No SQL Server, selecione um banco e abra **Dashboards**. **Visão geral** mostra
 
 Os painéis usam a conexão já aberta e as permissões do login. Estatísticas de partições e histórico podem exigir permissões adicionais de monitoramento. O JujubaSQL só consulta os metadados e o histórico disponível. A granularidade depende dos intervalos que o Query Store registrou.
 
-## Senha salva no Windows
+## Reconectar e lembrar credenciais no Windows
 
 Ao conectar com um usuário do SQL Server, marque **Lembrar senha neste PC**. Após uma conexão bem-sucedida, a senha fica no Gerenciador de Credenciais da sua conta do Windows, vinculada ao servidor, à porta ou instância e ao usuário. Na próxima conexão, clique em **Conectar** para usar a senha salva. Use **Digitar outra senha** para substituí-la ou **Esquecer senha salva** para removê-la.
+
+Os formulários de MySQL e PostgreSQL abrem com os dados da última conexão bem-sucedida daquele tipo. Marque **Lembrar senha neste PC** para reutilizar a senha. O SQLite lembra o caminho do último arquivo aberto. Para MongoDB e Redis, use **Lembrar URI neste PC** para guardar a URI inteira no Gerenciador de Credenciais do Windows.
 
 ## Atualizações no Windows
 
