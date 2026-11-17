@@ -1,6 +1,6 @@
 import { FolderOpen, LoaderCircle, Paperclip, Send, Sparkles, X } from 'lucide-react'
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
-import jujuba from '../assets/jujuba.png'
+import { JujubaMascot } from './JujubaMascot'
 import { appError, systemDiagram } from '../controllers/api'
 import type { AiProvider, ChatMessage, ReferenceDocument, SystemDiagram } from '../models/systemDiagram'
 
@@ -312,19 +312,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
         if (open) close()
         else setOpen(true)
       }}>
-      <img src={jujuba} alt="" draggable={false} />
-      <svg className="assistant-blink" viewBox="0 0 1280 1280" aria-hidden="true">
-        <defs>
-          <linearGradient id="mascot-eyelid" x1="0" y1="520" x2="0" y2="710" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#b1086d" />
-            <stop offset=".52" stopColor="#cc0c7e" />
-            <stop offset="1" stopColor="#e41182" />
-          </linearGradient>
-        </defs>
-        <path fill="url(#mascot-eyelid)" d="M346 615a90 94 0 1 1 180 0 90 94 0 1 1-180 0Z M699 605l150-47q23-7 22 18l-14 48c0 43-33 76-74 76-47 0-76-37-76-81Z" />
-        <path d="M363 604q66 72 140 2m224-1q59 62 120-15"
-          fill="none" stroke="#46042f" strokeWidth="18" strokeLinecap="round" />
-      </svg>
+      <JujubaMascot />
     </button>
   </>
 }

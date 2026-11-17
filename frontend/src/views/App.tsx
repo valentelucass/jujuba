@@ -11,7 +11,7 @@ import { NoSqlConnectionForm } from './NoSqlConnectionForm'
 import { NoSqlStudio } from './NoSqlStudio'
 import { engines, isNoSql, type Engine } from '../models/engines'
 import { ConnectionForm } from './ConnectionForm'
-import jujuba from '../assets/jujuba.png'
+import { JujubaMascot } from './JujubaMascot'
 import { Diagram, Graph } from './Diagram'
 import { useRemote } from '../controllers/useRemote'
 import { StudioLayout } from './StudioLayout'
@@ -289,7 +289,7 @@ export function App() {
     <StudioLayout items={[]} connected={false}>
       <main className="workspace welcome">
         {step === 'intro' && <div className="welcome-content welcome-intro">
-          <div className="welcome-mark" aria-hidden="true"><img src={jujuba} alt="" /></div>
+          <div className="welcome-mark"><JujubaMascot hero /></div>
           <div className="welcome-copy">
             <h1>Conecte a um banco de dados</h1>
             <p>Consulte dados, explore tabelas, coleções e chaves.</p>
