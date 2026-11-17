@@ -26,7 +26,9 @@ export function JujubaMascot({ hero = false, followPointer = false, grabbed = fa
   const relieved = reaction === 'relieved'
   const kissing = greeting === 'kiss' && !flight
   const watching = !!direction && !flight && !!greeting && ['look', 'hug', 'squeeze', 'kiss', 'dance'].includes(greeting)
-  const embracing = !!direction && !flight && !!greeting && ['hug', 'squeeze', 'push', 'kiss'].includes(greeting)
+  const embracing = !!direction && !grabbed && !flight && !!greeting && ['hug', 'squeeze', 'push', 'kiss'].includes(greeting)
+  const flailing = !embracing && (grabbed || scared)
+  const wiping = relieved && !embracing && !flailing
   const towardLeft = (direction?.x ?? 0) < 0
   const squash = flight?.squash ?? 0
   const sideImpact = flight?.edge === 'left' || flight?.edge === 'right'
@@ -86,7 +88,7 @@ export function JujubaMascot({ hero = false, followPointer = false, grabbed = fa
       transformOrigin: origins[flight.edge],
       } : {}),
     } as CSSProperties}>
-    {(grabbed || scared) && <svg className="jujuba-arms" viewBox="0 0 1254 1254" aria-hidden="true">
+    {flailing && <svg className="jujuba-arms" viewBox="0 0 1254 1254" aria-hidden="true">
       <path className="jujuba-arm jujuba-arm-left" d="M235 685Q152 670 101 544L72 465" />
       <path className="jujuba-arm jujuba-arm-right" d="M1018 695Q1116 661 1151 539L1181 468" />
     </svg>}
@@ -164,7 +166,7 @@ export function JujubaMascot({ hero = false, followPointer = false, grabbed = fa
           <path d="M572 760Q592 732 620 746Q638 728 665 755L658 780H581Z" fill="#ef518f" />
         </g>
       </g>
-      {relieved && <g className="jujuba-wipe" fill="none" strokeLinecap="round">
+      {wiping && <g className="jujuba-wipe" fill="none" strokeLinecap="round">
         <path d="M984 780Q884 637 753 729L716 716" stroke="#ef569d" strokeWidth="62" />
         <path d="M662 712q47-26 74-11m-62 50q54-11 75 10" stroke="#ffe6f4" strokeWidth="18" />
       </g>}

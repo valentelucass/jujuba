@@ -9,6 +9,7 @@ const greetingDistance = 60
 const separateDistance = 86
 const updateInterval = 65
 const meetingTime = 1320
+const hugTime = 7200
 
 const closeReactions = ['hug', 'look', 'squeeze', 'kiss', 'dance', 'play'] as const
 const brushReactions = ['push', 'squeeze', 'dance', 'hug', 'kiss', 'look'] as const
@@ -81,6 +82,7 @@ export function useSharedMascot(room: MascotRoom | null, {
   const event = shown && shown.room === roomId && shouldReact ? shown.event : null
   const midpoint = other ? { x: (position.x + other.x) / 2, y: (position.y + other.y) / 2 } : null
   const moving = pose === 'held' || !!flight
+  const hugging = event?.kind === 'hug' && gap < separateDistance && !moving && peer?.pose !== 'held' && !peer?.flight
   const scene = useRef({ room, bounds, midpoint, gap, share: preferences.shareOwn })
   scene.current = { room, bounds, midpoint, gap, share: preferences.shareOwn }
 
@@ -115,9 +117,13 @@ export function useSharedMascot(room: MascotRoom | null, {
 
   useEffect(() => {
     if (!shown) return
-    const timeout = window.setTimeout(() => setShown(null), meetingTime)
+    const timeout = window.setTimeout(() => setShown(null), shown.event.kind === 'hug' ? hugTime : meetingTime)
     return () => window.clearTimeout(timeout)
   }, [shown])
+
+  useEffect(() => {
+    if (shown?.event.kind === 'hug' && !hugging) setShown((current) => current === shown ? null : current)
+  }, [hugging, shown])
 
   const incoming = room?.meeting
   useEffect(() => {
@@ -156,6 +162,7 @@ export function useSharedMascot(room: MascotRoom | null, {
       flight ? unit(flight.velocity.x, flight.velocity.y) : { x: 1, y: 0 })
     const approach = flight ? flight.velocity.x * direction.x + flight.velocity.y * direction.y : 0
     const hit = room.rich && trigger === 'contact' && approach > 340 && now - lastImpact.current >= 430
+    if (hugging && !hit) return
     if (!hit && now - lastInteraction.current < (trigger === 'ambient' ? 1880 : 1300)) return
     if (trigger === 'ambient' && (!room.host || !room.rich || moving || peer?.pose === 'held' || peer?.flight)) return
     if (trigger === 'brush' && !room.rich) return
@@ -234,15 +241,26 @@ export function useSharedMascot(room: MascotRoom | null, {
     void flowCollaboration.command(room.id, { type: 'mascotSplat', splat }).catch(() => {})
   }
 
+  function pushPeer(impulse: MascotImpulse) {
+    if (!room?.rich || !other || !shouldReact) return
+    const now = performance.now()
+    lastInteraction.current = now
+    lastImpact.current = now
+    const meeting = { id: ++sequence.current, kind: 'bump' as const, position: normalize(other, bounds), impulse }
+    setShown({ room: room.id, source: 'local', event: meeting })
+    void flowCollaboration.command(room.id, { type: 'mascotMeeting', meeting }).catch(() => {})
+  }
+
   function savePreferences(next: MascotPreferences) {
     setPreferences(next)
     try { localStorage.setItem(preferenceKey, JSON.stringify(next)) } catch { /* A seleção continua ativa nesta sessão. */ }
   }
 
   return {
-    preferences, savePreferences, shareImpact,
+    preferences, savePreferences, shareImpact, pushPeer,
     remote: peer && remotePoint ? { ...peer, point: remotePoint } : null,
+    hug: hugging && midpoint && shown ? { key: shown.source + '-' + event.id, point: midpoint } : null,
     meeting: event ? { ...event, point: project(event.position, bounds),
-      source: shown?.source, near: gap < separateDistance } : null,
+      source: shown?.source, near: event.kind === 'hug' ? hugging : gap < separateDistance } : null,
   }
 }

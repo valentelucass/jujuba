@@ -1124,15 +1124,20 @@ dialog.connection-dialog {
 .jujuba-meeting-hug, .jujuba-meeting-squeeze { color: #ec60a7; }
 .jujuba-meeting-hug svg { fill: #fb9bce; }
 .jujuba-meeting-look, .jujuba-meeting-dance { color: var(--mint); }
-:is(.assistant-launch, .assistant-peer):not(.is-flying) .jujuba-greeting-hug { animation: jujuba-pair-hug 1270ms ease-in-out both; }
+:is(.assistant-launch, .assistant-peer):not(.is-flying, .is-grabbed) .jujuba-greeting-hug { animation: jujuba-pair-hug 7200ms ease-in-out both; }
+.jujuba-greeting-hug .jujuba-pair-arms { animation: jujuba-hold-arms 7200ms ease-in-out both; }
 :is(.assistant-launch, .assistant-peer):not(.is-flying) .jujuba-greeting-squeeze { animation: jujuba-pair-squeeze 1160ms ease-in-out both; }
 :is(.assistant-launch, .assistant-peer):not(.is-flying) .jujuba-greeting-look { animation: jujuba-pair-look 1120ms ease-in-out both; }
 :is(.assistant-launch, .assistant-peer):not(.is-flying) .jujuba-greeting-dance { animation: jujuba-pair-dance 1080ms ease-in-out both; }
 :is(.assistant-launch, .assistant-peer):not(.is-flying) :is(.jujuba-greeting-push, .jujuba-greeting-bump) { animation: jujuba-pair-push 610ms ease-out both; }
 @keyframes jujuba-pair-hug {
   0%, 100% { transform: none; }
-  24%, 79% { transform: translate(calc(var(--pair-x, 1) * 12px), calc(var(--pair-y, 0) * 10px)) rotate(calc(var(--pair-x, 1) * 9deg)) scale(1.04, .96); }
-  51% { transform: translate(calc(var(--pair-x, 1) * 13px), calc(var(--pair-y, 0) * 11px)) rotate(calc(var(--pair-x, 1) * 12deg)) scale(1.07, .94); }
+  5%, 31%, 58%, 95% { transform: translate(calc(var(--pair-x, 1) * 12px), calc(var(--pair-y, 0) * 10px)) rotate(calc(var(--pair-x, 1) * 9deg)) scale(1.04, .96); }
+  18%, 44%, 76% { transform: translate(calc(var(--pair-x, 1) * 15px), calc(var(--pair-y, 0) * 11px)) rotate(calc(var(--pair-x, 1) * 11deg)) scale(1.07, .93); }
+}
+@keyframes jujuba-hold-arms {
+  0%, 100% { opacity: 0; transform: scale(.88); }
+  5%, 95% { opacity: 1; transform: none; }
 }
 @keyframes jujuba-pair-squeeze {
   0%, 100% { transform: none; }
@@ -1161,3 +1166,107 @@ dialog.connection-dialog {
   .jujuba-pair-arms,
   :is(.assistant-launch, .assistant-peer) .jujuba-mascot[class*='jujuba-greeting-'] { animation: none !important; }
 }
+
+.jujuba-egg {
+  --shell: #f596c2;
+  --shell-spot: #c65394;
+  position: fixed; z-index: 14; width: 26px; height: 32px;
+  transform: translateX(-50%); pointer-events: none;
+  animation: jujuba-egg-life 4500ms ease both;
+}
+.jujuba-egg-1 { --shell: #f8d381; --shell-spot: #ba7827; }
+.jujuba-egg-2 { --shell: #a8e3c5; --shell-spot: #4c9e81; }
+.jujuba-egg-top, .jujuba-egg-bottom {
+  position: absolute; inset: 0; border-radius: 48% 48% 44% 44% / 60% 60% 40% 40%;
+  background:
+    radial-gradient(circle at 39% 28%, #fff9 0 9%, transparent 11%),
+    radial-gradient(circle at 64% 41%, var(--shell-spot) 0 9%, transparent 11%),
+    radial-gradient(circle at 36% 69%, var(--shell-spot) 0 9%, transparent 11%),
+    radial-gradient(ellipse at 37% 27%, var(--shell), var(--shell-spot) 120%);
+  border: 1px solid var(--shell-spot);
+}
+.jujuba-egg-top {
+  clip-path: polygon(0 0, 100% 0, 100% 56%, 72% 53%, 56% 62%, 35% 54%, 19% 61%, 0 56%);
+  z-index: 1; animation: jujuba-egg-top 680ms 720ms ease-out both;
+}
+.jujuba-egg-bottom {
+  clip-path: polygon(0 56%, 19% 61%, 35% 54%, 56% 62%, 72% 53%, 100% 56%, 100% 100%, 0 100%);
+  animation: jujuba-egg-bottom 1100ms 720ms ease-out both;
+}
+.jujuba-hatchling {
+  position: absolute; width: 38px; height: 38px; left: -6px; bottom: 0;
+  object-fit: contain; opacity: 0; filter: drop-shadow(0 2px 5px var(--shadow));
+  animation: jujuba-hatch 920ms 730ms ease-out both;
+}
+.jujuba-egg-1 .jujuba-hatchling { filter: hue-rotate(42deg) drop-shadow(0 2px 5px var(--shadow)); }
+.jujuba-egg-2 .jujuba-hatchling { filter: hue-rotate(182deg) drop-shadow(0 2px 5px var(--shadow)); }
+@keyframes jujuba-egg-life {
+  0% { opacity: 0; scale: .58; }
+  9%, 77% { opacity: 1; scale: 1; }
+  100% { opacity: 0; scale: .8; }
+}
+@keyframes jujuba-egg-top {
+  0% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translate(-15px, -25px) rotate(-55deg); }
+}
+@keyframes jujuba-egg-bottom { 51% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes jujuba-hatch {
+  0% { opacity: 0; transform: translateY(7px) scale(.48); }
+  34% { opacity: 1; transform: translateY(-16px) scale(1.08, .94); }
+  64% { opacity: 1; transform: translateY(-1px) scale(.91, 1.07); }
+  100% { opacity: 1; transform: none; }
+}
+
+.assistant-tools { display: grid; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--line); font-size: 12px; }
+.assistant-toys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.assistant-toys button { min-width: 0; white-space: normal; padding: 4px 5px; line-height: 1.2; }
+.assistant-toys svg { flex: none; color: var(--berry); }
+.assistant-sounds { display: grid; grid-template-columns: auto auto minmax(40px, 1fr) auto; gap: 7px; align-items: center; }
+.assistant-sounds select {
+  min-width: 0; padding: 5px;
+  border: 1px solid var(--line-strong); border-radius: 5px;
+  background: var(--workspace); color: var(--text); font: inherit;
+}
+.assistant-sounds input[type='range'] { width: 100%; min-width: 0; margin: 0; accent-color: var(--berry); }
+.mascot-aim {
+  position: fixed; z-index: 17;
+  inset: var(--app-header-height, 54px) 0 var(--app-footer-height, 24px);
+  cursor: crosshair; touch-action: none; outline: none;
+}
+.mascot-aim:has(.mascot-toy-cursor) { cursor: none; }
+.mascot-aim-status {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  z-index: 1; display: flex; align-items: center; gap: 9px; width: max-content;
+  border: 1px solid var(--berry-line); border-radius: 7px; padding: 4px 4px 4px 9px;
+  background: var(--surface); color: var(--text); box-shadow: 0 4px 18px var(--shadow); font-size: 12px;
+}
+.mascot-aim-status > svg { color: var(--berry); }
+.mascot-aim-status .icon-button { width: 28px; height: 28px; }
+.mascot-aim-guide { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; color: var(--berry); }
+.mascot-aim-guide.is-targeting { color: var(--mint); }
+.mascot-aim-guide line { stroke: currentColor; stroke-width: 1.5; stroke-dasharray: 5 5; opacity: .9; }
+.mascot-aim-guide circle { stroke: currentColor; fill: var(--workspace); stroke-width: 1.5; }
+.mascot-toy-cursor { position: fixed; color: var(--berry); width: 0; height: 0; pointer-events: none; }
+.mascot-toy-cursor > svg { position: absolute; inset: -8.5px; }
+.mascot-toy-cursor span {
+  position: absolute; display: flex; top: 7px; left: 7px; padding: 1px; border-radius: 8px;
+  background: var(--workspace); box-shadow: 0 2px 7px var(--shadow);
+}
+.mascot-shot { position: fixed; width: 0; height: 0; pointer-events: none; }
+.mascot-shot > span {
+  position: absolute; top: -4px; left: -5px; width: 12px; height: 8px; border-radius: 50%;
+  background: #ff85c9; box-shadow: 0 0 7px var(--berry);
+  animation: mascot-projectile var(--shot-duration) linear both;
+}
+.mascot-shot.is-bow > span {
+  top: -5px; width: 23px; height: 10px; border-radius: 0; background: #f4bf55; box-shadow: none;
+  clip-path: polygon(0 39%, 71% 39%, 71% 0, 100% 50%, 71% 100%, 71% 61%, 0 61%);
+}
+@keyframes mascot-projectile { to { transform: translateX(var(--shot-travel)); } }
+@media (prefers-reduced-motion: reduce) {
+  .jujuba-egg { animation-name: jujuba-meeting-fade; }
+  .jujuba-egg-top, .jujuba-egg-bottom { animation-name: jujuba-egg-bottom; }
+  .jujuba-hatchling { animation-name: jujuba-hatch-fade; }
+  .mascot-shot > span { animation-duration: 1ms; }
+}
+@keyframes jujuba-hatch-fade { from { opacity: 0; } to { opacity: 1; } }

@@ -1,9 +1,11 @@
-import { Eye, EyeOff, FolderOpen, LoaderCircle, Paperclip, Send, Sparkles, X } from 'lucide-react'
+import { Eye, EyeOff, FolderOpen, LoaderCircle, Paperclip, Send, Sparkles, Volume2, Wrench, X } from 'lucide-react'
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { JujubaMascot } from './JujubaMascot'
-import { MascotMeetingEffect, SharedMascot } from './SharedMascot'
+import { MascotHatchlings, MascotMeetingEffect, SharedMascot } from './SharedMascot'
 import { useSharedMascot } from '../controllers/useSharedMascot'
+import { soundStyles, useMascotSound, type SoundStyle } from '../controllers/mascotSound'
 import type { MascotImpulse, MascotRoom, MascotVisibility } from '../models/flowMascot'
+import { MascotAim, MascotToyIcon, toyLabels, type MascotTool } from './MascotAim'
 import { makeSplat, MascotSplat, type Splat } from './MascotSplat'
 import { hats, MascotHat, readHat, saveHat, type Hat } from './MascotHat'
 import { appError, systemDiagram } from '../controllers/api'
@@ -98,6 +100,9 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const [hat, setHat] = useState(readHat)
   const [hatsOpen, setHatsOpen] = useState(false)
   const [mascotOptions, setMascotOptions] = useState(false)
+  const [toolsOpen, setToolsOpen] = useState(false)
+  const [tool, setTool] = useState<MascotTool | null>(null)
+  const { settings: sound, save: saveSound, play: playSound } = useMascotSound()
   const [grabbed, setGrabbed] = useState(false)
   const [reaction, setReaction] = useState<Reaction | null>(null)
   const [dragPoint, setDragPoint] = useState<Point | null>(null)
@@ -168,7 +173,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const side = placement?.side === 'bottom' ? edgeAt(resting.x, width) : placement?.side ?? 'right'
   const point = dragPoint ?? flight ?? resting
   const expression = grabbed ? null : frightened && !flight ? (pointerNear ? 'scared' : 'wary') : reaction
-  const { preferences: mascotPreferences, savePreferences, shareImpact, remote, meeting } = useSharedMascot(mascotRoom, {
+  const { preferences: mascotPreferences, savePreferences, shareImpact, pushPeer, remote, meeting, hug } = useSharedMascot(mascotRoom, {
     position: point, bounds, hat, flight,
     pose: grabbed ? 'held' : expression === 'scared' || expression === 'wary' ? expression : 'idle',
     kick: collide, receiveSplat: addRemoteSplat,
@@ -179,6 +184,9 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   }, [showingRemote])
   const VisibilityIcon = mascotPreferences.remote === 'hidden' ? EyeOff : Eye
   const greeting = meeting?.near ? meeting.kind : undefined
+  const meetingSound = meeting?.kind
+  const meetingKey = meeting ? [mascotRoom?.id, meeting.source, meeting.id].join('-') : null
+  useEffect(() => { if (meetingSound) playSound(meetingSound) }, [meetingKey, meetingSound, playSound])
   const pairDelta = remote ? { x: remote.point.x - point.x, y: remote.point.y - point.y } : { x: 1, y: 0 }
   const pairLength = Math.max(1, Math.hypot(pairDelta.x, pairDelta.y))
   const pairDirection = { x: pairDelta.x / pairLength, y: pairDelta.y / pairLength }
@@ -294,8 +302,12 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     setSplats((previous) => [...previous.slice(-31), mark])
   }
 
-  function collide(impulse: MascotImpulse, source: 'local' | 'remote') {
-    if (drag.current || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  function collide(impulse: MascotImpulse, source: 'local' | 'remote' | 'toy' = 'toy') {
+    if (drag.current) return
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setReaction('protesting')
+      return
+    }
     const { direction, strength } = impulse
     const sign = source === 'local' ? -.88 : 1
     const carry = flight?.velocity ?? { x: 0, y: 0 }
@@ -328,6 +340,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
       }
       setTrail((previous) => [...previous.slice(-17), mark])
     }, (impact) => {
+      playSound('bounceOffWall')
       const mark = makeSplat(impact, launcherSize, ++nextSplat.current)
       setSplats((previous) => [...previous.slice(-31), mark])
       shareImpact(impact)
@@ -341,6 +354,12 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   function close() {
     setOpen(false)
     launcher.current?.focus()
+  }
+
+  function chooseTool(next: MascotTool) {
+    setTool(next)
+    setToolsOpen(false)
+    close()
   }
 
   function chooseProvider(next: AiProvider) {
@@ -419,19 +438,41 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
           {mascotRoom && <button className={'icon-button assistant-mascots-trigger is-' + mascotPreferences.remote}
             type="button" aria-label="Visibilidade das Jujubas" title="Visibilidade das Jujubas" aria-expanded={mascotOptions}
             aria-controls={mascotOptions ? 'assistant-mascots' : undefined}
-            onClick={() => { setMascotOptions(!mascotOptions); setHatsOpen(false) }}><VisibilityIcon size={18} aria-hidden="true" /></button>}
+            onClick={() => { setMascotOptions(!mascotOptions); setHatsOpen(false); setToolsOpen(false) }}><VisibilityIcon size={18} aria-hidden="true" /></button>}
           <button className="icon-button assistant-hats-trigger" type="button" aria-label="Chapéus" title="Chapéus"
             aria-expanded={hatsOpen} aria-controls={hatsOpen ? 'assistant-hats' : undefined}
-            onClick={() => { setHatsOpen(!hatsOpen); setMascotOptions(false) }}>
+            onClick={() => { setHatsOpen(!hatsOpen); setMascotOptions(false); setToolsOpen(false) }}>
             <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"
               strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
               <path d="m6 15-1-9c0-1.2 3-2 7-2s7 .8 7 2l-1 9M6 12c2.7 1 9.3 1 12 0" />
               <path d="M6 15c-2.6.5-4 1.4-4 2.3 0 1.6 4.5 2.7 10 2.7s10-1.1 10-2.7c0-.9-1.4-1.8-4-2.3" />
             </svg>
           </button>
+          <button className="icon-button" type="button" title="Ferramentas e sons" aria-label="Ferramentas e sons"
+            aria-expanded={toolsOpen} aria-controls={toolsOpen ? 'assistant-tools' : undefined}
+            onClick={() => { setToolsOpen(!toolsOpen); setHatsOpen(false); setMascotOptions(false) }}>
+            <Wrench size={17} aria-hidden="true" />
+          </button>
           <button className="icon-button" onClick={close} aria-label="Fechar assistente" title="Fechar assistente"><X size={17} /></button>
         </div>
       </header>
+      {toolsOpen && <div id="assistant-tools" className="assistant-tools" role="group" aria-label="Ferramentas e sons da Jujuba">
+        <div className="assistant-toys">
+          {(Object.keys(toyLabels) as MascotTool[]).map((option) => <button className="button" type="button" key={option}
+            onClick={() => chooseTool(option)}><MascotToyIcon tool={option} />{toyLabels[option]}</button>)}
+        </div>
+        <div className="assistant-sounds">
+          <label htmlFor="jujuba-sound-style">Som</label>
+          <select id="jujuba-sound-style" value={sound.style}
+            onChange={(event) => saveSound({ ...sound, style: event.target.value as SoundStyle })}>
+            {Object.entries(soundStyles).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+          </select>
+          <input type="range" min={0} max={100} value={Math.round(sound.volume * 100)} aria-label="Volume das Jujubas"
+            disabled={sound.style === 'silent'} onChange={(event) => saveSound({ ...sound, volume: Number(event.target.value) / 100 })} />
+          <button className="icon-button" type="button" aria-label="Ouvir exemplo" title="Ouvir exemplo"
+            disabled={sound.style === 'silent' || !sound.volume} onClick={() => playSound('kiss')}><Volume2 size={16} /></button>
+        </div>
+      </div>}
       {hatsOpen && <div id="assistant-hats" className="assistant-hats" role="group" aria-label="Chapéus da Jujuba">
         {(Object.keys(hats) as Hat[]).map((option) => <button key={option} className="button" type="button"
           aria-pressed={hat === option} onClick={() => { setHat(option); saveHat(option) }}>
@@ -516,10 +557,22 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
       transform: `translate(-50%, -50%) rotate(${mark.angle}deg)`,
       animationDuration: `${250 + mark.strength * 390}ms`,
     }} onAnimationEnd={() => setTrail((previous) => previous.filter((entry) => entry.id !== mark.id))} />)}
-    {mascotRoom && remote && <SharedMascot key={mascotRoom.id} peer={mascotRoom.peer}
+    {mascotRoom && remote && <SharedMascot key={'peer-' + mascotRoom.id} peer={mascotRoom.peer}
       appearance={remote} visibility={mascotPreferences.remote} greeting={greeting}
       direction={{ x: -pairDirection.x, y: -pairDirection.y }} />}
+    {mascotRoom && remote && mascotPreferences.shareOwn && <MascotHatchlings key={'eggs-' + mascotRoom.id} hug={hug}
+      size={launcherSize} onHatch={() => playSound('hatch')} />}
     {meeting && <MascotMeetingEffect key={meeting.source + '-' + meeting.id} kind={meeting.kind} point={meeting.point} />}
+    {tool && <MascotAim key={mascotRoom?.id ?? screen} tool={tool}
+      own={{ x: point.x + launcherSize / 2, y: point.y + launcherSize / 2 }}
+      peer={mascotRoom?.rich && remote && mascotPreferences.shareOwn
+        ? { x: remote.point.x + launcherSize / 2, y: remote.point.y + launcherSize / 2 } : null}
+      onExit={() => { setTool(null); launcher.current?.focus() }}
+      onFire={() => playSound(tool)}
+      onHit={(target, impulse) => {
+        if (target === 'peer') pushPeer(impulse)
+        else { playSound('hit'); collide(impulse) }
+      }} />}
     <button ref={launcher} className={`assistant-launch${grabbed ? ' is-grabbed' : ''}${dragPoint ? ' is-dragging' : ''}${flight ? ' is-flying' : ''}${expression ? ' is-' + expression : ''}`}
       style={{ left: point.x, top: point.y }} aria-label={open ? 'Fechar assistente' : 'Abrir assistente de IA'}
       title="Assistente de IA · arraste para mover ou solte rápido para arremessar" aria-expanded={open} aria-controls={open ? 'assistant-dock' : undefined}
@@ -538,6 +591,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
       }}
       onClick={(event) => {
         if (event.detail && moved.current) return
+        playSound('click')
         setFrightened(false)
         setPointerNear(false)
         if (open) close()
