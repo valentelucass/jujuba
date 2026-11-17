@@ -1,8 +1,10 @@
 mod ai;
 pub mod collaboration;
-pub mod workspaces;
 mod files;
+mod flow_access;
+mod flow_merge;
 mod model;
+pub mod workspaces;
 
 use self::{
     ai::Provider,

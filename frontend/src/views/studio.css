@@ -708,6 +708,13 @@ dialog.connection-dialog {
   display: grid; gap: 3px; pointer-events: none;
 }
 .flow-node small { font-size: 10px; color: var(--shape-text, var(--muted)); }
+.flow-node-label.is-editing { pointer-events: auto; }
+.flow-inline-label {
+  width: 100%; min-width: 0; padding: 3px 5px; border-radius: 4px;
+  border: 1px solid var(--berry); background: var(--surface); color: var(--text);
+  text-align: center; font: inherit; cursor: text;
+}
+.flow-inline-label:focus { outline: 1px solid var(--berry); outline-offset: 1px; }
 .flow-stage-title {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3;
   overflow: hidden; overflow-wrap: anywhere; font-size: 13px; font-weight: 650; line-height: 16px;
@@ -751,7 +758,7 @@ dialog.connection-dialog {
   transition: left 240ms cubic-bezier(.2,.7,.25,1), top 160ms ease-out;
 }
 .assistant-launch.is-grabbed { cursor: grabbing; }
-.assistant-launch.is-dragging { transition: none; }
+.assistant-launch:is(.is-dragging, .is-flying) { transition: none; }
 .assistant-launch:focus-visible { outline: 2px solid var(--berry); outline-offset: 2px; border-radius: 6px; }
 .jujuba-mascot {
   --mascot-cycle: 11s;
@@ -764,7 +771,7 @@ dialog.connection-dialog {
 .jujuba-hero { --mascot-cycle: 14s; --mascot-delay: -.8s; --mascot-hop: -8px; width: 100%; }
 .jujuba-mascot img { display: block; width: 100%; height: 100%; object-fit: contain; user-select: none; }
 .assistant-launch .jujuba-mascot img { filter: drop-shadow(0 5px 9px var(--shadow)); transition: filter 130ms ease-out; }
-.jujuba-expression { position: absolute; inset: 0; width: 100%; height: 100%; }
+.jujuba-expression, .jujuba-hat { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .jujuba-eyelid, .jujuba-smile {
   opacity: 0; animation-timing-function: ease-in-out; animation-iteration-count: infinite;
   animation-duration: var(--mascot-cycle); animation-delay: var(--mascot-delay);
@@ -774,12 +781,22 @@ dialog.connection-dialog {
 .jujuba-smile { animation-name: jujuba-smile; }
 .jujuba-closed-eye { fill: none; stroke: #46042f; stroke-width: 16; stroke-linecap: round; }
 .assistant-launch.is-grabbed .jujuba-mascot { animation: jujuba-held 310ms ease-in-out infinite; }
+.assistant-launch.is-flying .jujuba-mascot { animation: none; }
 .assistant-launch.is-protesting .jujuba-mascot { animation: jujuba-protest 480ms ease-out both; }
-.assistant-launch:is(.is-grabbed, .is-protesting) .jujuba-mascot img {
+.assistant-launch.is-scared .jujuba-mascot { animation: jujuba-held 150ms ease-in-out 4; }
+.assistant-launch.is-relieved .jujuba-mascot { animation: jujuba-relief 600ms ease-out both; }
+.assistant-launch:is(.is-grabbed, .is-protesting, .is-flying) .jujuba-mascot img {
   filter: drop-shadow(0 0 4px var(--berry)) drop-shadow(0 0 10px color-mix(in srgb, var(--berry) 65%, transparent));
 }
-.assistant-launch:is(.is-grabbed, .is-protesting) :is(.jujuba-eyelid, .jujuba-smile, .jujuba-glints) { animation: none; }
-.assistant-launch:is(.is-grabbed, .is-protesting) .jujuba-eyelid { opacity: 1; }
+.assistant-launch:is(.is-grabbed, .is-protesting, .is-flying, .is-scared, .is-relieved) :is(.jujuba-eyelid, .jujuba-smile, .jujuba-glints) { animation: none; }
+.assistant-launch:is(.is-grabbed, .is-protesting, .is-relieved) .jujuba-eyelid { opacity: 1; }
+.jujuba-wipe { animation: jujuba-wipe 620ms ease-out both; }
+.jujuba-splat {
+  position: fixed; z-index: 11; pointer-events: none; overflow: visible;
+  opacity: 0; animation: jujuba-splat 2.7s ease-out both;
+}
+.jujuba-splat.is-top { transform: translate(-50%, -7%) scaleY(-1); }
+.jujuba-splat.is-bottom { transform: translate(-50%, -90%); }
 .jujuba-gaze { visibility: hidden; }
 .jujuba-mascot[data-looking="true"] .jujuba-gaze { visibility: visible; }
 .jujuba-glints {
@@ -798,7 +815,23 @@ dialog.connection-dialog {
 .jujuba-arm-right { transform-origin: 81% 55%; animation-delay: -130ms; }
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
   .assistant-launch .jujuba-mascot { transition: rotate 160ms ease; }
-  .assistant-launch:not(.is-grabbed, .is-protesting):hover .jujuba-mascot { rotate: -5deg; }
+  .assistant-launch:not(.is-grabbed, .is-protesting, .is-flying, .is-scared, .is-relieved):hover .jujuba-mascot { rotate: -5deg; }
+}
+@keyframes jujuba-splat {
+  0% { opacity: 0; scale: .4 .7; }
+  9% { opacity: .9; scale: 1.06 1; }
+  20%, 54% { opacity: .78; scale: 1 1; }
+  100% { opacity: 0; scale: .92 .92; }
+}
+@keyframes jujuba-wipe {
+  0% { opacity: 0; transform: translate(130px, 30px); }
+  22%, 52% { opacity: 1; }
+  68% { transform: translate(-110px, -25px); }
+  100% { opacity: 0; transform: translate(110px, -25px); }
+}
+@keyframes jujuba-relief {
+  0%, 100% { transform: none; }
+  42% { transform: rotate(-5deg) scale(1.035, .94); }
 }
 @keyframes jujuba-flail {
   from { transform: rotate(-14deg); }
@@ -840,8 +873,9 @@ dialog.connection-dialog {
 }
 @media (prefers-reduced-motion: reduce) {
   .assistant-launch { transition: none; }
-  .jujuba-mascot, .jujuba-eyelid, .jujuba-smile, .jujuba-arm, .jujuba-glints,
-  .assistant-launch:is(.is-grabbed, .is-protesting) .jujuba-mascot { animation: none; }
+  .jujuba-mascot, .jujuba-eyelid, .jujuba-smile, .jujuba-arm, .jujuba-glints, .jujuba-wipe,
+  .assistant-launch:is(.is-grabbed, .is-protesting, .is-scared, .is-relieved) .jujuba-mascot { animation: none; }
+  .jujuba-splat { animation-duration: 1ms; }
   .jujuba-mascot[data-looking="true"] .jujuba-gaze { visibility: hidden; }
   .assistant-launch .jujuba-mascot img { transition: none; }
 }
@@ -852,6 +886,14 @@ dialog.connection-dialog {
   box-shadow: 0 16px 55px var(--shadow); overflow: hidden;
 }
 .assistant-heading { display: flex; align-items: center; justify-content: space-between; padding: 12px; border-bottom: 1px solid var(--line); }
+.assistant-heading-actions { display: flex; align-items: center; gap: 6px; }
+.assistant-hats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 6px;
+  max-height: 154px; overflow: auto; padding: 8px 12px; border-bottom: 1px solid var(--line);
+}
+.assistant-hats .button { display: grid; justify-items: center; min-height: 59px; height: auto; gap: 3px; padding: 4px; font-size: 10px; }
+.assistant-hats .button[aria-pressed="true"] { border-color: var(--berry-line); background: var(--berry-selected); color: var(--berry); }
+.hat-miniature { display: grid; place-items: center; width: 53px; height: 25px; }
 .assistant-heading h2 { display: flex; align-items: center; gap: 7px; font-size: 15px; }
 .assistant-heading h2 svg { color: var(--berry); }
 .assistant-heading small, .assistant-workspace { display: block; color: var(--quiet); margin-top: 3px; }
@@ -913,3 +955,12 @@ dialog.connection-dialog {
 .flow-peer-cursor { position: absolute; z-index: 1000; pointer-events: none; color: var(--berry); }
 .flow-peer-cursor svg { display: block; transform: translate(-3px, -3px); stroke: var(--surface); stroke-width: 1.5; }
 .flow-peer-cursor span { position: absolute; top: 12px; left: 12px; display: block; padding: 2px 6px; border-radius: 4px; background: var(--berry); color: var(--workspace); font-size: 12px; white-space: nowrap; }
+
+.flow-share-presence { display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--quiet); }
+.flow-share-presence svg { color: var(--gold); flex: none; }
+.flow-share-presence strong { color: var(--text); }
+.flow-share-bar input[type='checkbox'] { min-height: 0; accent-color: var(--berry); }
+.flow-return-projects { margin-top: 24px; }
+.flow-return-projects h2 { font-size: 15px; margin-bottom: 10px; }
+.flow-saved-preview { display: grid; place-content: center; justify-items: center; gap: 8px; height: 100%; color: var(--gold); }
+.flow-saved-preview span { color: var(--quiet); }

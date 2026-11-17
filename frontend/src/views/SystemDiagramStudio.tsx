@@ -15,6 +15,17 @@ import { SystemFlowCanvas } from './SystemFlowCanvas'
 import { SystemFlowEditor } from './SystemFlowEditor'
 
 type History = { past: SystemDiagram[]; future: SystemDiagram[] }
+type SavedFlowAccess = { code: string; title: string; host: string; name: string }
+const savedAccessKey = 'jujuba.flow.access'
+
+function readSavedAccess(): SavedFlowAccess[] {
+  try {
+    return JSON.parse(localStorage.getItem(savedAccessKey) || '[]')
+  } catch {
+    return []
+  }
+}
+
 type Panel = 'create' | 'share' | 'join' | null
 
 export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagram, connection }: {
@@ -31,6 +42,10 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
   const [name, setName] = useState('')
   const [title, setTitle] = useState('')
   const [invite, setInvite] = useState('')
+  const [remember, setRemember] = useState(false)
+  const [savedAccess, setSavedAccess] = useState(readSavedAccess)
+  const guestName = useRef('')
+  const savedTicket = useRef<string | null>(null)
   const [diagram, setDiagram] = useState<SystemDiagram | null>(null)
   const [history, setHistory] = useState<History>({ past: [], future: [] })
   const [file, setFile] = useState<DiagramProject | null>(null)
@@ -47,10 +62,13 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
   const locking = useRef(false)
   const active = useRef<FlowSession | null>(null)
   const edits = useRef(Promise.resolve())
+  const editGeneration = useRef(0)
+  const pendingEdits = useRef(0)
+  const diagramRef = useRef<SystemDiagram | null>(null)
   const appliedDiagram = useRef<typeof assistantDiagram>(null)
   const sessionId = session?.id
   const guest = !!session && session.projectId === null
-  const disabled = !!busy || (!!session && !session.canEdit)
+  const disabled = !!busy || (!!session && !session.canEdit && (guest || session.phase !== 'ended'))
 
   useEffect(() => { onDiagram(diagram) }, [diagram, onDiagram])
 
@@ -76,6 +94,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
     let timer: ReturnType<typeof setTimeout>
     async function refresh() {
       try {
+        const generation = editGeneration.current
         const view = await flowCollaboration.view(id, seen)
         if (disposed || active.current?.id !== id) return
         if (!view) {
@@ -83,14 +102,19 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
           setActive(null)
           return
         }
+        if (view.phase === 'approval' && active.current.phase !== 'approval') setRemember(false)
         active.current = view
         setSession(view)
-        if (view.diagram) {
+        if (view.diagram && pendingEdits.current === 0 && generation === editGeneration.current) {
           if (seen === 0 && view.projectId === null) {
             replace(view.diagram, null, false)
-          } else {
+            if (view.returnCode && view.peer && view.returnCode !== savedTicket.current) {
+              saveGuestAccess({ code: view.returnCode, title: view.diagram.title, host: view.peer, name: guestName.current })
+              savedTicket.current = view.returnCode
+            }
+          } else if (JSON.stringify(diagramRef.current) !== JSON.stringify(view.diagram)) {
             setHistory({ past: [], future: [] })
-            setDiagram(view.diagram)
+            setCurrentDiagram(view.diagram)
             setSelected((id) => view.diagram?.nodes.some((node) => node.id === id) ? id : null)
             setDirty(true)
             setCode(null)
@@ -113,7 +137,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
     if (!assistantDiagram || appliedDiagram.current === assistantDiagram) return
     appliedDiagram.current = assistantDiagram
     if (disabled) {
-      setError('Assuma a edição do projeto antes de aplicar o fluxograma do assistente.')
+      setError('Aguarde o projeto ficar disponível para edição e tente novamente.')
       return
     }
     if (diagram) {
@@ -126,7 +150,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
     } else {
       void perform('Criando projeto…', async () => {
         const next = assistantDiagram.diagram
-        openWorkspace(await flowProjects.create({ ...next, title: next.title.trim() || emptyDiagram.title }, null))
+        await openWorkspace(await flowProjects.create({ ...next, title: next.title.trim() || emptyDiagram.title }, null))
       })
     }
   }, [assistantDiagram, diagram, disabled])
@@ -160,30 +184,37 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
     setActive(null)
   }
 
-  function persist(next: SystemDiagram) {
-    const current = active.current
+  function persist(before: SystemDiagram, next: SystemDiagram) {
+    const current = active.current?.phase === 'ended' ? null : active.current
+    editGeneration.current += 1
+    pendingEdits.current += 1
     const id = workspace
     edits.current = edits.current.then(async () => {
       if (current) {
-        await flowCollaboration.command(current.id, { type: 'edit', diagram: next })
+        await flowCollaboration.command(current.id, { type: 'edit', before, diagram: next })
       } else if (id) {
         await flowProjects.edit(id, next)
       }
-    }).catch((failure) => setError(appError(failure).message))
+    }).catch((failure) => setError(appError(failure).message)).finally(() => { pendingEdits.current -= 1 })
   }
 
   function edit(next: SystemDiagram) {
     if (locking.current || disabled || !diagram) return
     setHistory(({ past }) => ({ past: [...past.slice(-39), diagram], future: [] }))
-    showEdit(next)
+    showEdit(diagram, next)
   }
 
-  function showEdit(next: SystemDiagram) {
+  function setCurrentDiagram(next: SystemDiagram | null) {
+    diagramRef.current = next
     setDiagram(next)
+  }
+
+  function showEdit(before: SystemDiagram, next: SystemDiagram) {
+    setCurrentDiagram(next)
     setDirty(true)
     setCode(null)
     setNotice('')
-    persist(next)
+    persist(before, next)
   }
 
   function restore(direction: 'past' | 'future') {
@@ -194,7 +225,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
     setHistory(direction === 'past' ? { past: past.slice(0, -1), future: [...future, diagram] } :
       { past: [...past, diagram], future: future.slice(0, -1) })
     if (!next.nodes.some((node) => node.id === selected)) setSelected(null)
-    showEdit(next)
+    showEdit(diagram, next)
   }
 
   function organize() {
@@ -205,7 +236,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
 
   function replace(next: SystemDiagram | null, source: DiagramProject | null, modified: boolean) {
     setHistory({ past: [], future: [] })
-    setDiagram(next)
+    setCurrentDiagram(next)
     setFile(source)
     setSelected(null)
     setDirty(modified)
@@ -214,10 +245,11 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
     setCode(null)
   }
 
-  function openWorkspace(next: FlowProject) {
+  async function openWorkspace(next: FlowProject) {
     setWorkspace(next.id)
     setPanel(null)
     replace(next.diagram, next.file, next.fileDirty)
+    if (next.returningGuest) setActive(await flowCollaboration.host(next.id))
   }
 
   function addEdge(edge: SystemEdge) {
@@ -229,6 +261,11 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
   function moveStep(id: string, position: StagePosition) {
     if (!diagram) return
     edit({ ...diagram, nodes: diagram.nodes.map((node) => node.id === id ? { ...node, position } : node) })
+  }
+
+  function renameStep(id: string, label: string) {
+    if (!diagram) return
+    edit({ ...diagram, nodes: diagram.nodes.map((node) => node.id === id ? { ...node, label } : node) })
   }
 
   function library() {
@@ -243,7 +280,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
   function create(event: FormEvent) {
     event.preventDefault()
     void perform('Criando projeto…', async () => {
-      openWorkspace(await flowProjects.create({ ...emptyDiagram, title: title.trim() }, null))
+      await openWorkspace(await flowProjects.create({ ...emptyDiagram, title: title.trim() }, null))
       setTitle('')
     })
   }
@@ -251,7 +288,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
   function importDiagram() {
     void perform('Importando fluxograma…', async () => {
       const opened = await systemDiagram.open()
-      if (opened) openWorkspace(await flowProjects.create(opened.diagram, opened.project))
+      if (opened) await openWorkspace(await flowProjects.create(opened.diagram, opened.project))
     })
   }
 
@@ -268,22 +305,62 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
     void perform('Iniciando conexão…', async () => {
       const view = panel === 'share' && workspace
         ? await flowCollaboration.host(workspace, name)
-        : await flowCollaboration.join(invite, name)
+        : await joinProject(invite, name)
       setActive(view)
       setPanel(null)
       setInvite('')
     })
   }
 
-  function sessionCommand(type: 'accept' | 'reject' | 'passEdit') {
+  function saveGuestAccess(access: SavedFlowAccess) {
+    // The first 42 characters identify the host endpoint, independently of the ticket.
+    const next = [access, ...readSavedAccess().filter((entry) => entry.code.slice(0, 42) !== access.code.slice(0, 42))]
+    localStorage.setItem(savedAccessKey, JSON.stringify(next))
+    setSavedAccess(next)
+  }
+
+  function forgetAccess(code: string) {
+    const next = readSavedAccess().filter((entry) => entry.code !== code)
+    localStorage.setItem(savedAccessKey, JSON.stringify(next))
+    setSavedAccess(next)
+  }
+
+  function joinProject(code: string, name: string) {
+    guestName.current = name.trim()
+    savedTicket.current = null
+    return flowCollaboration.join(code, name)
+  }
+
+  function returnToProject(access: SavedFlowAccess) {
+    void perform('Abrindo projeto compartilhado…', async () => {
+      setActive(await joinProject(access.code, access.name))
+      setPanel(null)
+    })
+  }
+
+  function sessionCommand(command: FlowCommand, label: string) {
     const id = active.current?.id
-    if (!id) return
-    void perform(type === 'passEdit' ? 'Transferindo edição…' : 'Respondendo ao pedido…', async () => {
-      await flowCollaboration.command(id, { type })
-      if (type === 'passEdit' && active.current?.id === id) {
-        const next = await flowCollaboration.view(id, active.current.revision)
-        if (next && active.current?.id === id) setActive(next)
-      }
+    if (id) void perform(label, () => flowCollaboration.command(id, command))
+  }
+
+  function closeSharing() {
+    void perform('Encerrando conexão…', async () => {
+      await endSession()
+      if (guest) replace(null, null, false)
+    })
+  }
+
+  function leaveStudio() {
+    if (!active.current) {
+      exit()
+      return
+    }
+    void perform('Fechando projeto…', async () => {
+      await endSession()
+      setWorkspace(null)
+      setPanel(null)
+      replace(null, null, false)
+      exit()
     })
   }
 
@@ -349,23 +426,34 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
   const hasProject = workspace !== null || diagram !== null
 
   return <>
-    <Header onDiagrams={exit} diagramActive />
+    <Header onDiagrams={leaveStudio} diagramActive />
     <main className="system-design" aria-label="Fluxogramas de sistema">
       <header className="system-design-toolbar">
         <div className="system-doc">
           <h1><GitBranch size={19} />{hasProject ? diagram?.title || 'Projeto sem título' : 'Meus projetos'}</h1>
           {file && <code title={file.path}>{file.path}</code>}
         </div>
+        {session?.phase === 'connected' && <div className="flow-share-presence" aria-label="Compartilhamento do fluxograma">
+          <Users size={17} />
+          <span><strong>{session.peer}</strong> está no fluxograma</span>
+        </div>}
         <div className="system-doc-actions">
+          {session?.phase === 'connected' && <>
+            {!guest && session.trustedPeer && <button className="button" disabled={!!busy}
+              onClick={() => sessionCommand({ type: 'revoke' }, 'Revogando acesso…')}>Revogar acesso salvo</button>}
+            <button className="button" disabled={!!busy} onClick={closeSharing}>
+              {guest ? 'Sair da sessão' : 'Encerrar sessão'}
+            </button>
+          </>}
           {hasProject ? <>
             <button className="icon-button" disabled={!!busy} onClick={library}
               aria-label="Voltar para Meus projetos" title="Voltar para Meus projetos"><ArrowLeft size={17} /></button>
             {workspace && !session && <button className="button design-accent" disabled={!!busy}
               onClick={() => setPanel(panel === 'share' ? null : 'share')}><Users size={15} />Compartilhar</button>}
             {guest ? <button className="icon-button" disabled={!!busy} onClick={saveCopy}
-              aria-label="Salvar cópia" title="Salvar cópia"><Copy size={17} /></button>
-              : <button className="icon-button" disabled={!diagram || !!busy} onClick={save}
-                aria-label="Salvar arquivo" title="Salvar arquivo"><Save size={17} /></button>}
+              aria-label="Salvar cópia" title="Salvar cópia"><Copy size={17} /></button> : null}
+            <button className="icon-button" disabled={!diagram || !!busy} onClick={save}
+              aria-label="Salvar arquivo" title="Salvar arquivo"><Save size={17} /></button>
             <button className="icon-button" disabled={!diagram || !!busy} onClick={exportMarkdown}
               aria-label="Exportar Markdown" title="Exportar Markdown"><FileDown size={17} /></button>
           </> : <>
@@ -392,9 +480,16 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
         </button>
         <button type="button" className="button" disabled={!!busy} onClick={() => setPanel(null)}>Cancelar</button>
       </form>}
-      {session && <div className="flow-share-bar" aria-label="Compartilhamento do fluxograma">
+      {session && session.phase !== 'connected' && <div className="flow-share-bar" aria-label="Compartilhamento do fluxograma">
         <Users size={17} />
         {session.phase === 'starting' && <span role="status">Estabelecendo conexão…</span>}
+        {session.phase === 'available' && <>
+          <span>{session.trustedPeer ? <><strong>{session.trustedPeer}</strong> tem acesso salvo</> : 'Compartilhamento ativo'}</span>
+          <button className="button design-accent" disabled={!!busy}
+            onClick={() => sessionCommand({ type: 'invite' }, 'Gerando convite…')}>Gerar convite</button>
+          {session.trustedPeer && <button className="button" disabled={!!busy}
+            onClick={() => sessionCommand({ type: 'revoke' }, 'Revogando acesso…')}>Revogar acesso salvo</button>}
+        </>}
         {session.phase === 'joining' && <span role="status">Aguardando aprovação do dono do projeto…</span>}
         {session.code && <><label>Código do convite
           <input className="flow-invite-code" readOnly value={session.code} onFocus={(event) => event.target.select()} />
@@ -408,26 +503,24 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
         </>}
         {session.phase === 'approval' && <>
           <span role="status"><strong>{session.peer}</strong> quer entrar neste projeto.</span>
-          <button className="button design-accent" disabled={!!busy} onClick={() => sessionCommand('accept')}>Aceitar</button>
-          <button className="button" disabled={!!busy} onClick={() => sessionCommand('reject')}>Recusar</button>
-        </>}
-        {session.phase === 'connected' && <>
-          <span><strong>{session.peer}</strong> está no fluxograma</span>
-          {session.canEdit
-            ? <button className="button" disabled={!!busy} onClick={() => sessionCommand('passEdit')}>Passar edição</button>
-            : <small>Editando · {session.peer}</small>}
+          <label>
+            <input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} />
+            Permitir que volte enquanto este projeto estiver aberto
+          </label>
+          {remember && session.trustedPeer && session.trustedPeer !== session.peer &&
+            <small>Substitui o acesso salvo de {session.trustedPeer}.</small>}
+          <button className="button design-accent" disabled={!!busy}
+            onClick={() => sessionCommand({ type: 'accept', remember }, 'Aceitando pedido…')}>Aceitar</button>
+          <button className="button" disabled={!!busy}
+            onClick={() => sessionCommand({ type: 'reject' }, 'Recusando pedido…')}>Recusar</button>
         </>}
         {session.phase === 'ended' && <span role="status">{session.message}</span>}
-        <button className="button flow-end-share" disabled={!!busy} onClick={() => {
-          if (guest && !diagram) library()
-          else void perform('Encerrando conexão…', async () => {
-            await endSession()
-            if (guest) replace(null, null, false)
-          })
-        }}>{session.phase === 'ended' ? 'Fechar sessão' : 'Encerrar sessão'}</button>
+        <button className="button flow-end-share" disabled={!!busy} onClick={closeSharing}>
+          {session.phase === 'ended' ? 'Fechar sessão' : guest ? 'Cancelar entrada' : 'Encerrar sessão'}
+        </button>
       </div>}
-      {(busy || error || notice) && <div className={'system-message' + (error ? ' is-error' : '')} role={error ? 'alert' : 'status'}>
-        {busy && <LoaderCircle size={15} className="spin" />}{error || busy || notice}
+      {(busy || error || notice || (session?.phase === 'connected' && session.message)) && <div className={'system-message' + (error ? ' is-error' : '')} role={error ? 'alert' : 'status'}>
+        {busy && <LoaderCircle size={15} className="spin" />}{error || busy || notice || session?.message}
       </div>}
       {!hasProject ? <section className="flow-project-library" aria-label="Projetos de fluxograma">
         {entries.length ? <ul>
@@ -440,16 +533,27 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
             <button className="icon-button" disabled={!!busy || !!session} aria-label={'Excluir ' + (entry.title || 'projeto sem título')}
               onClick={() => remove(entry)}><Trash2 size={15} /></button>
           </li>)}
-        </ul> : <p>Crie ou importe um fluxograma para começar.</p>}
+        </ul> : !savedAccess.length && <p>Crie ou importe um fluxograma para começar.</p>}
+        {!!savedAccess.length && <section className="flow-return-projects" aria-label="Acessos salvos">
+          <h2>Acessos salvos</h2>
+          <ul>{savedAccess.map((access) => <li key={access.code}>
+            <button className="flow-open-project" disabled={!!busy || !!session} onClick={() => returnToProject(access)}>
+              <span className="flow-card-preview"><div className="flow-saved-preview"><Users size={30} /><span>{access.host}</span></div></span>
+              <span className="flow-card-title"><GitBranch size={15} />{access.title || 'Projeto sem título'}</span>
+            </button>
+            <button className="icon-button" disabled={!!busy || !!session} aria-label={'Esquecer acesso a ' + access.title}
+              title="Esquecer acesso" onClick={() => forgetAccess(access.code)}><Trash2 size={15} /></button>
+          </li>)}</ul>
+        </section>}
       </section> : <div className="system-design-body">
         <SystemFlowCanvas key={fitKey} diagram={diagram} selected={selected}
           choose={(id) => { setSelected(id); if (id) setTab('flow') }} connect={addEdge}
-          move={moveStep} disabled={disabled} sendCursor={session?.phase === 'connected' ? sendCursor : undefined}
+          move={moveStep} rename={renameStep} disabled={disabled} sendCursor={session?.phase === 'connected' ? sendCursor : undefined}
           peerCursor={session?.cursor && session.peer ? { ...session.cursor, name: session.peer } : null} />
         <aside className="system-design-panel system-inspector">
           <div className="system-panel-tabs" aria-label="Detalhes do fluxograma">
             <button className="button" aria-pressed={tab === 'flow'} onClick={() => setTab('flow')}><GitBranch size={14} />Fluxo</button>
-            {!guest && <button className="button" aria-pressed={tab === 'code'} onClick={() => setTab('code')}><Braces size={14} />Código</button>}
+            <button className="button" aria-pressed={tab === 'code'} onClick={() => setTab('code')}><Braces size={14} />Código</button>
           </div>
           {tab === 'flow' ? <>
             <div className="flow-edit-actions" aria-label="Edição do fluxograma">

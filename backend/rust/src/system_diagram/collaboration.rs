@@ -1,4 +1,6 @@
 use super::{
+    flow_access::{self, Guest, Sharing},
+    flow_merge::merge,
     model::{invalid, Diagram, Position},
     workspaces,
 };
@@ -6,10 +8,11 @@ use crate::error::{AppError, Result};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use iroh::{
     endpoint::{presets, Connection, RecvStream, SendStream},
-    Endpoint, EndpointAddr, EndpointId,
+    Endpoint, EndpointAddr, EndpointId, SecretKey,
 };
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::VecDeque,
     future::Future,
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -20,16 +23,17 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     sync::{mpsc, oneshot},
     task::AbortHandle,
-    time::{timeout, timeout_at, Instant},
+    time::{sleep_until, timeout, Instant},
 };
 use uuid::Uuid;
 
-const ALPN: &[u8] = b"jujubasql/flow/2";
+const ALPN: &[u8] = b"jujubasql/flow/3";
 const INVITATION_LIFETIME: Duration = Duration::from_secs(600);
 const APPROVAL_TIME: Duration = Duration::from_secs(120);
 const DIAL_TIME: Duration = Duration::from_secs(25);
 const IO_TIME: Duration = Duration::from_secs(8);
-const MAX_FRAME: usize = 128 * 1024;
+const MAX_FRAME: usize = 256 * 1024;
+const MAX_PENDING: usize = 128;
 
 #[derive(Default)]
 pub struct FlowCollaboration(Mutex<Option<Session>>);
@@ -50,6 +54,7 @@ impl Drop for Session {
 #[serde(rename_all = "camelCase")]
 enum Phase {
     Starting,
+    Available,
     Inviting,
     Joining,
     Approval,
@@ -70,29 +75,47 @@ pub struct View {
     diagram: Option<Diagram>,
     revision: u64,
     message: Option<String>,
+    trusted_peer: Option<String>,
+    return_code: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 enum Packet {
     Bye,
-    Hello { name: String, token: [u8; 16] },
-    Accepted { name: String, diagram: Diagram },
+    Hello {
+        name: String,
+        token: [u8; 16],
+    },
+    Accepted {
+        name: String,
+        diagram: Diagram,
+        return_code: Option<String>,
+    },
     Rejected,
-    Snapshot { diagram: Diagram },
-    Cursor { position: Option<Position> },
-    PassEdit,
+    Snapshot {
+        diagram: Diagram,
+        acknowledged: u64,
+    },
+    Edit {
+        before: Diagram,
+        diagram: Diagram,
+    },
+    Cursor {
+        position: Option<Position>,
+    },
 }
 
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum Command {
     End,
-    Accept,
+    Accept { remember: bool },
     Reject,
-    PassEdit,
+    Invite,
+    Revoke,
     Cursor { position: Option<Position> },
-    Edit { diagram: Diagram },
+    Edit { before: Diagram, diagram: Diagram },
 }
 
 struct Request {
@@ -130,6 +153,8 @@ impl FlowCollaboration {
             diagram: None,
             revision: 0,
             message: None,
+            trusted_peer: None,
+            return_code: None,
         };
         let view = Arc::new(Mutex::new(initial.clone()));
         let (tx, rx) = mpsc::channel(24);
@@ -185,8 +210,8 @@ fn change(state: &Mutex<View>, update: impl FnOnce(&mut View)) {
     }
 }
 
-async fn endpoint(host: bool) -> Result<Endpoint> {
-    let mut builder = Endpoint::builder(presets::N0);
+async fn endpoint(host: bool, key: SecretKey) -> Result<Endpoint> {
+    let mut builder = Endpoint::builder(presets::N0).secret_key(key);
     if host {
         builder = builder.alpns(vec![ALPN.to_vec()]);
     }
@@ -225,107 +250,227 @@ fn alias(name: &str) -> Result<String> {
 
 async fn host(
     endpoint: Endpoint,
-    name: String,
+    mut sharing: Sharing,
     mut diagram: Diagram,
-    project: Option<SharedProject>,
+    project: SharedProject,
+    mut invitation: Option<(Uuid, Instant)>,
     state: Arc<Mutex<View>>,
     mut commands: Inbox,
 ) -> Result<()> {
-    let token = Uuid::new_v4();
-    change(&state, |view| {
-        view.phase = Phase::Inviting;
-        view.code = Some(encode(endpoint.id(), token));
-    });
-
-    let (connection, mut send, mut recv, peer) =
-        timeout(INVITATION_LIFETIME, invited(&endpoint, token))
-            .await
-            .map_err(|_| AppError::new("expired", "O convite expirou. Crie outro código."))??;
-    change(&state, |view| {
-        view.phase = Phase::Approval;
-        view.peer = Some(peer);
-        view.code = None;
-    });
-
-    let deadline = Instant::now() + APPROVAL_TIME;
     loop {
-        let request = tokio::select! {
-            _ = connection.closed() => return Err(disconnected()),
-            request = timeout_at(deadline, commands.recv()) =>
-                request.map_err(|_| AppError::new("expired", "O pedido de entrada expirou."))?
-                    .ok_or_else(disconnected)?,
+        idle_view(&state, &endpoint, &sharing, invitation);
+        let mut next = std::pin::pin!(incoming(&endpoint));
+        let attempt = loop {
+            let expires = invitation.map(|(_, expires)| expires);
+            tokio::select! {
+                result = &mut next => break result?,
+                _ = wait_for_expiry(expires), if expires.is_some() => {
+                    invitation = None;
+                    idle_view(&state, &endpoint, &sharing, invitation);
+                }
+                request = commands.recv() => {
+                    let request = request.ok_or_else(disconnected)?;
+                    let result = match request.command {
+                        Command::Invite => {
+                            invitation = Some(new_invitation());
+                            idle_view(&state, &endpoint, &sharing, invitation);
+                            Ok(())
+                        }
+                        Command::Revoke => revoke(&project, &mut sharing, &state),
+                        Command::Edit { before, diagram: after } =>
+                            apply_edit(&state, Some(&project), &mut diagram, &before, &after),
+                        _ => Err(operation_unavailable()),
+                    };
+                    let _ = request.response.send(result);
+                }
+            }
         };
-        match request.command {
-            Command::Accept => {
-                send_packet(
-                    &mut send,
-                    Packet::Accepted {
-                        name,
-                        diagram: diagram.clone(),
-                    },
-                )
-                .await?;
-                let _ = request.response.send(Ok(()));
-                break;
+        let (connection, mut send, mut recv, peer, candidate) = attempt;
+        let peer_id = connection.remote_id();
+        let saved = sharing
+            .guest
+            .as_ref()
+            .filter(|guest| guest.id == peer_id && matches_token(candidate, guest.ticket));
+        let return_code = if let Some(guest) = saved {
+            change(&state, |view| view.peer = Some(guest.name.clone()));
+            Some(encode(endpoint.id(), guest.ticket))
+        } else if invitation.is_some_and(|(token, expiry)| {
+            Instant::now() < expiry && matches_token(candidate, token)
+        }) {
+            invitation = None;
+            change(&state, |view| {
+                view.phase = Phase::Approval;
+                view.peer = Some(peer.clone());
+                view.code = None;
+            });
+            let Some(remember) =
+                approve(&connection, &mut commands, &state, &project, &mut diagram).await
+            else {
+                reject(connection, send);
+                continue;
+            };
+            if remember {
+                let ticket = Uuid::new_v4();
+                let previous = sharing.guest.replace(Guest {
+                    id: peer_id,
+                    name: peer,
+                    ticket,
+                });
+                if flow_access::write(&project.directory, project.id, &sharing).is_ok() {
+                    change(&state, |view| {
+                        view.trusted_peer = sharing.guest.as_ref().map(|guest| guest.name.clone())
+                    });
+                    Some(encode(endpoint.id(), ticket))
+                } else {
+                    sharing.guest = previous;
+                    change(&state, |view| {
+                        view.message =
+                            Some("A pessoa entrou, mas não foi possível salvar o acesso.".into())
+                    });
+                    None
+                }
+            } else {
+                None
             }
-            Command::Reject => {
-                send_packet(&mut send, Packet::Rejected).await?;
-                let _ = send.finish();
-                let _ = request.response.send(Ok(()));
-                // Let QUIC deliver the last frame before the endpoint is dropped.
-                let _ = timeout(IO_TIME, send.stopped()).await;
-                return Err(AppError::new(
-                    "declined",
-                    "O pedido de entrada foi recusado.",
-                ));
-            }
-            _ => {
-                let _ = request.response.send(Err(unavailable()));
-            }
+        } else {
+            reject(connection, send);
+            continue;
+        };
+        if send_packet(
+            &mut send,
+            Packet::Accepted {
+                name: sharing.name.clone(),
+                diagram: diagram.clone(),
+                return_code,
+            },
+        )
+        .await
+        .is_err()
+        {
+            continue;
         }
-    }
 
-    let result = connected(
-        &mut send,
-        &mut recv,
-        &state,
-        &mut commands,
-        &mut diagram,
-        true,
-        project,
-    )
-    .await;
-    endpoint.close().await;
-    result
+        let result = connected(
+            &mut send,
+            &mut recv,
+            &state,
+            &mut commands,
+            &mut diagram,
+            Some((&project, &mut sharing)),
+        )
+        .await;
+        if result.is_ok_and(|ended_here| ended_here) {
+            return Ok(());
+        }
+        // Keep the project's listener available when a guest leaves.
+    }
 }
 
-async fn invited(
+fn new_invitation() -> (Uuid, Instant) {
+    (Uuid::new_v4(), Instant::now() + INVITATION_LIFETIME)
+}
+
+fn idle_view(
+    state: &Mutex<View>,
     endpoint: &Endpoint,
-    token: Uuid,
-) -> Result<(Connection, SendStream, RecvStream, String)> {
+    sharing: &Sharing,
+    invitation: Option<(Uuid, Instant)>,
+) {
+    change(state, |view| {
+        view.phase = if invitation.is_some() {
+            Phase::Inviting
+        } else {
+            Phase::Available
+        };
+        view.code = invitation.map(|(token, _)| encode(endpoint.id(), token));
+        view.peer = None;
+        view.cursor = None;
+        view.can_edit = true;
+        view.trusted_peer = sharing.guest.as_ref().map(|guest| guest.name.clone());
+    });
+}
+
+async fn wait_for_expiry(expires: Option<Instant>) {
+    if let Some(expires) = expires {
+        sleep_until(expires).await;
+    }
+}
+
+async fn approve(
+    connection: &Connection,
+    commands: &mut Inbox,
+    state: &Mutex<View>,
+    project: &SharedProject,
+    diagram: &mut Diagram,
+) -> Option<bool> {
+    let expires = Instant::now() + APPROVAL_TIME;
+    loop {
+        let request = tokio::select! {
+            _ = connection.closed() => return None,
+            _ = sleep_until(expires) => return None,
+            request = commands.recv() => request?,
+        };
+        let result = match request.command {
+            Command::Accept { remember } => {
+                let _ = request.response.send(Ok(()));
+                return Some(remember);
+            }
+            Command::Reject => {
+                let _ = request.response.send(Ok(()));
+                return None;
+            }
+            Command::Edit {
+                before,
+                diagram: after,
+            } => apply_edit(state, Some(project), diagram, &before, &after),
+            _ => Err(operation_unavailable()),
+        };
+        let _ = request.response.send(result);
+    }
+}
+
+fn revoke(project: &SharedProject, sharing: &mut Sharing, state: &Mutex<View>) -> Result<()> {
+    let previous = sharing.guest.take();
+    if let Err(error) = flow_access::write(&project.directory, project.id, sharing) {
+        sharing.guest = previous;
+        return Err(error);
+    }
+    change(state, |view| view.trusted_peer = None);
+    Ok(())
+}
+
+fn reject(connection: Connection, mut send: SendStream) {
+    tokio::spawn(async move {
+        let _ = send_packet(&mut send, Packet::Rejected).await;
+        let _ = send.finish();
+        let _ = timeout(IO_TIME, send.stopped()).await;
+        drop(connection);
+    });
+}
+
+fn matches_token(candidate: [u8; 16], token: Uuid) -> bool {
+    candidate
+        .iter()
+        .zip(token.as_bytes())
+        .fold(0, |diff, (a, b)| diff | (a ^ b))
+        == 0
+}
+
+async fn incoming(
+    endpoint: &Endpoint,
+) -> Result<(Connection, SendStream, RecvStream, String, [u8; 16])> {
     while let Some(incoming) = endpoint.accept().await {
         let attempt = timeout(IO_TIME, async {
             let connection = incoming.await.map_err(|_| unavailable())?;
             let (send, mut recv) = connection.accept_bi().await.map_err(|_| unavailable())?;
-            let Packet::Hello {
-                name,
-                token: candidate,
-            } = read_packet(&mut recv).await?
-            else {
+            let Packet::Hello { name, token } = read_packet(&mut recv).await? else {
                 return Err(unavailable());
             };
-            let diff = candidate
-                .iter()
-                .zip(token.as_bytes())
-                .fold(0, |diff, (a, b)| diff | (a ^ b));
-            if diff != 0 {
-                return Err(unavailable());
-            }
-            Ok((connection, send, recv, alias(&name)?))
+            Ok((connection, send, recv, alias(&name)?, token))
         })
         .await;
-        if let Ok(Ok(invitation)) = attempt {
-            return Ok(invitation);
+        if let Ok(Ok(attempt)) = attempt {
+            return Ok(attempt);
         }
     }
     Err(disconnected())
@@ -351,24 +496,30 @@ async fn join(
     .await
     .map_err(|_| unavailable())??;
     change(&state, |view| view.phase = Phase::Joining);
-    let (name, mut diagram) = match timeout(APPROVAL_TIME, read_packet(&mut recv)).await {
-        Ok(Ok(Packet::Accepted { name, diagram })) => (alias(&name)?, diagram),
-        Ok(Ok(Packet::Rejected)) => {
-            return Err(AppError::new(
-                "declined",
-                "O dono recusou o pedido de entrada.",
-            ))
-        }
-        _ => {
-            return Err(AppError::new(
-                "approval",
-                "O convite foi encerrado ou expirou.",
-            ))
-        }
-    };
+    let (name, mut diagram, return_code) =
+        match timeout(APPROVAL_TIME, read_packet(&mut recv)).await {
+            Ok(Ok(Packet::Accepted {
+                name,
+                diagram,
+                return_code,
+            })) => (alias(&name)?, diagram, return_code),
+            Ok(Ok(Packet::Rejected)) => {
+                return Err(AppError::new(
+                    "declined",
+                    "O código ou o acesso salvo não está disponível neste projeto.",
+                ))
+            }
+            _ => {
+                return Err(AppError::new(
+                    "approval",
+                    "O convite foi encerrado ou expirou.",
+                ))
+            }
+        };
     diagram.validate_draft()?;
     change(&state, |view| {
         view.peer = Some(name);
+        view.return_code = return_code;
         view.diagram = Some(diagram.clone());
         view.revision += 1;
     });
@@ -379,12 +530,11 @@ async fn join(
         &state,
         &mut commands,
         &mut diagram,
-        false,
         None,
     )
     .await;
     endpoint.close().await;
-    result
+    result.map(|_| ())
 }
 
 async fn connected(
@@ -393,15 +543,18 @@ async fn connected(
     state: &Mutex<View>,
     commands: &mut Inbox,
     diagram: &mut Diagram,
-    mut can_edit: bool,
-    project: Option<SharedProject>,
-) -> Result<()> {
+    mut owner: Option<(&SharedProject, &mut Sharing)>,
+) -> Result<bool> {
     change(state, |view| {
         view.phase = Phase::Connected;
-        view.can_edit = can_edit;
+        view.can_edit = true;
+        view.code = None;
     });
+    let mut acknowledged = 0;
+    let mut sequence = 0;
+    let mut pending = VecDeque::new();
     loop {
-        // Retain the read future while handling local commands, including partial frames.
+        // Keep the read future alive while local commands run so partial frames are retained.
         let mut packet = std::pin::pin!(read_packet(recv));
         let received = loop {
             tokio::select! {
@@ -412,27 +565,37 @@ async fn connected(
                         Command::End => {
                             let result = send_packet(send, Packet::Bye).await;
                             let _ = send.finish();
-                            let _ = timeout(IO_TIME, send.stopped()).await;
+                            let _ = timeout(Duration::from_millis(500), send.stopped()).await;
                             let _ = request.response.send(result);
-                            return Ok(());
+                            return Ok(true);
                         }
-                        Command::Edit { diagram: next } if can_edit => {
-                            match save(project.as_ref(), &next) {
-                                Ok(()) => {
-                                    *diagram = next;
-                                    send_packet(send, Packet::Snapshot { diagram: diagram.clone() }).await
+                        Command::Edit { before, diagram: after } => {
+                            if let Some((project, _)) = owner.as_ref() {
+                                match apply_edit(state, Some(project), diagram, &before, &after) {
+                                    Ok(()) => send_packet(send, Packet::Snapshot { diagram: diagram.clone(), acknowledged }).await,
+                                    Err(error) => Err(error),
                                 }
-                                Err(error) => Err(error),
+                            } else if pending.len() >= MAX_PENDING {
+                                Err(invalid("Aguarde a sincronização para continuar editando."))
+                            } else {
+                                match apply_edit(state, None, diagram, &before, &after) {
+                                    Ok(()) => {
+                                        let message = Packet::Edit { before: before.clone(), diagram: after.clone() };
+                                        sequence += 1;
+                                        pending.push_back((sequence, before, after));
+                                        send_packet(send, message).await
+                                    }
+                                    Err(error) => Err(error),
+                                }
                             }
                         }
-                        Command::PassEdit if can_edit => {
-                            can_edit = false;
-                            change(state, |view| view.can_edit = false);
-                            send_packet(send, Packet::PassEdit).await
-                        }
+                        Command::Revoke => match owner.as_mut() {
+                            Some((project, sharing)) => revoke(project, sharing, state),
+                            None => Err(operation_unavailable()),
+                        },
                         Command::Cursor { position } if valid_position(position) =>
                             send_packet(send, Packet::Cursor { position }).await,
-                        _ => Err(invalid("A edição está com a outra pessoa.")),
+                        _ => Err(operation_unavailable()),
                     };
                     let lost = result.as_ref().err().is_some_and(|error| error.kind == "collaboration");
                     let _ = request.response.send(result);
@@ -443,21 +606,37 @@ async fn connected(
             }
         };
         match received {
-            Packet::Bye => return Ok(()),
+            Packet::Bye => return Ok(false),
             Packet::Cursor { position } if valid_position(position) => {
                 change(state, |view| view.cursor = position);
             }
-            Packet::PassEdit if !can_edit => {
-                can_edit = true;
-                change(state, |view| view.can_edit = true);
+            Packet::Edit {
+                before,
+                diagram: after,
+            } if owner.is_some() => {
+                let project = owner.as_ref().map(|(project, _)| *project);
+                apply_edit(state, project, diagram, &before, &after)?;
+                acknowledged += 1;
+                send_packet(
+                    send,
+                    Packet::Snapshot {
+                        diagram: diagram.clone(),
+                        acknowledged,
+                    },
+                )
+                .await?;
             }
-            Packet::Snapshot { diagram: next } if !can_edit => {
-                save(project.as_ref(), &next)?;
+            Packet::Snapshot {
+                diagram: mut next,
+                acknowledged,
+            } if owner.is_none() => {
+                next.validate_draft()?;
+                pending.retain(|(sequence, _, _)| *sequence > acknowledged);
+                for (_, before, after) in &pending {
+                    merge(&mut next, before, after);
+                }
                 *diagram = next;
-                change(state, |view| {
-                    view.revision += 1;
-                    view.diagram = Some(diagram.clone());
-                });
+                publish(state, diagram);
             }
             _ => {
                 return Err(AppError::new(
@@ -469,12 +648,34 @@ async fn connected(
     }
 }
 
-fn save(project: Option<&SharedProject>, diagram: &Diagram) -> Result<()> {
-    diagram.validate_draft()?;
+fn apply_edit(
+    state: &Mutex<View>,
+    project: Option<&SharedProject>,
+    diagram: &mut Diagram,
+    before: &Diagram,
+    after: &Diagram,
+) -> Result<()> {
+    before.validate_draft()?;
+    after.validate_draft()?;
+    let mut next = diagram.clone();
+    merge(&mut next, before, after);
     if let Some(project) = project {
-        workspaces::update(&project.directory, project.id, diagram.clone())?;
+        workspaces::update(&project.directory, project.id, next.clone())?;
     }
+    *diagram = next;
+    publish(state, diagram);
     Ok(())
+}
+
+fn publish(state: &Mutex<View>, diagram: &Diagram) {
+    change(state, |view| {
+        view.revision += 1;
+        view.diagram = Some(diagram.clone());
+    });
+}
+
+fn operation_unavailable() -> AppError {
+    invalid("A ação não está disponível nesta sessão.")
 }
 
 fn valid_position(position: Option<Position>) -> bool {
@@ -525,31 +726,58 @@ pub async fn flow_collab_host(
     app: AppHandle,
     sessions: State<'_, FlowCollaboration>,
     id: Uuid,
-    name: String,
+    name: Option<String>,
 ) -> Result<View> {
-    let name = alias(&name)?;
     let directory = workspaces::directory(&app)?;
     let diagram = workspaces::load(&directory, id)?.diagram;
+    let saved = flow_access::read(&directory, id)?;
+    let (sharing, invitation) = match name {
+        Some(name) => {
+            let name = alias(&name)?;
+            let mut sharing = saved.unwrap_or_else(|| Sharing::new(name.clone()));
+            sharing.name = name;
+            (sharing, Some(new_invitation()))
+        }
+        None => (
+            saved
+                .filter(|sharing| sharing.guest.is_some())
+                .ok_or_else(operation_unavailable)?,
+            None,
+        ),
+    };
     let project = SharedProject { directory, id };
     sessions.start(Some(id), |state, commands| async move {
-        let endpoint = endpoint(true).await?;
+        let endpoint = endpoint(true, SecretKey::from_bytes(&sharing.key)).await?;
         timeout(DIAL_TIME, endpoint.online())
             .await
             .map_err(|_| unavailable())?;
-        host(endpoint, name, diagram, Some(project), state, commands).await
+        let result = host(
+            endpoint.clone(),
+            sharing,
+            diagram,
+            project,
+            invitation,
+            state,
+            commands,
+        )
+        .await;
+        endpoint.close().await;
+        result
     })
 }
 
 #[tauri::command]
 pub async fn flow_collab_join(
+    app: AppHandle,
     sessions: State<'_, FlowCollaboration>,
     code: String,
     name: String,
 ) -> Result<View> {
     let (host_id, token) = decode(&code)?;
     let name = alias(&name)?;
+    let key = flow_access::guest_key(&workspaces::directory(&app)?)?;
     sessions.start(None, |state, commands| async move {
-        let endpoint = endpoint(false).await?;
+        let endpoint = endpoint(false, key).await?;
         join(
             endpoint,
             EndpointAddr::new(host_id),
@@ -620,7 +848,7 @@ pub fn flow_project_edit(
     let guard = sessions.0.lock().map_err(|_| unavailable())?;
     if let Some(session) = guard.as_ref() {
         let view = session.view.lock().map_err(|_| unavailable())?;
-        if view.project_id == Some(id) {
+        if view.project_id == Some(id) && view.phase != Phase::Ended {
             return Err(invalid(
                 "Este projeto está em uma sessão de compartilhamento.",
             ));
@@ -663,65 +891,111 @@ mod tests {
         .unwrap()
     }
 
-    #[tokio::test]
-    async fn real_invitation_approval_cursors_and_editing() {
-        let server = Endpoint::builder(presets::Minimal)
-            .alpns(vec![ALPN.to_vec()])
-            .bind()
-            .await
-            .unwrap();
-        let port = server
+    async fn test_endpoint(secret: SecretKey, relay: bool, host: bool) -> Endpoint {
+        let mut builder = if relay {
+            Endpoint::builder(presets::N0).clear_ip_transports()
+        } else {
+            Endpoint::builder(presets::Minimal)
+        };
+        if host {
+            builder = builder.alpns(vec![ALPN.to_vec()]);
+        }
+        let endpoint = builder.secret_key(secret).bind().await.unwrap();
+        if relay && host {
+            timeout(DIAL_TIME, endpoint.online()).await.unwrap();
+        }
+        endpoint
+    }
+
+    fn address(endpoint: &Endpoint, relay: bool) -> EndpointAddr {
+        let address = EndpointAddr::new(endpoint.id());
+        if relay {
+            return address;
+        }
+        let port = endpoint
             .bound_sockets()
             .into_iter()
-            .find(|address| address.is_ipv4())
+            .find(|ip| ip.is_ipv4())
             .unwrap()
             .port();
-        let address = EndpointAddr::new(server.id()).with_ip_addr(([127, 0, 0, 1], port).into());
-        let client = Endpoint::builder(presets::Minimal).bind().await.unwrap();
-        exercise_session(server, client, address).await;
+        address.with_ip_addr(([127, 0, 0, 1], port).into())
+    }
+
+    #[tokio::test]
+    async fn real_invitation_approval_cursors_and_editing() {
+        exercise_session(false).await;
     }
 
     #[tokio::test]
     #[ignore = "requer acesso aos relays públicos do Iroh"]
     async fn invitation_uses_public_relay_with_direct_ip_disabled() {
-        let server = Endpoint::builder(presets::N0)
-            .clear_ip_transports()
-            .alpns(vec![ALPN.to_vec()])
-            .bind()
-            .await
-            .unwrap();
-        timeout(DIAL_TIME, server.online()).await.unwrap();
-        let address = EndpointAddr::new(server.id());
-        let client = Endpoint::builder(presets::N0)
-            .clear_ip_transports()
-            .bind()
-            .await
-            .unwrap();
-        exercise_session(server, client, address).await;
+        exercise_session(true).await;
     }
 
-    async fn exercise_session(server: Endpoint, client: Endpoint, address: EndpointAddr) {
+    async fn exercise_session(relay: bool) {
+        let directory = tempfile::tempdir().unwrap();
+        let project = SharedProject {
+            id: Uuid::new_v4(),
+            directory: directory.path().to_owned(),
+        };
+        let mut base = diagram("Projeto");
+        for id in ["processo", "fim"] {
+            base.nodes.push(super::super::model::Node {
+                id: id.into(),
+                kind: super::super::model::Kind::Action,
+                label: id.into(),
+                detail: String::new(),
+                position: None,
+            });
+        }
+        let workspace = workspaces::Workspace {
+            id: project.id,
+            diagram: base.clone(),
+            file: None,
+            file_dirty: false,
+            returning_guest: false,
+        };
+        std::fs::write(
+            project.directory.join(format!("{}.json", project.id)),
+            serde_json::to_vec(&workspace).unwrap(),
+        )
+        .unwrap();
+        let sharing = Sharing::new("Ana".into());
+        let server = test_endpoint(SecretKey::from_bytes(&sharing.key), relay, true).await;
+        let destination = address(&server, relay);
+        let guest_key = flow_access::guest_key(&project.directory).unwrap();
+        let client = test_endpoint(guest_key.clone(), relay, false).await;
+
         let owner = FlowCollaboration::default();
         let host = owner
-            .start(None, |state, commands| {
-                super::host(
-                    server,
-                    "Ana".into(),
-                    diagram("Projeto"),
-                    None,
+            .start(Some(project.id), |state, commands| {
+                let operation = super::host(
+                    server.clone(),
+                    sharing,
+                    base.clone(),
+                    project.clone(),
+                    Some(new_invitation()),
                     state,
                     commands,
-                )
+                );
+                async move { operation.await }
             })
             .unwrap();
         let invite = wait(&owner, |view| view.phase == Phase::Inviting).await;
         let (id, token) = decode(&invite.code.unwrap()).unwrap();
-        assert_eq!(address.id, id);
+        assert_eq!(destination.id, id);
 
         let guest = FlowCollaboration::default();
         let visitor = guest
             .start(None, |state, commands| {
-                join(client, address, token, "Bia".into(), state, commands)
+                join(
+                    client,
+                    destination.clone(),
+                    token,
+                    "Bia".into(),
+                    state,
+                    commands,
+                )
             })
             .unwrap();
 
@@ -732,18 +1006,20 @@ mod tests {
         assert!(!before_approval.can_edit);
         let host_tx = owner.sender(host.id).unwrap();
         let guest_tx = guest.sender(visitor.id).unwrap();
-        submit(host_tx.clone(), Command::Accept).await.unwrap();
+        submit(host_tx.clone(), Command::Accept { remember: true })
+            .await
+            .unwrap();
         let approved = wait(&guest, |view| view.phase == Phase::Connected).await;
+        assert!(approved.can_edit);
         assert_eq!(approved.diagram.unwrap().title, "Projeto");
         assert_eq!(approved.peer.as_deref(), Some("Ana"));
-        assert!(submit(
-            guest_tx.clone(),
-            Command::Edit {
-                diagram: diagram("Sem edição")
-            }
-        )
-        .await
-        .is_err());
+        let code = approved.return_code.unwrap();
+        assert!(
+            wait(&owner, |view| view.phase == Phase::Connected)
+                .await
+                .can_edit
+        );
+
         let position = Some(Position { x: 21.0, y: -117.0 });
         submit(guest_tx.clone(), Command::Cursor { position })
             .await
@@ -753,32 +1029,120 @@ mod tests {
             .await
             .unwrap();
         wait(&guest, |view| view.cursor == position).await;
-        submit(
-            host_tx.clone(),
-            Command::Edit {
-                diagram: diagram("Ana editou"),
-            },
-        )
-        .await
-        .unwrap();
-        wait(&guest, |view| view.revision == 2).await;
-        submit(host_tx, Command::PassEdit).await.unwrap();
-        wait(&guest, |view| view.can_edit).await;
-        submit(
-            guest_tx.clone(),
-            Command::Edit {
-                diagram: diagram("Bia editou"),
-            },
-        )
-        .await
-        .unwrap();
-        let edit = wait(&owner, |view| view.revision == 1).await;
-        assert_eq!(edit.diagram.unwrap().title, "Bia editou");
+
+        let mut host_edit = base.clone();
+        host_edit.nodes[0].label = "Ana editou".into();
+        let mut guest_edit = base.clone();
+        guest_edit.nodes[0].position = position;
+        guest_edit.nodes[1].label = "Bia editou".into();
+        let (sent_host, sent_guest) = tokio::join!(
+            submit(
+                host_tx,
+                Command::Edit {
+                    before: base.clone(),
+                    diagram: host_edit
+                }
+            ),
+            submit(
+                guest_tx.clone(),
+                Command::Edit {
+                    before: base,
+                    diagram: guest_edit
+                }
+            ),
+        );
+        sent_host.unwrap();
+        sent_guest.unwrap();
+        let merged = |view: &View| {
+            view.diagram.as_ref().is_some_and(|diagram| {
+                diagram.nodes[0].label == "Ana editou"
+                    && diagram.nodes[0].position == position
+                    && diagram.nodes[1].label == "Bia editou"
+            })
+        };
+        wait(&owner, merged).await;
+        wait(&guest, merged).await;
+        assert_eq!(
+            workspaces::load(&project.directory, project.id)
+                .unwrap()
+                .diagram
+                .nodes[1]
+                .label,
+            "Bia editou"
+        );
+
         submit(guest_tx, Command::End).await.unwrap();
         guest.end(visitor.id).unwrap();
         wait(&owner, |view| {
-            view.phase == Phase::Ended && view.cursor.is_none()
+            view.phase == Phase::Available && view.cursor.is_none()
         })
         .await;
+        owner.end(host.id).unwrap();
+        server.close().await;
+
+        let sharing = flow_access::read(&project.directory, project.id)
+            .unwrap()
+            .unwrap();
+        let reopened = test_endpoint(SecretKey::from_bytes(&sharing.key), relay, true).await;
+        let destination = address(&reopened, relay);
+        let (host_id, token) = decode(&code).unwrap();
+        assert_eq!(host_id, reopened.id());
+        let diagram = workspaces::load(&project.directory, project.id)
+            .unwrap()
+            .diagram;
+        let resumed = owner
+            .start(Some(project.id), |state, commands| {
+                super::host(
+                    reopened,
+                    sharing,
+                    diagram,
+                    project.clone(),
+                    None,
+                    state,
+                    commands,
+                )
+            })
+            .unwrap();
+
+        let stranger = test_endpoint(SecretKey::generate(), relay, false).await;
+        let attempt = guest
+            .start(None, |state, commands| {
+                join(
+                    stranger,
+                    destination.clone(),
+                    token,
+                    "Bia".into(),
+                    state,
+                    commands,
+                )
+            })
+            .unwrap();
+        let denied = wait(&guest, |view| view.phase == Phase::Ended).await;
+        assert!(denied.diagram.is_none());
+        guest.end(attempt.id).unwrap();
+
+        let client = test_endpoint(guest_key, relay, false).await;
+        let visitor = guest
+            .start(None, |state, commands| {
+                join(client, destination, token, "Bia".into(), state, commands)
+            })
+            .unwrap();
+        assert!(
+            wait(&guest, |view| view.phase == Phase::Connected)
+                .await
+                .can_edit
+        );
+        wait(&guest, merged).await;
+        submit(owner.sender(resumed.id).unwrap(), Command::Revoke)
+            .await
+            .unwrap();
+        assert!(flow_access::read(&project.directory, project.id)
+            .unwrap()
+            .unwrap()
+            .guest
+            .is_none());
+        submit(guest.sender(visitor.id).unwrap(), Command::End)
+            .await
+            .unwrap();
     }
 }

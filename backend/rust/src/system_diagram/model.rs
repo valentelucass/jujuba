@@ -52,7 +52,7 @@ pub struct Position {
     pub y: f64,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct Edge {
     pub from: String,
     pub to: String,

@@ -7,12 +7,13 @@ export interface FlowProject {
   diagram: SystemDiagram
   file: DiagramProject | null
   fileDirty: boolean
+  returningGuest?: boolean
 }
 
 export interface FlowSession {
   id: string
   projectId: string | null
-  phase: 'starting' | 'inviting' | 'joining' | 'approval' | 'connected' | 'ended'
+  phase: 'starting' | 'available' | 'inviting' | 'joining' | 'approval' | 'connected' | 'ended'
   code: string | null
   peer: string | null
   canEdit: boolean
@@ -20,9 +21,12 @@ export interface FlowSession {
   diagram: SystemDiagram | null
   revision: number
   message: string | null
+  trustedPeer?: string | null
+  returnCode?: string | null
 }
 
 export type FlowCommand =
-  | { type: 'accept' | 'reject' | 'passEdit' }
-  | { type: 'edit'; diagram: SystemDiagram }
+  | { type: 'reject' | 'invite' | 'revoke' }
+  | { type: 'accept'; remember: boolean }
+  | { type: 'edit'; before: SystemDiagram; diagram: SystemDiagram }
   | { type: 'cursor'; position: StagePosition | null }

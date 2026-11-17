@@ -1,5 +1,6 @@
 use super::{
     files::ProjectRef,
+    flow_access,
     model::{invalid, Diagram, Edge, Node},
 };
 use crate::error::{AppError, Result};
@@ -22,6 +23,8 @@ pub struct Workspace {
     pub diagram: Diagram,
     pub file: Option<ProjectRef>,
     pub file_dirty: bool,
+    #[serde(default, skip_deserializing, skip_serializing_if = "is_false")]
+    pub returning_guest: bool,
 }
 
 #[derive(Serialize)]
@@ -120,7 +123,15 @@ pub fn flow_projects(app: AppHandle) -> Result<Vec<WorkspaceEntry>> {
 
 #[tauri::command]
 pub fn flow_project_load(app: AppHandle, id: Uuid) -> Result<Workspace> {
-    load(&directory(&app)?, id)
+    let directory = directory(&app)?;
+    let mut workspace = load(&directory, id)?;
+    workspace.returning_guest =
+        flow_access::read(&directory, id)?.is_some_and(|sharing| sharing.guest.is_some());
+    Ok(workspace)
+}
+
+fn is_false(value: &bool) -> bool {
+    !value
 }
 
 #[tauri::command]
@@ -135,6 +146,7 @@ pub fn flow_project_create(
     let workspace = Workspace {
         id: Uuid::new_v4(),
         file_dirty: file.is_none(),
+        returning_guest: false,
         diagram,
         file,
     };
@@ -162,7 +174,9 @@ pub fn flow_project_link(
 #[tauri::command]
 pub fn flow_project_remove(app: AppHandle, id: Uuid) -> Result<()> {
     let _guard = CATALOG.lock().map_err(|_| catalog_error())?;
-    match fs::remove_file(path(&directory(&app)?, id)) {
+    let directory = directory(&app)?;
+    flow_access::remove(&directory, id)?;
+    match fs::remove_file(path(&directory, id)) {
         Err(error) if error.kind() != ErrorKind::NotFound => Err(catalog_error()),
         _ => Ok(()),
     }
@@ -196,6 +210,7 @@ mod tests {
                     diagram: diagram("Original"),
                     file: None,
                     file_dirty: false,
+                    returning_guest: false,
                 },
             )
             .unwrap();
