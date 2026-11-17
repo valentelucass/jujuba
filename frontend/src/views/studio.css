@@ -778,7 +778,7 @@ dialog.connection-dialog {
 .assistant-launch:is(.is-grabbed, .is-protesting) .jujuba-mascot img {
   filter: drop-shadow(0 0 4px var(--berry)) drop-shadow(0 0 10px color-mix(in srgb, var(--berry) 65%, transparent));
 }
-.assistant-launch:is(.is-grabbed, .is-protesting) :is(.jujuba-eyelid, .jujuba-smile) { animation: none; }
+.assistant-launch:is(.is-grabbed, .is-protesting) :is(.jujuba-eyelid, .jujuba-smile, .jujuba-glints) { animation: none; }
 .assistant-launch:is(.is-grabbed, .is-protesting) .jujuba-eyelid { opacity: 1; }
 .jujuba-gaze { visibility: hidden; }
 .jujuba-mascot[data-looking="true"] .jujuba-gaze { visibility: visible; }
