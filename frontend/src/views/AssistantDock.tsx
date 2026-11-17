@@ -81,6 +81,8 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const [verifyOpen, setVerifyOpen] = useState(false)
   const [screenSize, setScreenSize] = useState(viewport)
   const [placement, setPlacement] = useState(readLauncherPosition)
+  const [grabbed, setGrabbed] = useState(false)
+  const [protesting, setProtesting] = useState(false)
   const [dragPoint, setDragPoint] = useState<Point | null>(null)
   const drag = useRef<{ id: number; origin: Point; offset: Point; moved: boolean } | null>(null)
   const moved = useRef(false)
@@ -91,6 +93,11 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
 
   useEffect(() => { if (open) composer.current?.focus() }, [open])
   useEffect(() => { if (open) end.current?.scrollIntoView({ block: 'nearest' }) }, [chat, busy, open])
+  useEffect(() => {
+    if (!protesting) return
+    const timer = window.setTimeout(() => setProtesting(false), 560)
+    return () => window.clearTimeout(timer)
+  }, [protesting])
   useEffect(() => {
     const resize = () => setScreenSize(viewport())
     window.addEventListener('resize', resize)
@@ -134,6 +141,8 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
       moved: false,
     }
     event.currentTarget.setPointerCapture(event.pointerId)
+    setProtesting(false)
+    setGrabbed(true)
   }
 
   function move(event: PointerEvent<HTMLButtonElement>) {
@@ -151,6 +160,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     const active = drag.current
     if (!active || active.id !== event.pointerId) return
     drag.current = null
+    setGrabbed(false)
     setDragPoint(null)
     moved.current = active.moved
     if (!active.moved || event.type !== 'pointerup') return
@@ -161,6 +171,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     const sideChange = inward >= Math.max(sideGesture, Math.abs(shiftY) / 3)
       || edgeAt(event.clientX - active.offset.x, width) !== side
     place(sideChange ? other : side, event.clientY - active.offset.y)
+    setProtesting(true)
   }
 
   function close() {
@@ -292,7 +303,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
         </div>
       </form>
     </section>}
-    <button ref={launcher} className={'assistant-launch' + (dragPoint ? ' is-dragging' : '')}
+    <button ref={launcher} className={`assistant-launch${grabbed ? ' is-grabbed' : ''}${dragPoint ? ' is-dragging' : ''}${protesting ? ' is-protesting' : ''}`}
       style={{ left: point.x, top: point.y }} aria-label={open ? 'Fechar assistente' : 'Abrir assistente de IA'}
       title="Assistente de IA · arraste na vertical ou deslize para trocar de borda" aria-expanded={open} aria-controls={open ? 'assistant-dock' : undefined}
       onPointerDown={grab} onPointerMove={move} onPointerUp={release} onPointerCancel={release} onLostPointerCapture={release}
@@ -312,7 +323,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
         if (open) close()
         else setOpen(true)
       }}>
-      <JujubaMascot />
+      <JujubaMascot followPointer grabbed={grabbed} protesting={protesting} />
     </button>
   </>
 }

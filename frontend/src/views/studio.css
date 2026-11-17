@@ -498,8 +498,6 @@ dialog.connection-dialog {
 .connection-dialog fieldset { margin: 18px 0 13px; padding: 0; border: 0; display: grid; gap: 12px; }
 .connection-dialog label { display: grid; gap: 5px; color: var(--text); font-size: 12px; min-width: 0; }
 .connection-dialog input, .connection-dialog select { width: 100%; height: 36px; }
-.connection-dialog .remember-password { display: flex; align-items: center; gap: 7px; }
-.remember-password input[type="checkbox"] { width: auto; height: auto; margin: 0; accent-color: var(--berry); }
 .saved-password { display: flex; align-items: center; gap: 7px; }
 .saved-password svg { color: var(--mint); }
 .saved-password-actions { display: flex; flex-wrap: wrap; gap: 8px 14px; }
@@ -582,6 +580,7 @@ dialog.connection-dialog {
 .welcome-intro { justify-items: center; text-align: center; }
 .welcome-intro p { margin-inline: auto; max-width: none; font-size: clamp(10px, 3.2cqw, 13px); white-space: nowrap; }
 .welcome-intro .welcome-connect { height: 44px; padding-inline: 18px; border-radius: 8px; font-size: 14px; font-weight: 650; }
+.welcome-connect-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 9px; }
 .welcome-engines .welcome-mark { max-width: 245px; }
 .welcome-picker-heading + .engine-list { margin-top: 0; }
 .welcome-picker-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 19px; text-align: left; }
@@ -751,7 +750,8 @@ dialog.connection-dialog {
   cursor: grab; touch-action: none; user-select: none;
   transition: left 240ms cubic-bezier(.2,.7,.25,1), top 160ms ease-out;
 }
-.assistant-launch.is-dragging { cursor: grabbing; transition: none; }
+.assistant-launch.is-grabbed { cursor: grabbing; }
+.assistant-launch.is-dragging { transition: none; }
 .assistant-launch:focus-visible { outline: 2px solid var(--berry); outline-offset: 2px; border-radius: 6px; }
 .jujuba-mascot {
   --mascot-cycle: 11s;
@@ -763,7 +763,7 @@ dialog.connection-dialog {
 }
 .jujuba-hero { --mascot-cycle: 14s; --mascot-delay: -.8s; --mascot-hop: -8px; width: 100%; }
 .jujuba-mascot img { display: block; width: 100%; height: 100%; object-fit: contain; user-select: none; }
-.assistant-launch .jujuba-mascot img { filter: drop-shadow(0 5px 9px var(--shadow)); }
+.assistant-launch .jujuba-mascot img { filter: drop-shadow(0 5px 9px var(--shadow)); transition: filter 130ms ease-out; }
 .jujuba-expression { position: absolute; inset: 0; width: 100%; height: 100%; }
 .jujuba-eyelid, .jujuba-smile {
   opacity: 0; animation-timing-function: ease-in-out; animation-iteration-count: infinite;
@@ -773,10 +773,51 @@ dialog.connection-dialog {
 .jujuba-eyelid-right { animation-name: jujuba-right-eye; }
 .jujuba-smile { animation-name: jujuba-smile; }
 .jujuba-closed-eye { fill: none; stroke: #46042f; stroke-width: 16; stroke-linecap: round; }
-.assistant-launch.is-dragging :is(.jujuba-mascot, .jujuba-eyelid, .jujuba-smile) { animation: none; }
+.assistant-launch.is-grabbed .jujuba-mascot { animation: jujuba-held 310ms ease-in-out infinite; }
+.assistant-launch.is-protesting .jujuba-mascot { animation: jujuba-protest 480ms ease-out both; }
+.assistant-launch:is(.is-grabbed, .is-protesting) .jujuba-mascot img {
+  filter: drop-shadow(0 0 4px var(--berry)) drop-shadow(0 0 10px color-mix(in srgb, var(--berry) 65%, transparent));
+}
+.assistant-launch:is(.is-grabbed, .is-protesting) :is(.jujuba-eyelid, .jujuba-smile) { animation: none; }
+.assistant-launch:is(.is-grabbed, .is-protesting) .jujuba-eyelid { opacity: 1; }
+.jujuba-gaze { visibility: hidden; }
+.jujuba-mascot[data-looking="true"] .jujuba-gaze { visibility: visible; }
+.jujuba-glints {
+  transform: translate(var(--gaze-x, 0px), var(--gaze-y, 0px));
+  animation: jujuba-gaze-wink var(--mascot-cycle) ease-in-out var(--mascot-delay) infinite;
+}
+.jujuba-arms { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.jujuba-arms + img { position: relative; }
+.jujuba-arm {
+  fill: none; stroke: #ff61b6; stroke-width: 68; stroke-linecap: round;
+  filter: drop-shadow(0 0 18px #ff4aa9);
+  transform-box: view-box;
+  animation: jujuba-flail 130ms ease-in-out infinite alternate;
+}
+.jujuba-arm-left { transform-origin: 19% 55%; }
+.jujuba-arm-right { transform-origin: 81% 55%; animation-delay: -130ms; }
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
   .assistant-launch .jujuba-mascot { transition: rotate 160ms ease; }
-  .assistant-launch:not(.is-dragging):hover .jujuba-mascot { rotate: -5deg; }
+  .assistant-launch:not(.is-grabbed, .is-protesting):hover .jujuba-mascot { rotate: -5deg; }
+}
+@keyframes jujuba-flail {
+  from { transform: rotate(-14deg); }
+  to { transform: rotate(16deg); }
+}
+@keyframes jujuba-held {
+  0%, 100% { transform: rotate(-7deg) scale(.99, .94); }
+  50% { transform: rotate(7deg) translateY(1px) scale(1.04, .92); }
+}
+@keyframes jujuba-gaze-wink {
+  0%, 29%, 43%, 100% { transform: translate(var(--gaze-x, 0px), var(--gaze-y, 0px)); }
+  33%, 40% { transform: none; }
+}
+@keyframes jujuba-protest {
+  0% { transform: none; }
+  25% { transform: translateY(2px) scale(1.09, .82) rotate(-9deg); }
+  55% { transform: translateY(-2px) scale(.94, 1.06) rotate(7deg); }
+  80% { transform: scale(1.05, .92) rotate(-5deg); }
+  100% { transform: none; }
 }
 @keyframes jujuba-left-eye {
   0%, 13%, 17%, 32%, 40%, 74%, 78%, 80%, 84%, 100% { opacity: 0; }
@@ -799,7 +840,10 @@ dialog.connection-dialog {
 }
 @media (prefers-reduced-motion: reduce) {
   .assistant-launch { transition: none; }
-  .jujuba-mascot, .jujuba-eyelid, .jujuba-smile { animation: none; }
+  .jujuba-mascot, .jujuba-eyelid, .jujuba-smile, .jujuba-arm, .jujuba-glints,
+  .assistant-launch:is(.is-grabbed, .is-protesting) .jujuba-mascot { animation: none; }
+  .jujuba-mascot[data-looking="true"] .jujuba-gaze { visibility: hidden; }
+  .assistant-launch .jujuba-mascot img { transition: none; }
 }
 .assistant-dock {
   position: fixed; z-index: 12; display: flex; flex-direction: column;

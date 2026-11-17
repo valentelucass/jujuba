@@ -67,12 +67,9 @@ pub async fn dashboard_performance(
 pub async fn connect(
     input: ConnectInput,
     use_saved: Option<bool>,
-    remember: Option<bool>,
     state: State<'_, Connections>,
 ) -> Result<Connected> {
-    state
-        .connect(input, use_saved.unwrap_or(false), remember.unwrap_or(false))
-        .await
+    state.connect(input, use_saved.unwrap_or(false)).await
 }
 
 #[tauri::command]
@@ -80,10 +77,9 @@ pub async fn connect_nosql(
     engine: Engine,
     uri: Option<String>,
     use_saved: Option<bool>,
-    remember: Option<bool>,
     state: State<'_, Connections>,
 ) -> Result<Connected> {
-    state.connect_nosql(engine, uri, use_saved.unwrap_or(false), remember.unwrap_or(false)).await
+    state.connect_nosql(engine, uri, use_saved.unwrap_or(false)).await
 }
 
 #[tauri::command]

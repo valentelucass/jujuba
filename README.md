@@ -101,9 +101,11 @@ Os painéis usam a conexão já aberta e as permissões do login. Estatísticas 
 
 ## Reconectar e lembrar credenciais no Windows
 
-Ao conectar com um usuário do SQL Server, marque **Lembrar senha neste PC**. Após uma conexão bem-sucedida, a senha fica no Gerenciador de Credenciais da sua conta do Windows, vinculada ao servidor, à porta ou instância e ao usuário. Na próxima conexão, clique em **Conectar** para usar a senha salva. Use **Digitar outra senha** para substituí-la ou **Esquecer senha salva** para removê-la.
+Após uma conexão bem-sucedida com SQL Server, MySQL ou PostgreSQL, o JujubaSQL salva a senha no Gerenciador de Credenciais da sua conta do Windows, vinculada ao servidor, à porta ou instância e ao usuário. Na próxima vez, clique em **Conectar** para usar a senha salva. Use **Digitar outra senha** para substituí-la após uma conexão válida ou **Esquecer senha salva** para removê-la.
 
-Os formulários de MySQL e PostgreSQL abrem com os dados da última conexão bem-sucedida daquele tipo. Marque **Lembrar senha neste PC** para reutilizar a senha. O SQLite lembra o caminho do último arquivo aberto. Para MongoDB e Redis, use **Lembrar URI neste PC** para guardar a URI inteira no Gerenciador de Credenciais do Windows.
+MongoDB e Redis guardam a URI da última conexão bem-sucedida no mesmo gerenciador. Use **Digitar outra URI** para trocar a conexão ou **Esquecer URI salva** para removê-la. O SQLite lembra o caminho do último arquivo aberto.
+
+Se fechar o aplicativo com uma sessão ativa, o JujubaSQL volta a se conectar ao mesmo servidor ou arquivo na próxima abertura. Ele reabre o último banco selecionado quando esse banco ainda está acessível. Depois de clicar em **Desconectar**, use o atalho **Reconectar** para restabelecer a sessão quando quiser.
 
 ## Atualizações no Windows
 

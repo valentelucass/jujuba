@@ -16,7 +16,6 @@ export function NoSqlConnectionForm({ engine, loading, setLoading, onClose, onCo
   const [visible, setVisible] = useState(false)
   const [error, setError] = useState<AppError | null>(null)
   const [manual, setManual] = useState(false)
-  const [remember, setRemember] = useState(false)
   const [credentialRevision, setCredentialRevision] = useState(0)
   const info = engines[engine]
   const lookup = useMemo(() => () => noSql.hasSavedUri(engine), [engine, credentialRevision])
@@ -28,7 +27,6 @@ export function NoSqlConnectionForm({ engine, loading, setLoading, onClose, onCo
     try {
       await noSql.forgetUri(engine)
       setManual(true)
-      setRemember(false)
       setCredentialRevision((value) => value + 1)
     } catch (failure) {
       setError(appError(failure))
@@ -37,14 +35,14 @@ export function NoSqlConnectionForm({ engine, loading, setLoading, onClose, onCo
 
   async function connect(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (loading) return
+    if (loading || credential.status === 'loading') return
     setLoading(true)
     setError(null)
     const data = new FormData(event.currentTarget)
     const uri = useSaved ? undefined : String(data.get('uri') ?? '')
     data.delete('uri')
     try {
-      onConnected(await noSql.connect(engine, uri, useSaved, !useSaved && (remember || hasSaved)))
+      onConnected(await noSql.connect(engine, uri, useSaved))
     } catch (failure) {
       if (useSaved) setManual(true)
       setError(appError(failure))
@@ -70,19 +68,16 @@ export function NoSqlConnectionForm({ engine, loading, setLoading, onClose, onCo
                 onClick={() => setVisible(!visible)}>{visible ? <EyeOff size={16} /> : <Eye size={16} />}</button>
             </div>
           </div>}
-        {hasSaved ? <div className="saved-password-actions">
+        {hasSaved && <div className="saved-password-actions">
           {useSaved && <button type="button" className="detail-link" onClick={() => setManual(true)}>Digitar outra URI</button>}
           <button type="button" className="detail-link" onClick={() => void forget()}>Esquecer URI salva</button>
-        </div> : <label className="remember-password">
-          <input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} />
-          Lembrar URI neste PC
-        </label>}
+        </div>}
         <p className="tls-note">{engine === 'mongodb' ? 'Aceita mongodb:// e mongodb+srv://.' : 'Aceita redis:// e rediss://.'}</p>
       </fieldset>
       {error && <div className="form-error" role="alert">{error.message}</div>}
       <div className="dialog-actions">
         <button type="button" className="button" disabled={loading} onClick={onClose}>Cancelar</button>
-        <button className="button primary" disabled={loading}>{loading ?
+        <button className="button primary" disabled={loading || credential.status === 'loading'}>{loading ?
           <><LoaderCircle className="spin" size={16} /> Conectando…</> :
           <>Conectar <ArrowRight size={16} /></>}</button>
       </div>

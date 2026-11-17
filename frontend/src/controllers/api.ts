@@ -17,8 +17,8 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
 }
 
 export const sql = {
-  connect: (input: ConnectionInput, useSaved: boolean, remember: boolean) =>
-    call<Connection>('connect', { input, useSaved, remember }),
+  connect: (input: ConnectionInput, useSaved: boolean) =>
+    call<Connection>('connect', { input, useSaved }),
   hasSavedPassword: (input: Omit<ConnectionInput, 'password'>) => call<boolean>('has_saved_password', { input }),
   forgetPassword: (input: Omit<ConnectionInput, 'password'>) => call<void>('forget_password', { input }),
   disconnect: () => call<void>('disconnect'),
@@ -41,8 +41,8 @@ export const sql = {
 }
 
 export const noSql = {
-  connect: (engine: NoSqlEngine, uri: string | undefined, useSaved: boolean, remember: boolean) =>
-    call<Connection>('connect_nosql', { engine, uri, useSaved, remember }),
+  connect: (engine: NoSqlEngine, uri: string | undefined, useSaved: boolean) =>
+    call<Connection>('connect_nosql', { engine, uri, useSaved }),
   hasSavedUri: (engine: NoSqlEngine) => call<boolean>('has_saved_uri', { engine }),
   forgetUri: (engine: NoSqlEngine) => call<void>('forget_uri', { engine }),
   collections: (scope: Scope) => call<string[]>('mongo_collections', { scope }),

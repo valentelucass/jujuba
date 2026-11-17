@@ -1,7 +1,9 @@
-import { lazy, Suspense, useCallback, useEffect, useId, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { isTauri } from '@tauri-apps/api/core'
 import { ArrowDownRight, ArrowRight, Braces, ChevronRight, Database as DatabaseIcon, GitFork, KeyRound,
   PanelRight, Plug, RefreshCw, Search, Table2 } from 'lucide-react'
-import { sql } from '../controllers/api'
+import { appError, sql } from '../controllers/api'
+import { activeDatabase, getSavedConnection, readSessionPreference, rememberActiveDatabase, rememberSession } from '../controllers/connectionPreference'
 import { useExplorer } from '../controllers/useExplorer'
 import { useTable } from '../controllers/useTable'
 import type { Connection, Database, Relationship, Scope, Structure as TableStructure, Tab, Table, TableScope } from '../models/sql'
@@ -9,7 +11,7 @@ import { CenterEnginePicker, SelectedEngine } from './EnginePicker'
 import { OtherConnectionForm } from './OtherConnectionForm'
 import { NoSqlConnectionForm } from './NoSqlConnectionForm'
 import { NoSqlStudio } from './NoSqlStudio'
-import { engines, isNoSql, type Engine } from '../models/engines'
+import { engineOrder, engines, isNoSql, type Engine } from '../models/engines'
 import { ConnectionForm } from './ConnectionForm'
 import { JujubaMascot } from './JujubaMascot'
 import { Diagram, Graph } from './Diagram'
@@ -188,7 +190,9 @@ function ConnectedStudio({ connection, disconnect, openDiagrams, onScreen }: {
     setDisconnecting(true)
     try { await disconnect() } finally { setDisconnecting(false) }
   }
-  const [database, setDatabase] = useState<Database | null>(null)
+  const [database, setDatabase] = useState<Database | null>(() =>
+    activeDatabase(connection.engine, connection.databases) ??
+    (connection.databases.length === 1 ? connection.databases[0] : null))
   const [table, setTable] = useState<Table | null>(null)
   const [workspaceView, setWorkspaceView] = useState<'objects' | 'diagram' | 'sql' | 'dashboard'>('objects')
   useEffect(() => {
@@ -201,7 +205,11 @@ function ConnectedStudio({ connection, disconnect, openDiagrams, onScreen }: {
     setDatabase(db)
     setTable(null)
     setWorkspaceView('objects')
-  }, (db, entry) => { setDatabase(db); setTable(entry); setWorkspaceView('objects') })
+    rememberActiveDatabase(connection.engine, db)
+  }, (db, entry) => {
+    setDatabase(db); setTable(entry); setWorkspaceView('objects')
+    rememberActiveDatabase(connection.engine, db)
+  })
   return <>
     <Header onDiagrams={openDiagrams} connection={connection} database={database} onDatabase={explorer.chooseDatabase} onDisconnect={closeConnection} disconnecting={disconnecting}
       tools={<>
@@ -239,6 +247,11 @@ export function App() {
   const [step, setStep] = useState<Engine | 'picker' | 'intro'>('intro')
   const [selectedEngine, setSelectedEngine] = useState<Engine | null>(null)
   const [loading, setLoading] = useState(false)
+  const [lastSession, setLastSession] = useState(readSessionPreference)
+  const [restoring, setRestoring] = useState(() => isTauri() && readSessionPreference()?.resume !== false)
+  const [restoreError, setRestoreError] = useState<{ engine: Engine; detail: string } | null>(null)
+  const [savedEngines, setSavedEngines] = useState<Engine[]>([])
+  const started = useRef(!restoring)
 
   const [diagrams, setDiagrams] = useState(false)
   const [openedDiagrams, setOpenedDiagrams] = useState(false)
@@ -249,7 +262,13 @@ export function App() {
   const [assistantDiagram, setAssistantDiagram] = useState<{ diagram: SystemDiagram; revisionOf: SystemDiagram | null } | null>(null)
   const screen = diagrams ? 'Fluxogramas de sistema' : connection ? databaseScreen :
     step === 'intro' ? 'Tela inicial' : step === 'picker' ? 'Seleção de banco' : 'Conexão · ' + engines[step].name
-  const openPicker = () => setStep('picker')
+  const openPicker = () => { setRestoreError(null); setStep('picker') }
+
+  useEffect(() => {
+    if (!restoring || started.current) return
+    started.current = true
+    void reopen(lastSession?.engine)
+  }, [restoring, lastSession])
 
   function openDiagrams() {
     setOpenedDiagrams(true)
@@ -264,17 +283,62 @@ export function App() {
   }
 
   function chooseEngine(engine: Engine) {
+    setRestoreError(null)
     setSelectedEngine(engine)
     setStep(engine)
   }
 
   function connected(active: Connection) {
+    const next = {
+      engine: active.engine,
+      database: activeDatabase(active.engine, active.databases),
+      resume: true,
+    }
+    rememberSession(next)
+    setLastSession(next)
     setConnection(active)
     setStep('intro')
   }
 
+  async function reopen(engine?: Engine) {
+    setRestoreError(null)
+    setRestoring(true)
+    let target = engine
+    try {
+      if (engine) {
+        const resume = await getSavedConnection(engine)
+        if (!resume) {
+          setRestoreError({ engine, detail: 'O acesso salvo está indisponível. Abra a conexão para informar os dados.' })
+          return
+        }
+        connected(await resume())
+        return
+      }
+      const profiles = await Promise.all(engineOrder.map(async (candidate) => {
+        const resume = await getSavedConnection(candidate).catch(() => null)
+        return resume ? [{ engine: candidate, resume }] : []
+      }))
+      const candidates = profiles.flat()
+      setSavedEngines(candidates.map((entry) => entry.engine))
+      if (candidates.length === 1) {
+        target = candidates[0].engine
+        connected(await candidates[0].resume())
+      }
+    } catch (failure) {
+      if (target) setRestoreError({ engine: target, detail: appError(failure).message })
+    } finally {
+      setRestoring(false)
+    }
+  }
+
   async function disconnect() {
     try { await sql.disconnect() } finally {
+      const saved = readSessionPreference()
+      if (saved) {
+        const next = { ...saved, resume: false }
+        rememberSession(next)
+        setLastSession(next)
+      }
       setConnection(null)
       setSelectedEngine(null)
     }
@@ -285,15 +349,32 @@ export function App() {
       {connection ? (isNoSql(connection.engine) ?
         <NoSqlStudio key={connection.session} connection={connection} disconnect={disconnect} openDiagrams={openDiagrams} onScreen={setDatabaseScreen} /> :
         <ConnectedStudio key={connection.session} connection={connection} disconnect={disconnect} openDiagrams={openDiagrams} onScreen={setDatabaseScreen} />) : <>
-    <Header onConnect={openPicker} connecting={loading} onDiagrams={openDiagrams} />
+    <Header onConnect={openPicker} connecting={loading || restoring} onDiagrams={openDiagrams} />
     <StudioLayout items={[]} connected={false}>
       <main className="workspace welcome">
-        {step === 'intro' && <div className="welcome-content welcome-intro">
+        {restoring ? <div className="welcome-content welcome-intro" role="status">
+          <Loading />
+          <h1>{lastSession ? 'Reconectando ao ' + engines[lastSession.engine].name : 'Verificando conexões salvas'}</h1>
+        </div> : step === 'intro' && <div className="welcome-content welcome-intro">
           <div className="welcome-mark"><JujubaMascot hero /></div>
           <div className="welcome-copy">
             <h1>Conecte a um banco de dados</h1>
             <p>Consulte dados, explore tabelas, coleções e chaves.</p>
-            <button className="button primary welcome-connect" onClick={openPicker}><Plug size={17} />Nova conexão</button>
+            {restoreError && <div className="form-error" role="alert">
+              <strong>Falha ao reconectar ao {engines[restoreError.engine].name}</strong>
+              <div>{restoreError.detail}</div>
+              <div className="welcome-connect-actions">
+                <button className="detail-link" onClick={() => void reopen(restoreError.engine)}>Tentar novamente</button>
+                <button className="detail-link" onClick={() => chooseEngine(restoreError.engine)}>Abrir configuração da conexão</button>
+              </div>
+            </div>}
+            <div className="welcome-connect-actions">
+              {!restoreError && (lastSession ? [lastSession.engine] : savedEngines).map((engine) =>
+                <button key={engine} className="button welcome-connect" onClick={() => void reopen(engine)}>
+                  <RefreshCw size={17} />Reconectar ao {engines[engine].name}
+                </button>)}
+              <button className="button primary welcome-connect" onClick={openPicker}><Plug size={17} />Nova conexão</button>
+            </div>
           </div>
         </div>}
         {step === 'picker' && <CenterEnginePicker selected={selectedEngine} choose={chooseEngine} back={() => { setStep('intro'); setSelectedEngine(null) }} />}
@@ -304,7 +385,7 @@ export function App() {
       </main>
       <SelectedEngine engine={selectedEngine} />
     </StudioLayout>
-    <StatusBar />
+    <StatusBar reconnecting={restoring} />
     </>}
     </div>
     {openedDiagrams && <div className="app-screen" hidden={!diagrams}>

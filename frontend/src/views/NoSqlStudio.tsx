@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Braces, ChevronLeft, ChevronRight, Database, KeyRound, PanelRight, RefreshCw, Search } from 'lucide-react'
 import { noSql } from '../controllers/api'
+import { activeDatabase, rememberActiveDatabase } from '../controllers/connectionPreference'
 import type { TreeItem } from '../controllers/useExplorer'
 import { useRemote } from '../controllers/useRemote'
 import { engines } from '../models/engines'
@@ -18,7 +19,9 @@ export function NoSqlStudio({ connection, disconnect, openDiagrams, onScreen }: 
 }) {
   const mongo = connection.engine === 'mongodb'
   const engine = engines[connection.engine]
-  const [database, setDatabase] = useState<string | null>(connection.databases.find((name) => !['admin', 'config', 'local'].includes(name)) ?? connection.databases[0] ?? null)
+  const [database, setDatabase] = useState<string | null>(() =>
+    activeDatabase(connection.engine, connection.databases) ??
+    connection.databases.find((name) => !['admin', 'config', 'local'].includes(name)) ?? connection.databases[0] ?? null)
   const [collection, setCollection] = useState<string | null>(null)
   const [dashboard, setDashboard] = useState(false)
   useEffect(() => {
@@ -36,6 +39,7 @@ export function NoSqlStudio({ connection, disconnect, openDiagrams, onScreen }: 
   function selectDatabase(name: string) {
     setDatabase(name)
     setCollection(null)
+    rememberActiveDatabase(connection.engine, name)
   }
 
   function selectCollection(name: string) {

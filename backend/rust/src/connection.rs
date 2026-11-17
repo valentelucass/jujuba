@@ -38,16 +38,21 @@ enum SessionProfile {
 }
 
 impl Connections {
-    pub async fn connect(
+    pub async fn connect(&self, input: ConnectInput, use_saved: bool) -> Result<Connected> {
+        let key = PasswordKey::for_input(&input);
+        self.connect_with_key(input, use_saved, key).await
+    }
+
+    async fn connect_with_key(
         &self,
         input: ConnectInput,
         use_saved: bool,
-        remember: bool,
+        key: Option<PasswordKey>,
     ) -> Result<Connected> {
+        let remember = input.password.is_some() || !use_saved;
         if input.engine != Engine::SqlServer {
-            return self.connect_other(input, use_saved, remember).await;
+            return self.connect_other(input, use_saved, remember, key).await;
         }
-        let key = PasswordKey::for_input(&input);
         let saved = if use_saved && input.password.is_none() {
             Some(
                 key.as_ref()
@@ -105,9 +110,9 @@ impl Connections {
         mut input: ConnectInput,
         use_saved: bool,
         remember: bool,
+        key: Option<PasswordKey>,
     ) -> Result<Connected> {
         let engine = input.engine;
-        let key = PasswordKey::for_input(&input);
         if use_saved && input.password.is_none() && engine != Engine::Sqlite {
             input.password = Some(read_secret(key.as_ref())?.to_string());
         }
@@ -141,9 +146,20 @@ impl Connections {
         engine: Engine,
         uri: Option<String>,
         use_saved: bool,
-        remember: bool,
     ) -> Result<Connected> {
         let key = PasswordKey::for_uri(engine);
+        self.connect_nosql_with_key(engine, uri, use_saved, key)
+            .await
+    }
+
+    pub(crate) async fn connect_nosql_with_key(
+        &self,
+        engine: Engine,
+        uri: Option<String>,
+        use_saved: bool,
+        key: Option<PasswordKey>,
+    ) -> Result<Connected> {
+        let remember = uri.is_some();
         let uri = match uri {
             Some(value) => Zeroizing::new(value),
             None if use_saved => read_secret(key.as_ref())?,
@@ -292,5 +308,127 @@ impl ConnectionState {
             return Err(AppError::denied());
         }
         Ok(&session.profile)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::Authentication;
+
+    struct TestCredential(String);
+
+    impl TestCredential {
+        fn new(engine: Engine) -> Self {
+            Self(format!("reconnect-{engine:?}-{}", std::process::id()))
+        }
+
+        fn key(&self) -> PasswordKey {
+            PasswordKey::test_target(&self.0)
+        }
+    }
+
+    impl Drop for TestCredential {
+        fn drop(&mut self) {
+            let _ = self.key().forget();
+        }
+    }
+
+    #[tokio::test]
+    #[ignore = "requer MySQL de teste local"]
+    async fn reconnects_mysql_with_the_automatically_saved_password() {
+        check_sql_reconnect(Engine::Mysql, "MYSQL").await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requer PostgreSQL de teste local"]
+    async fn reconnects_postgres_with_the_automatically_saved_password() {
+        check_sql_reconnect(Engine::Postgres, "POSTGRES").await;
+    }
+
+    async fn check_sql_reconnect(engine: Engine, prefix: &str) {
+        let setting = |name| std::env::var(format!("JUJUBA_TEST_{prefix}_{name}")).unwrap();
+        let password = setting("PASSWORD");
+        let input = |password| ConnectInput {
+            engine,
+            database: Some("postgres".into()),
+            path: None,
+            host: "127.0.0.1".into(),
+            port: setting("PORT").parse().unwrap(),
+            transport: Transport::Network,
+            instance: None,
+            authentication: Authentication::Sql,
+            username: Some(setting("USER")),
+            password,
+        };
+        let fixture = TestCredential::new(engine);
+        let first = Connections::default();
+        let active = first
+            .connect_with_key(input(Some(password.clone())), false, Some(fixture.key()))
+            .await
+            .unwrap();
+        assert!(!active.password_save_failed);
+        first.disconnect().await;
+        let second = Connections::default();
+        assert!(second
+            .connect_with_key(
+                input(Some(format!("{password}-invalid"))),
+                false,
+                Some(fixture.key())
+            )
+            .await
+            .is_err());
+        let active = second
+            .connect_with_key(input(None), true, Some(fixture.key()))
+            .await
+            .unwrap();
+        assert_eq!(active.engine, engine);
+        assert!(active.databases.iter().any(|name| name == "jujuba_test"));
+    }
+
+    #[tokio::test]
+    #[ignore = "requer MongoDB de teste local"]
+    async fn reconnects_mongodb_with_the_automatically_saved_uri() {
+        check_uri_reconnect(
+            Engine::Mongodb,
+            "JUJUBA_TEST_MONGO_URI",
+            "mongodb://127.0.0.1:",
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requer Redis de teste local"]
+    async fn reconnects_redis_with_the_automatically_saved_uri() {
+        check_uri_reconnect(Engine::Redis, "JUJUBA_TEST_REDIS_URI", "redis://127.0.0.1:").await;
+    }
+
+    async fn check_uri_reconnect(engine: Engine, variable: &str, prefix: &str) {
+        let uri = std::env::var(variable).unwrap();
+        assert!(uri.starts_with(prefix));
+        let fixture = TestCredential::new(engine);
+        let first = Connections::default();
+        let active = first
+            .connect_nosql_with_key(engine, Some(uri), false, Some(fixture.key()))
+            .await
+            .unwrap();
+        assert!(!active.password_save_failed);
+        first.disconnect().await;
+        let second = Connections::default();
+        assert!(second
+            .connect_nosql_with_key(
+                engine,
+                Some("invalid-uri".into()),
+                false,
+                Some(fixture.key())
+            )
+            .await
+            .is_err());
+        let resumed = second
+            .connect_nosql_with_key(engine, None, true, Some(fixture.key()))
+            .await
+            .unwrap();
+        assert_eq!(resumed.engine, engine);
+        assert_eq!(resumed.endpoint, active.endpoint);
     }
 }

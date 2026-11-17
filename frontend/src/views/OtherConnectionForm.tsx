@@ -26,7 +26,6 @@ export function OtherConnectionForm({ engine, onClose, onConnected, loading, set
   const [error, setError] = useState<AppError | null>(null)
   const [credentialRevision, setCredentialRevision] = useState(0)
   const [manual, setManual] = useState('')
-  const [remembered, setRemembered] = useState('')
   const loopback = ['localhost', '127.0.0.1', '::1'].includes(host.trim().toLowerCase())
   const profile = useMemo(() => ({
     engine,
@@ -66,7 +65,7 @@ export function OtherConnectionForm({ engine, onClose, onConnected, loading, set
 
   async function connect(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (loading) return
+    if (loading || passwordStatus.status === 'loading') return
     const data = new FormData(event.currentTarget)
     setLoading(true)
     setError(null)
@@ -75,7 +74,7 @@ export function OtherConnectionForm({ engine, onClose, onConnected, loading, set
         ...profile,
         port: localFile ? 0 : profile.port,
         password: localFile || useSaved ? undefined : String(data.get('password') ?? ''),
-      }, useSaved, !localFile && !useSaved && (remembered === profileKey || hasSaved))
+      }, useSaved)
       rememberDatabase(engine, profile)
       onConnected(active)
     } catch (failure) {
@@ -115,14 +114,10 @@ export function OtherConnectionForm({ engine, onClose, onConnected, loading, set
           {useSaved ? <p className="saved-password"><LockKeyhole size={15} />Senha salva neste PC</p> :
             <label>Senha<input key={profileKey} name="password" type="password" maxLength={256}
               autoComplete="off" onChange={() => setManual(profileKey)} /></label>}
-          {hasSaved ? <div className="saved-password-actions">
+          {hasSaved && <div className="saved-password-actions">
             {useSaved && <button type="button" className="detail-link" onClick={() => setManual(profileKey)}>Digitar outra senha</button>}
             <button type="button" className="detail-link" onClick={() => void forget()}>Esquecer senha salva</button>
-          </div> : <label className="remember-password">
-            <input type="checkbox" checked={remembered === profileKey}
-              onChange={(event) => setRemembered(event.target.checked ? profileKey : '')} />
-            Lembrar senha neste PC
-          </label>}
+          </div>}
         </>}
       </fieldset>
       <div className="tls-note"><LockKeyhole size={15} />{localFile ? 'Arquivo aberto em modo de leitura.' :
@@ -130,7 +125,7 @@ export function OtherConnectionForm({ engine, onClose, onConnected, loading, set
       {error && <div className="form-error" role="alert">{error.message}</div>}
       <div className="dialog-actions">
         <button type="button" className="button" disabled={loading} onClick={onClose}>Cancelar</button>
-        <button className="button primary" disabled={loading}>{loading ?
+        <button className="button primary" disabled={loading || passwordStatus.status === 'loading'}>{loading ?
           <><LoaderCircle className="spin" size={16} /> Conectando…</> :
           <>{localFile ? 'Abrir arquivo' : 'Conectar'} <ArrowRight size={16} /></>}</button>
       </div>

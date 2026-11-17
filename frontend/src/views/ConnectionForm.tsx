@@ -19,7 +19,6 @@ export function ConnectionForm({ onClose, onConnected, loading, setLoading }: {
   const [port, setPort] = useState(String(saved.port ?? 1433))
   const [instance, setInstance] = useState(saved.instance ?? '')
   const [username, setUsername] = useState(saved.username ?? '')
-  const [rememberedProfile, setRememberedProfile] = useState('')
   const [manualProfile, setManualProfile] = useState('')
   const [credentialRevision, setCredentialRevision] = useState(0)
   const loopback = ['127.0.0.1', 'localhost', '::1'].includes(host.trim().toLowerCase())
@@ -36,7 +35,6 @@ export function ConnectionForm({ onClose, onConnected, loading, setLoading }: {
   }), [transport, host, port, instance, authentication, username])
   const profileKey = JSON.stringify([transport, profile.host?.toLowerCase(), profile.port,
     profile.instance?.toLowerCase(), authentication, profile.username])
-  const remember = rememberedProfile === profileKey
   const lookup = useMemo(() => () => sql.hasSavedPassword(profile), [profile, credentialRevision])
   const passwordStatus = useRemote(authentication === 'sql' && profile.username
     && (transport === 'local' || (profile.host && profile.port && profile.port <= 65535)) ? lookup : null)
@@ -46,15 +44,14 @@ export function ConnectionForm({ onClose, onConnected, loading, setLoading }: {
 
   async function connect(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (loading) return
+    if (loading || passwordStatus.status === 'loading') return
     setError(null)
     setLoading(true)
     const form = event.currentTarget
     const data = new FormData(form)
     const secret = form.elements.namedItem('password')
     if (secret instanceof HTMLInputElement) secret.value = ''
-    const request = sql.connect({ ...profile, password: String(data.get('password') ?? '') || undefined },
-      useSavedPassword, authentication === 'sql' && !useSavedPassword && (remember || hasSavedPassword))
+    const request = sql.connect({ ...profile, password: String(data.get('password') ?? '') || undefined }, useSavedPassword)
     data.delete('password')
     try {
       const connection = await request
@@ -75,7 +72,6 @@ export function ConnectionForm({ onClose, onConnected, loading, setLoading }: {
     try {
       await sql.forgetPassword(profile)
       setManualProfile(profileKey)
-      setRememberedProfile('')
       setCredentialRevision((value) => value + 1)
     } catch (failure) {
       setError(appError(failure))
@@ -126,13 +122,10 @@ export function ConnectionForm({ onClose, onConnected, loading, setLoading }: {
               onClick={() => { setManualProfile(profileKey); setShowPassword(!showPassword || manualProfile !== profileKey) }}>
               {showPassword && manualProfile === profileKey ? <EyeOff size={16} /> : <Eye size={16} />}</button>
           </div></div>}
-          {hasSavedPassword ? <div className="saved-password-actions">
+          {hasSavedPassword && <div className="saved-password-actions">
             {useSavedPassword && <button type="button" className="detail-link" onClick={() => { setManualProfile(profileKey); setShowPassword(false) }}>Digitar outra senha</button>}
             <button type="button" className="detail-link" onClick={() => void forgetPassword()}>Esquecer senha salva</button>
-          </div> : <label className="remember-password">
-            <input type="checkbox" checked={remember} onChange={(event) => setRememberedProfile(event.target.checked ? profileKey : '')} />
-            Lembrar senha neste PC
-          </label>}
+          </div>}
         </>}
       </fieldset>
       <div className="tls-note"><LockKeyhole size={15} /> {transport === 'local'
@@ -140,7 +133,7 @@ export function ConnectionForm({ onClose, onConnected, loading, setLoading }: {
         : 'Criptografia e validação do certificado do servidor.'}</div>
       {error && <div className="form-error" role="alert">{error.message}</div>}
       <div className="dialog-actions"><button type="button" className="button" disabled={loading} onClick={onClose}>Cancelar</button>
-        <button className="button primary" disabled={loading}>{loading ? <><LoaderCircle className="spin" size={16} /> Conectando…</> : <>Conectar <ArrowRight size={16} /></>}</button>
+        <button className="button primary" disabled={loading || passwordStatus.status === 'loading'}>{loading ? <><LoaderCircle className="spin" size={16} /> Conectando…</> : <>Conectar <ArrowRight size={16} /></>}</button>
       </div>
     </form>
   </section>

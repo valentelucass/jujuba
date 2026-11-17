@@ -13,8 +13,8 @@ const links = [
   { label: 'Feito por Lucas Andrade', url: 'https://github.com/valentelucass' },
 ]
 
-export function StatusBar({ engine, endpoint, database, passwordSaveFailed }: {
-  engine?: Engine; endpoint?: string; database?: Database | null; passwordSaveFailed?: boolean
+export function StatusBar({ engine, endpoint, database, passwordSaveFailed, reconnecting }: {
+  engine?: Engine; endpoint?: string; database?: Database | null; passwordSaveFailed?: boolean; reconnecting?: boolean
 }) {
   const [error, setError] = useState(false)
   const [version, setVersion] = useState(buildVersion)
@@ -31,7 +31,9 @@ export function StatusBar({ engine, endpoint, database, passwordSaveFailed }: {
   }
 
   return <footer className="statusbar">
-    <span className={`connection-status${engine ? ' online' : ''}`} role="status"><i />{engine ? 'Conectado' : 'Desconectado'}</span>
+    <span className={`connection-status${engine ? ' online' : ''}`} role="status">
+      <i />{engine ? 'Conectado' : reconnecting ? 'Reconectando…' : 'Desconectado'}
+    </span>
     <UpdateButton />
     {engine && <span className="status-permissions"><ShieldCheck size={13} /> {engines[engine].name}</span>}
     {database && <span className="status-context"><DatabaseIcon size={12} /> <span>{database}</span></span>}

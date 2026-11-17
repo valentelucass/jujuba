@@ -71,6 +71,11 @@ impl PasswordKey {
         Self(value.encode_utf16().chain([0]).collect())
     }
 
+    #[cfg(test)]
+    pub(crate) fn test_target(id: &str) -> Self {
+        Self::target(&format!("JujubaSQL/tests/{id}"))
+    }
+
     pub fn exists(&self) -> Result<bool> {
         Ok(self.read_entry()?.is_some())
     }
@@ -79,7 +84,7 @@ impl PasswordKey {
         self.read_entry()?
             .map(|entry| {
                 let bytes = entry.blob();
-                if bytes.is_empty() || bytes.len() > CRED_MAX_CREDENTIAL_BLOB_SIZE as usize {
+                if bytes.len() > CRED_MAX_CREDENTIAL_BLOB_SIZE as usize {
                     return Err(vault_error());
                 }
                 String::from_utf8(bytes.to_vec())
@@ -93,9 +98,6 @@ impl PasswordKey {
     }
 
     pub fn save(&self, password: &str) -> Result<()> {
-        if password.is_empty() {
-            return self.forget();
-        }
         if password.len() > CRED_MAX_CREDENTIAL_BLOB_SIZE as usize {
             return Err(vault_error());
         }
@@ -105,7 +107,11 @@ impl PasswordKey {
             Type: CRED_TYPE_GENERIC,
             TargetName: target.as_mut_ptr(),
             CredentialBlobSize: blob.len() as u32,
-            CredentialBlob: blob.as_mut_ptr(),
+            CredentialBlob: if blob.is_empty() {
+                ptr::null_mut()
+            } else {
+                blob.as_mut_ptr()
+            },
             Persist: CRED_PERSIST_LOCAL_MACHINE,
             ..Default::default()
         };
@@ -249,5 +255,16 @@ mod tests {
             value.unwrap().as_deref().map(String::as_str),
             Some(uri.as_str())
         );
+    }
+
+    #[test]
+    fn distinguishes_a_saved_empty_password_from_a_missing_password() {
+        let key = PasswordKey::test_target(&format!("empty-{}", std::process::id()));
+        key.forget().unwrap();
+        assert!(key.read().unwrap().is_none());
+        key.save("").unwrap();
+        let value = key.read();
+        key.forget().unwrap();
+        assert_eq!(value.unwrap().as_deref().map(String::as_str), Some(""));
     }
 }
