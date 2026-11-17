@@ -2,14 +2,14 @@ import { useEffect, useRef } from 'react'
 import type { FlightBounds, FlightFrame, Point } from './mascotMotion'
 import type { MascotImpulse } from '../models/flowMascot'
 
-type Obstacle = { target: 'main' | 'clone'; point: Point }
+type Obstacle = { target: 'main' | 'clone'; peer: string; point: Point }
 
 export function useRemoteMascotCollisions({
   point, flight, held, obstacles, bounds, relocate, kick, hitPeer,
 }: {
   point: Point | null; flight: FlightFrame | null; held: boolean; obstacles: Obstacle[]; bounds: FlightBounds
   relocate: (point: Point) => void; kick: (impulse: MascotImpulse, recoil: boolean, from: Point) => void
-  hitPeer: (target: 'main' | 'clone', impulse: MascotImpulse) => void
+  hitPeer: (target: 'main' | 'clone', impulse: MascotImpulse, peer: string) => void
 }) {
   const previous = useRef<{ own: Point; peers: Obstacle[]; time: number } | null>(null)
   const lastHit = useRef(-Infinity)
@@ -39,13 +39,13 @@ export function useRemoteMascotCollisions({
       ]
       const separated = candidates.find((at) => at.x >= bounds.left && at.x <= bounds.right && at.y >= bounds.top && at.y <= bounds.bottom)
       if (separated) relocate(separated)
-      const priorPeer = before?.peers.find(({ target }) => target === obstacle.target)?.point ?? obstacle.point
+      const priorPeer = before?.peers.find(({ target, peer }) => target === obstacle.target && peer === obstacle.peer)?.point ?? obstacle.point
       const remoteVelocity = { x: (obstacle.point.x - priorPeer.x) / elapsed, y: (obstacle.point.y - priorPeer.y) / elapsed }
       const approach = (velocity.x - remoteVelocity.x) * direction.x + (velocity.y - remoteVelocity.y) * direction.y
       if ((!flight && !held) || approach < 900 || now - lastHit.current < 420) continue
       lastHit.current = now
       const impulse = { direction, strength: Math.min(1250, Math.max(180, approach * .46)) }
-      hitPeer(obstacle.target, impulse)
+      hitPeer(obstacle.target, impulse, obstacle.peer)
       if (!held) kick(impulse, true, separated ?? point)
     }
   })

@@ -1,6 +1,6 @@
 use super::{
     flow_access::{self, Guest, Sharing, StoredInvitation},
-    flow_mascot::{Mascot, Meeting, Splat},
+    flow_mascot::{ChildDrag, Mascot, Meeting, Splat},
     flow_merge::merge,
     model::{invalid, Diagram, Position},
     workspaces,
@@ -25,9 +25,13 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     sync::{mpsc, oneshot, watch},
     task::{AbortHandle, JoinSet},
-    time::{sleep_until, timeout, Instant},
+    time::{timeout, Instant},
 };
 use uuid::Uuid;
+
+#[path = "flow_room.rs"]
+mod room;
+use room::{host, ApprovalRequest, Member, MemberEvent, RoutedDrag};
 
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 const ALPN: &[u8] = b"jujubasql/flow/4";
@@ -87,7 +91,7 @@ pub struct View {
     cursor: Option<Position>,
     mascot_supported: bool,
     mascot_version: u64,
-    mascot: Option<Mascot>,
+    mascot: Option<Arc<Mascot>>,
     mascot_meeting: Option<Meeting>,
     mascot_splats: VecDeque<Splat>,
     diagram: Option<Arc<Diagram>>,
@@ -95,6 +99,11 @@ pub struct View {
     message: Option<String>,
     trusted_peer: Option<String>,
     return_code: Option<String>,
+    self_id: Option<Uuid>,
+    members: Vec<Member>,
+    approval: Option<ApprovalRequest>,
+    trusted_guests: Vec<String>,
+    child_drags: VecDeque<RoutedDrag>,
     live_version: u64,
     #[serde(skip)]
     updates: watch::Sender<u64>,
@@ -112,7 +121,7 @@ pub enum ViewUpdate {
     Full(View),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 enum Packet {
     Bye,
@@ -123,6 +132,8 @@ enum Packet {
         mascots: bool,
         #[serde(default)]
         version: Option<String>,
+        #[serde(default, skip_serializing_if = "is_false")]
+        group: bool,
     },
     RoomVersion {
         name: String,
@@ -136,6 +147,8 @@ enum Packet {
         mascots: bool,
         #[serde(default)]
         version: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        you: Option<Uuid>,
     },
     Rejected,
     Snapshot {
@@ -158,21 +171,51 @@ enum Packet {
     MascotSplat {
         splat: Splat,
     },
+    Member {
+        id: Uuid,
+        event: MemberEvent,
+    },
+    ChildDrag {
+        owner: Uuid,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        from: Option<Uuid>,
+        drag: ChildDrag,
+    },
 }
 
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum Command {
     End,
-    Accept { remember: bool },
-    Reject,
+    Accept {
+        remember: bool,
+        request: Option<Uuid>,
+    },
+    Reject {
+        request: Option<Uuid>,
+    },
     Invite,
     Revoke,
-    Cursor { position: Option<Position> },
-    Mascot { mascot: Option<Mascot> },
-    MascotMeeting { meeting: Meeting },
-    MascotSplat { splat: Splat },
-    Edit { before: Diagram, diagram: Diagram },
+    Cursor {
+        position: Option<Position>,
+    },
+    Mascot {
+        mascot: Option<Mascot>,
+    },
+    MascotMeeting {
+        meeting: Meeting,
+    },
+    MascotSplat {
+        splat: Splat,
+    },
+    ChildDrag {
+        owner: Uuid,
+        drag: ChildDrag,
+    },
+    Edit {
+        before: Diagram,
+        diagram: Diagram,
+    },
 }
 
 struct Request {
@@ -193,12 +236,11 @@ struct Visitor {
     token: [u8; 16],
     mascots: bool,
     version: Option<String>,
+    group: bool,
 }
 
-enum Approval {
-    Accepted { remember: bool },
-    Rejected,
-    Interrupted,
+fn is_false(value: &bool) -> bool {
+    !value
 }
 
 impl Sessions {
@@ -244,6 +286,11 @@ impl Sessions {
             message: None,
             trusted_peer: None,
             return_code: None,
+            self_id: None,
+            members: Vec::new(),
+            approval: None,
+            trusted_guests: Vec::new(),
+            child_drags: VecDeque::new(),
             live_version: 0,
             updates: watch::channel(0).0,
         };
@@ -262,6 +309,9 @@ impl Sessions {
                 view.mascot_meeting = None;
                 view.mascot_splats.clear();
                 view.mascot_supported = false;
+                view.members.clear();
+                view.approval = None;
+                view.child_drags.clear();
                 view.message = Some(
                     result
                         .err()
@@ -385,6 +435,11 @@ fn snapshot(view: &View, seen: u64) -> ViewUpdate {
     if view.revision == seen {
         view.diagram = None;
     }
+    if view.self_id.is_some() {
+        view.mascot = None;
+        view.mascot_meeting = None;
+        view.mascot_splats.clear();
+    }
     ViewUpdate::Full(view)
 }
 
@@ -432,167 +487,6 @@ fn alias(name: &str) -> Result<String> {
         return Err(invalid("Digite um nome de até 32 caracteres."));
     }
     Ok(name.to_owned())
-}
-
-async fn host(
-    endpoint: Endpoint,
-    mut sharing: Sharing,
-    mut diagram: Diagram,
-    project: SharedProject,
-    mut invitation: Option<(Uuid, Instant)>,
-    state: Arc<Mutex<View>>,
-    mut commands: Inbox,
-) -> Result<()> {
-    loop {
-        idle_view(&state, &endpoint, &sharing, invitation);
-        let mut next = std::pin::pin!(incoming(&endpoint));
-        let attempt = loop {
-            let expires = invitation.map(|(_, expires)| expires);
-            tokio::select! {
-                result = &mut next => break result?,
-                _ = wait_for_expiry(expires), if expires.is_some() => {
-                    invitation = None;
-                    idle_view(&state, &endpoint, &sharing, invitation);
-                }
-                request = commands.recv() => {
-                    let request = request.ok_or_else(disconnected)?;
-                    let result = match request.command {
-                        Command::Invite => {
-                            record_invitation(&project, &mut sharing, Some(new_invitation())).map(|next| {
-                                invitation = next;
-                                idle_view(&state, &endpoint, &sharing, invitation);
-                            })
-                        }
-                        Command::Revoke => revoke(&project, &mut sharing, &state),
-                        Command::End => {
-                            let _ = request.response.send(Ok(()));
-                            return Ok(());
-                        }
-                        Command::Edit { before, diagram: after } =>
-                            apply_edit(&state, Some(&project), &mut diagram, &before, &after),
-                        _ => Err(operation_unavailable()),
-                    };
-                    let _ = request.response.send(result);
-                }
-            }
-        };
-        let (
-            connection,
-            mut send,
-            mut recv,
-            Visitor {
-                name: peer,
-                token: candidate,
-                mascots,
-                version,
-            },
-        ) = attempt;
-        let peer_id = connection.remote_id();
-        let saved = sharing
-            .guest
-            .as_ref()
-            .filter(|guest| guest.id == peer_id && matches_token(candidate, guest.ticket));
-        let return_code = if let Some(guest) = saved {
-            if announce_room(&mut send, &sharing.name, version.is_some())
-                .await
-                .is_err()
-            {
-                continue;
-            }
-            change(&state, |view| {
-                view.peer = Some(guest.name.clone());
-                view.peer_version.clone_from(&version);
-            });
-            Some(encode(endpoint.id(), guest.ticket))
-        } else if invitation.is_some_and(|(token, expiry)| {
-            Instant::now() < expiry && matches_token(candidate, token)
-        }) {
-            if announce_room(&mut send, &sharing.name, version.is_some())
-                .await
-                .is_err()
-            {
-                continue;
-            }
-            change(&state, |view| {
-                view.phase = Phase::Approval;
-                view.peer_version.clone_from(&version);
-                view.peer = Some(peer.clone());
-                view.code = None;
-            });
-            let remember =
-                match approve(&connection, &mut commands, &state, &project, &mut diagram).await {
-                    Approval::Accepted { remember } => {
-                        invitation = record_invitation(&project, &mut sharing, None)?;
-                        remember
-                    }
-                    Approval::Rejected => {
-                        invitation = record_invitation(&project, &mut sharing, None)?;
-                        reject(connection, send);
-                        continue;
-                    }
-                    Approval::Interrupted => {
-                        reject(connection, send);
-                        continue;
-                    }
-                };
-            if remember {
-                let ticket = Uuid::new_v4();
-                let previous = sharing.guest.replace(Guest {
-                    id: peer_id,
-                    name: peer,
-                    ticket,
-                });
-                if flow_access::write(&project.directory, project.id, &sharing).is_ok() {
-                    change(&state, |view| {
-                        view.trusted_peer = sharing.guest.as_ref().map(|guest| guest.name.clone())
-                    });
-                    Some(encode(endpoint.id(), ticket))
-                } else {
-                    sharing.guest = previous;
-                    change(&state, |view| {
-                        view.message =
-                            Some("A pessoa entrou, mas não foi possível salvar o acesso.".into())
-                    });
-                    None
-                }
-            } else {
-                None
-            }
-        } else {
-            reject(connection, send);
-            continue;
-        };
-        if send_packet(
-            &mut send,
-            Packet::Accepted {
-                name: sharing.name.clone(),
-                diagram: diagram.clone(),
-                return_code,
-                mascots,
-                version: Some(APP_VERSION.into()),
-            },
-        )
-        .await
-        .is_err()
-        {
-            continue;
-        }
-
-        let result = connected(
-            &mut send,
-            &mut recv,
-            &state,
-            &mut commands,
-            &mut diagram,
-            mascots,
-            Some((&project, &mut sharing)),
-        )
-        .await;
-        if result.is_ok_and(|ended_here| ended_here) {
-            return Ok(());
-        }
-        // Keep the project's listener available when a guest leaves.
-    }
 }
 
 fn new_invitation() -> (Uuid, Instant) {
@@ -662,83 +556,6 @@ async fn announce_room(send: &mut SendStream, name: &str, versioned: bool) -> Re
     Ok(())
 }
 
-fn idle_view(
-    state: &Mutex<View>,
-    endpoint: &Endpoint,
-    sharing: &Sharing,
-    invitation: Option<(Uuid, Instant)>,
-) {
-    change(state, |view| {
-        view.phase = if invitation.is_some() {
-            Phase::Inviting
-        } else {
-            Phase::Available
-        };
-        view.code = invitation.map(|(token, _)| encode(endpoint.id(), token));
-        view.peer = None;
-        view.peer_version = None;
-        view.cursor = None;
-        view.mascot = None;
-        view.mascot_meeting = None;
-        view.mascot_splats.clear();
-        view.mascot_supported = false;
-        view.can_edit = true;
-        view.trusted_peer = sharing.guest.as_ref().map(|guest| guest.name.clone());
-    });
-}
-
-async fn wait_for_expiry(expires: Option<Instant>) {
-    if let Some(expires) = expires {
-        sleep_until(expires).await;
-    }
-}
-
-async fn approve(
-    connection: &Connection,
-    commands: &mut Inbox,
-    state: &Mutex<View>,
-    project: &SharedProject,
-    diagram: &mut Diagram,
-) -> Approval {
-    let expires = Instant::now() + APPROVAL_TIME;
-    loop {
-        let request = tokio::select! {
-            _ = connection.closed() => return Approval::Interrupted,
-            _ = sleep_until(expires) => return Approval::Interrupted,
-            request = commands.recv() => match request {
-                Some(request) => request,
-                None => return Approval::Interrupted,
-            },
-        };
-        let result = match request.command {
-            Command::Accept { remember } => {
-                let _ = request.response.send(Ok(()));
-                return Approval::Accepted { remember };
-            }
-            Command::Reject => {
-                let _ = request.response.send(Ok(()));
-                return Approval::Rejected;
-            }
-            Command::Edit {
-                before,
-                diagram: after,
-            } => apply_edit(state, Some(project), diagram, &before, &after),
-            _ => Err(operation_unavailable()),
-        };
-        let _ = request.response.send(result);
-    }
-}
-
-fn revoke(project: &SharedProject, sharing: &mut Sharing, state: &Mutex<View>) -> Result<()> {
-    let previous = sharing.guest.take();
-    if let Err(error) = flow_access::write(&project.directory, project.id, sharing) {
-        sharing.guest = previous;
-        return Err(error);
-    }
-    change(state, |view| view.trusted_peer = None);
-    Ok(())
-}
-
 fn reject(connection: Connection, mut send: SendStream) {
     tokio::spawn(async move {
         let _ = send_packet(&mut send, Packet::Rejected).await;
@@ -766,6 +583,7 @@ async fn incoming(endpoint: &Endpoint) -> Result<(Connection, SendStream, RecvSt
                 token,
                 mascots,
                 version,
+                group,
             } = read_packet(&mut recv).await?
             else {
                 return Err(unavailable());
@@ -779,6 +597,7 @@ async fn incoming(endpoint: &Endpoint) -> Result<(Connection, SendStream, RecvSt
                     token,
                     mascots,
                     version: version.filter(|value| valid_version(value)),
+                    group,
                 },
             ))
         })
@@ -811,6 +630,7 @@ async fn join(
                 token,
                 mascots: true,
                 version: Some(APP_VERSION.into()),
+                group: true,
             },
         )
         .await?;
@@ -829,14 +649,15 @@ async fn join(
         });
         answer = tokio::time::timeout_at(deadline, read_packet(&mut recv)).await;
     }
-    let (name, mut diagram, return_code, mascots, version) = match answer {
+    let (name, mut diagram, return_code, mascots, version, you) = match answer {
         Ok(Ok(Packet::Accepted {
             name,
             diagram,
             return_code,
             mascots,
             version,
-        })) => (alias(&name)?, diagram, return_code, mascots, version),
+            you,
+        })) => (alias(&name)?, diagram, return_code, mascots, version, you),
         Ok(Ok(Packet::Rejected)) => {
             return Err(AppError::new(
                 "declined",
@@ -857,6 +678,7 @@ async fn join(
             view.peer_version = Some(version);
         }
         view.return_code = return_code;
+        view.self_id = you;
         view.diagram = Some(Arc::new(diagram.clone()));
         view.revision += 1;
     });
@@ -868,11 +690,11 @@ async fn join(
         &mut commands,
         &mut diagram,
         mascots,
-        None,
+        you,
     )
     .await;
     endpoint.close().await;
-    result.map(|_| ())
+    result
 }
 
 async fn connected(
@@ -882,83 +704,76 @@ async fn connected(
     commands: &mut Inbox,
     diagram: &mut Diagram,
     mascots: bool,
-    mut owner: Option<(&SharedProject, &mut Sharing)>,
-) -> Result<bool> {
+    you: Option<Uuid>,
+) -> Result<()> {
     change(state, |view| {
         view.phase = Phase::Connected;
         view.mascot_supported = mascots;
         view.can_edit = true;
         view.code = None;
     });
-    let rich_mascots = mascots
+    let rich = mascots
         && state
             .lock()
             .map_err(|_| unavailable())?
             .peer_version
             .is_some();
-    let mut acknowledged = 0;
     let mut sequence = 0;
     let mut pending = VecDeque::new();
     loop {
-        // Keep the read future alive while local commands run so partial frames are retained.
         let mut packet = std::pin::pin!(read_packet(recv));
         let received = loop {
             tokio::select! {
                 incoming = &mut packet => break incoming?,
                 request = commands.recv() => {
                     let request = request.ok_or_else(disconnected)?;
-                    let result = match request.command {
-                        Command::End => {
-                            let result = send_packet(send, Packet::Bye).await;
-                            let _ = send.finish();
-                            let _ = timeout(Duration::from_millis(500), send.stopped()).await;
-                            let _ = request.response.send(result);
-                            return Ok(true);
-                        }
-                        Command::Edit { before, diagram: after } => {
-                            if let Some((project, _)) = owner.as_ref() {
-                                match apply_edit(state, Some(project), diagram, &before, &after) {
-                                    Ok(()) => send_packet(send, Packet::Snapshot { diagram: diagram.clone(), acknowledged }).await,
-                                    Err(error) => Err(error),
+                    if matches!(request.command, Command::End) {
+                        let result = send_packet(send, Packet::Bye).await;
+                        let _ = send.finish();
+                        let _ = timeout(Duration::from_millis(500), send.stopped()).await;
+                        let _ = request.response.send(result);
+                        return Ok(());
+                    }
+                    let packet = match request.command {
+                        Command::Edit { before, diagram: after } if pending.len() < MAX_PENDING => {
+                            match apply_edit(state, None, diagram, &before, &after) {
+                                Ok(()) => {
+                                    sequence += 1;
+                                    let packet = Packet::Edit { before: before.clone(), diagram: after.clone() };
+                                    pending.push_back((sequence, before, after));
+                                    Ok(packet)
                                 }
-                            } else if pending.len() >= MAX_PENDING {
-                                Err(invalid("Aguarde a sincronização para continuar editando."))
-                            } else {
-                                match apply_edit(state, None, diagram, &before, &after) {
-                                    Ok(()) => {
-                                        let message = Packet::Edit { before: before.clone(), diagram: after.clone() };
-                                        sequence += 1;
-                                        pending.push_back((sequence, before, after));
-                                        send_packet(send, message).await
-                                    }
-                                    Err(error) => Err(error),
-                                }
+                                Err(error) => Err(error),
                             }
                         }
-                        Command::Revoke => match owner.as_mut() {
-                            Some((project, sharing)) => revoke(project, sharing, state),
-                            None => Err(operation_unavailable()),
-                        },
-                        Command::Mascot { mascot } if mascots && mascot.as_ref().is_none_or(Mascot::valid) =>
-                            send_packet(send, Packet::Mascot { mascot }).await,
-                        Command::MascotSplat { splat } if rich_mascots && splat.valid() =>
-                            send_packet(send, Packet::MascotSplat { splat }).await,
-                        Command::MascotMeeting { meeting } if mascots && meeting.valid() =>
-                            send_packet(send, Packet::MascotMeeting { meeting }).await,
-                        Command::Cursor { position } if valid_position(position) =>
-                            send_packet(send, Packet::Cursor { position }).await,
+                        Command::Edit { .. } => Err(invalid("Aguarde a sincronização para continuar editando.")),
+                        Command::Cursor { position } if valid_position(position) => Ok(Packet::Cursor { position }),
+                        Command::Mascot { mascot } if mascots && mascot.as_ref().is_none_or(Mascot::valid) => Ok(Packet::Mascot { mascot }),
+                        Command::MascotSplat { splat } if rich && splat.valid() => Ok(Packet::MascotSplat { splat }),
+                        Command::MascotMeeting { meeting } if mascots && meeting.valid() => Ok(Packet::MascotMeeting { meeting }),
+                        Command::ChildDrag { owner, drag } if you.is_some() && drag.valid() =>
+                            Ok(Packet::ChildDrag { owner, from: None, drag }),
                         _ => Err(operation_unavailable()),
                     };
+                    let result = match packet { Ok(packet) => send_packet(send, packet).await, Err(error) => Err(error) };
                     let lost = result.as_ref().err().is_some_and(|error| error.kind == "collaboration");
                     let _ = request.response.send(result);
-                    if lost {
-                        return Err(disconnected());
-                    }
+                    if lost { return Err(disconnected()); }
                 }
             }
         };
         match received {
-            Packet::Bye => return Ok(false),
+            Packet::Bye => return Ok(()),
+            Packet::Member { id, event } if you.is_some() => {
+                change(state, |view| room::receive_member(view, id, event))
+            }
+            Packet::ChildDrag {
+                owner,
+                from: Some(from),
+                drag,
+            } if Some(owner) == you && drag.valid() => {
+                change(state, |view| room::receive_drag(view, from, drag))
+            }
             Packet::Mascot { mascot } if mascots => {
                 if mascot.as_ref().is_none_or(Mascot::valid) {
                     change(state, |view| {
@@ -966,57 +781,37 @@ async fn connected(
                             view.mascot_meeting = None;
                             view.mascot_splats.clear();
                         }
-                        view.mascot = mascot;
+                        view.mascot = mascot.map(Arc::new);
                         view.mascot_version += 1;
                     });
                 }
             }
-            Packet::MascotSplat { splat } if rich_mascots => {
-                if splat.valid() {
-                    change(state, |view| {
-                        if view.mascot.is_some() {
-                            if view.mascot_splats.len() >= 16 {
-                                view.mascot_splats.pop_front();
-                            }
-                            view.mascot_splats.push_back(splat);
-                            view.mascot_version += 1;
+            Packet::MascotSplat { splat } if rich && splat.valid() => {
+                change(state, |view| {
+                    if view.mascot.is_some() {
+                        if view.mascot_splats.len() >= 16 {
+                            view.mascot_splats.pop_front();
                         }
-                    });
-                }
+                        view.mascot_splats.push_back(splat);
+                        view.mascot_version += 1;
+                    }
+                });
             }
-            Packet::MascotMeeting { meeting } if mascots => {
-                if meeting.valid() {
-                    change(state, |view| {
-                        if view.mascot.is_some() {
-                            view.mascot_meeting = Some(meeting);
-                            view.mascot_version += 1;
-                        }
-                    });
-                }
+            Packet::MascotMeeting { meeting } if mascots && meeting.valid() => {
+                change(state, |view| {
+                    if view.mascot.is_some() {
+                        view.mascot_meeting = Some(meeting);
+                        view.mascot_version += 1;
+                    }
+                });
             }
             Packet::Cursor { position } if valid_position(position) => {
-                change(state, |view| view.cursor = position);
-            }
-            Packet::Edit {
-                before,
-                diagram: after,
-            } if owner.is_some() => {
-                let project = owner.as_ref().map(|(project, _)| *project);
-                apply_edit(state, project, diagram, &before, &after)?;
-                acknowledged += 1;
-                send_packet(
-                    send,
-                    Packet::Snapshot {
-                        diagram: diagram.clone(),
-                        acknowledged,
-                    },
-                )
-                .await?;
+                change(state, |view| view.cursor = position)
             }
             Packet::Snapshot {
                 diagram: mut next,
                 acknowledged,
-            } if owner.is_none() => {
+            } => {
                 next.validate_draft()?;
                 pending.retain(|(sequence, _, _)| *sequence > acknowledged);
                 for (_, before, after) in &pending {
@@ -1083,7 +878,11 @@ async fn read_packet(recv: &mut RecvStream) -> Result<Packet> {
 }
 
 async fn send_packet(send: &mut SendStream, packet: Packet) -> Result<()> {
-    let bytes = serde_json::to_vec(&packet).map_err(|_| unavailable())?;
+    send_packet_ref(send, &packet).await
+}
+
+async fn send_packet_ref(send: &mut SendStream, packet: &Packet) -> Result<()> {
+    let bytes = serde_json::to_vec(packet).map_err(|_| unavailable())?;
     if bytes.len() > MAX_FRAME {
         return Err(unavailable());
     }
@@ -1139,7 +938,7 @@ impl FlowCollaboration {
                 .filter(|_| resume_invite)
                 .and_then(restore_invitation);
             match saved {
-                Some(sharing) if invitation.is_some() || sharing.guest.is_some() => {
+                Some(sharing) if invitation.is_some() || !sharing.guests.is_empty() => {
                     (sharing, invitation)
                 }
                 _ if resume_invite => {
@@ -1197,7 +996,7 @@ impl FlowCollaboration {
                 continue;
             };
             if flow_access::read(directory, id)
-                .is_ok_and(|saved| saved.is_some_and(|sharing| sharing.guest.is_some()))
+                .is_ok_and(|saved| saved.is_some_and(|sharing| !sharing.guests.is_empty()))
             {
                 let _ = self.host_project(directory, id, None, true);
             }
@@ -1451,6 +1250,248 @@ mod tests {
         exercise_session(true).await;
     }
 
+    #[tokio::test]
+    async fn guests_share_the_same_room_and_can_move_one_anothers_young() {
+        exercise_group(false).await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requer acesso aos relays públicos do Iroh"]
+    async fn group_uses_the_public_relay() {
+        exercise_group(true).await;
+    }
+
+    async fn exercise_group(relay: bool) {
+        use super::super::flow_mascot::DragKind;
+
+        let directory = tempfile::tempdir().unwrap();
+        let project = SharedProject {
+            id: Uuid::new_v4(),
+            directory: directory.path().to_owned(),
+        };
+        let base = diagram("Sala");
+        let workspace = workspaces::Workspace {
+            id: project.id,
+            diagram: base.clone(),
+            file: None,
+            file_dirty: false,
+            returning_guest: false,
+        };
+        std::fs::write(
+            project.directory.join(format!("{}.json", project.id)),
+            serde_json::to_vec(&workspace).unwrap(),
+        )
+        .unwrap();
+        let sharing = Sharing::new("Lucas".into());
+        let server = test_endpoint(SecretKey::from_bytes(&sharing.key), relay, true).await;
+        let destination = address(&server, relay);
+        let owner = FlowCollaboration::default();
+        let host = owner
+            .start(Some(project.id), |state, commands| {
+                super::host(
+                    server,
+                    sharing,
+                    base.clone(),
+                    project.clone(),
+                    Some(new_invitation()),
+                    state,
+                    commands,
+                )
+            })
+            .unwrap();
+        let room = wait(&owner, Some(project.id), |view| {
+            view.phase == Phase::Inviting
+        })
+        .await;
+        let (_, token) = decode(&room.code.unwrap()).unwrap();
+        let host_tx = owner.sender(host.id).unwrap();
+        let bia = FlowCollaboration::default();
+        let ste = FlowCollaboration::default();
+        let first = test_endpoint(SecretKey::generate(), relay, false).await;
+        let second = test_endpoint(SecretKey::generate(), relay, false).await;
+        let first = bia
+            .start(None, |state, inbox| {
+                join(
+                    first,
+                    destination.clone(),
+                    token,
+                    "Bia".into(),
+                    state,
+                    inbox,
+                )
+            })
+            .unwrap();
+        let second = ste
+            .start(None, |state, inbox| {
+                join(second, destination, token, "Sté".into(), state, inbox)
+            })
+            .unwrap();
+        for count in 0..2 {
+            let pending = wait(&owner, Some(project.id), |view| {
+                view.members.len() == count && view.approval.is_some()
+            })
+            .await;
+            let approval = serde_json::to_value(pending.approval.unwrap()).unwrap();
+            let request = serde_json::from_value(approval["id"].clone()).unwrap();
+            submit(
+                host_tx.clone(),
+                Command::Accept {
+                    remember: true,
+                    request: Some(request),
+                },
+            )
+            .await
+            .unwrap();
+        }
+        let ready = |view: &View| view.phase == Phase::Connected && view.members.len() == 2;
+        let (bia_ready, ste_ready) = tokio::join!(wait(&bia, None, ready), wait(&ste, None, ready));
+        assert_ne!(bia_ready.self_id, ste_ready.self_id);
+        assert_eq!(
+            flow_access::read(&project.directory, project.id)
+                .unwrap()
+                .unwrap()
+                .guests
+                .len(),
+            2
+        );
+
+        let cursor = Some(Position { x: 73.0, y: 44.0 });
+        submit(
+            ste.sender(second.id).unwrap(),
+            Command::Cursor { position: cursor },
+        )
+        .await
+        .unwrap();
+        let people = |view: &View| serde_json::to_value(&view.members).unwrap();
+        wait(&bia, None, |view| {
+            people(view)
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|peer| peer["name"] == "Sté" && peer["cursor"]["x"] == 73.0)
+        })
+        .await;
+
+        let mut left_edit = base.clone();
+        left_edit.summary = "Bia editou".into();
+        let mut right_edit = base.clone();
+        right_edit.requirements.push("Sté editou".into());
+        let bia_tx = bia.sender(first.id).unwrap();
+        let ste_tx = ste.sender(second.id).unwrap();
+        let (left, right) = tokio::join!(
+            submit(
+                bia_tx.clone(),
+                Command::Edit {
+                    before: base.clone(),
+                    diagram: left_edit
+                }
+            ),
+            submit(
+                ste_tx.clone(),
+                Command::Edit {
+                    before: base,
+                    diagram: right_edit
+                }
+            ),
+        );
+        left.unwrap();
+        right.unwrap();
+        let merged = |view: &View| {
+            view.diagram.as_ref().is_some_and(|diagram| {
+                diagram.summary == "Bia editou" && diagram.requirements == ["Sté editou"]
+            })
+        };
+        wait(&bia, None, merged).await;
+        wait(&ste, None, merged).await;
+        wait(&owner, Some(project.id), merged).await;
+
+        let mascot = serde_json::from_value(serde_json::json!({
+            "position":{"x":0.4,"y":0.6}, "hat":"none", "pose":"idle", "flight":null,
+            "scene": {"epoch":1, "origin":{"x":0.5,"y":0.7}, "toy":null, "clone":null, "hits":[],
+                "young":[{"id":9,"point":{"x":0.5,"y":0.9},"phase":"young","held":false,"rotation":0,"squash":0}]}
+        })).unwrap();
+        submit(
+            bia_tx.clone(),
+            Command::Mascot {
+                mascot: Some(mascot),
+            },
+        )
+        .await
+        .unwrap();
+        wait(&ste, None, |view| {
+            people(view)
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|peer| peer["name"] == "Bia" && peer["mascot"]["scene"]["young"][0]["id"] == 9)
+        })
+        .await;
+        let owner_id = bia_ready.self_id.unwrap();
+        let at = Position { x: 0.4, y: 0.4 };
+        submit(
+            ste_tx.clone(),
+            Command::ChildDrag {
+                owner: owner_id,
+                drag: ChildDrag {
+                    id: 9,
+                    kind: DragKind::Grab,
+                    point: at,
+                    velocity: None,
+                },
+            },
+        )
+        .await
+        .unwrap();
+        let picked = wait(&bia, None, |view| !view.child_drags.is_empty()).await;
+        assert_eq!(
+            serde_json::to_value(&picked.child_drags[0]).unwrap()["from"],
+            serde_json::json!(ste_ready.self_id)
+        );
+        assert!(owner
+            .view(host.id)
+            .unwrap()
+            .unwrap()
+            .lock()
+            .unwrap()
+            .child_drags
+            .is_empty());
+        assert!(submit(
+            host_tx,
+            Command::ChildDrag {
+                owner: owner_id,
+                drag: ChildDrag {
+                    id: 9,
+                    kind: DragKind::Grab,
+                    point: at,
+                    velocity: None
+                }
+            }
+        )
+        .await
+        .is_err());
+        submit(
+            ste_tx,
+            Command::ChildDrag {
+                owner: owner_id,
+                drag: ChildDrag {
+                    id: 9,
+                    kind: DragKind::Release,
+                    point: at,
+                    velocity: Some(Position { x: 1.0, y: -0.5 }),
+                },
+            },
+        )
+        .await
+        .unwrap();
+        wait(&bia, None, |view| view.child_drags.len() == 2).await;
+
+        ste.close(second.id).await.unwrap();
+        wait(&bia, None, |view| view.members.len() == 1).await;
+        assert!(owner.begin_shutdown());
+        owner.shutdown().await;
+        wait(&bia, None, |view| view.phase == Phase::Ended).await;
+    }
+
     async fn exercise_session(relay: bool) {
         let directory = tempfile::tempdir().unwrap();
         let project = SharedProject {
@@ -1542,9 +1583,15 @@ mod tests {
         assert!(!before_approval.can_edit);
         let host_tx = owner.sender(host.id).unwrap();
         let guest_tx = guest.sender(visitor.id).unwrap();
-        submit(host_tx.clone(), Command::Accept { remember: true })
-            .await
-            .unwrap();
+        submit(
+            host_tx.clone(),
+            Command::Accept {
+                remember: true,
+                request: None,
+            },
+        )
+        .await
+        .unwrap();
         let approved = wait(&guest, None, |view| view.phase == Phase::Connected).await;
         assert!(approved.can_edit);
         assert_eq!(approved.diagram.unwrap().title, "Projeto");
@@ -1615,7 +1662,7 @@ mod tests {
         assert_eq!(scene.young.len(), 1);
         assert!(scene.hits[0].pop);
         assert_eq!(scene.sounds[0].strength, 0.8);
-        assert_eq!(remote.flight.unwrap().velocity_x, -1040.0);
+        assert_eq!(remote.flight.as_ref().unwrap().velocity_x, -1040.0);
         submit(
             host_tx.clone(),
             Command::Mascot {
@@ -1647,6 +1694,7 @@ mod tests {
             id: 1,
             position: Position { x: 0.5, y: 0.5 },
             kind: super::super::flow_mascot::MeetingKind::Bump,
+            peer: None,
             impulse: Some(super::super::flow_mascot::Impulse {
                 direction: Position { x: 1.0, y: 0.0 },
                 strength: 920.0,
@@ -1749,7 +1797,7 @@ mod tests {
         submit(guest_tx, Command::End).await.unwrap();
         guest.end(visitor.id).unwrap();
         wait(&owner, Some(project.id), |view| {
-            view.phase == Phase::Available && view.cursor.is_none()
+            view.phase == Phase::Inviting && view.cursor.is_none()
         })
         .await;
         owner.end(host.id).unwrap();
@@ -1827,8 +1875,8 @@ mod tests {
         assert!(flow_access::read(&project.directory, project.id)
             .unwrap()
             .unwrap()
-            .guest
-            .is_none());
+            .guests
+            .is_empty());
         assert!(owner.begin_shutdown());
         assert!(!owner.begin_shutdown());
         owner.shutdown().await;

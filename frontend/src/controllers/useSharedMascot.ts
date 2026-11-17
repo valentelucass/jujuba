@@ -3,7 +3,7 @@ import { flowCollaboration } from './api'
 import type { FlightBounds, FlightFrame, Impact, Point } from './mascotMotion'
 import { separateMascots } from './mascotMotion'
 import type { MascotScene } from '../models/mascotScene'
-import type { MascotImpulse, MascotMeeting, MascotMeetingKind, MascotPose, MascotPreferences, MascotPresence, MascotRoom } from '../models/flowMascot'
+import type { FlowParticipant, MascotImpulse, MascotMeeting, MascotMeetingKind, MascotPose, MascotPreferences, MascotPresence, MascotRoom, MascotVisibility } from '../models/flowMascot'
 
 const preferenceKey = 'jujuba.flow.mascots'
 const normal = (value: number) => Math.max(0, Math.min(value, 1))
@@ -21,10 +21,10 @@ function readPreferences(): MascotPreferences {
     const saved = JSON.parse(localStorage.getItem(preferenceKey) ?? 'null')
     if (saved) {
       const remote = saved.remote === 'hidden' || saved.remote === 'full' ? saved.remote : 'dim'
-      return { remote, shareOwn: saved.shareOwn !== false }
+      return { remote, shareOwn: saved.shareOwn !== false, paused: saved.paused === true, byPeer: {} }
     }
   } catch { /* As preferências continuam funcionando durante esta sessão. */ }
-  return { remote: 'dim', shareOwn: true }
+  return { remote: 'dim', shareOwn: true, paused: false, byPeer: {} }
 }
 
 function normalize(point: Point, limits: FlightBounds): Point {
@@ -51,18 +51,24 @@ type Practice = {
   relocate: (point: Point) => void
 }
 
-export function useSharedMascot(room: MascotRoom | null, {
+export type VisibleMascot = {
+  member: FlowParticipant
+  appearance: MascotPresence & { point: Point }
+  visibility: MascotVisibility
+}
+
+export function useSharedMascot(network: MascotRoom | null, {
   position, bounds, hat, pose, flight, kick, relocate, receiveSplat, practice, scene: sharedScene,
 }: {
   position: Point; bounds: FlightBounds; hat: string; pose: MascotPose; flight: FlightFrame | null
   kick: (impulse: MascotImpulse, source: 'local' | 'remote', from?: Point) => void
   relocate: (point: Point) => void
-  receiveSplat?: (impact: Impact) => void
+  receiveSplat?: (impact: Impact, peer: string) => void
   practice?: Practice | null
   scene?: RefObject<(() => MascotScene) | null>
 }) {
   const [preferences, setPreferences] = useState(readPreferences)
-  const [shown, setShown] = useState<{ source: 'local' | 'remote'; room: string; event: MascotMeeting } | null>(null)
+  const [shown, setShown] = useState<{ source: 'local' | 'remote'; room: string; peer?: string; event: MascotMeeting } | null>(null)
   const latest = useRef<MascotPresence | null>(null)
   const contact = useRef(false)
   const sequence = useRef(0)
@@ -71,31 +77,49 @@ export function useSharedMascot(room: MascotRoom | null, {
   const splatSequence = useRef(0)
   const lastInteraction = useRef(-Infinity)
   const lastImpact = useRef(-Infinity)
-  const received = useRef(0)
-  const receivedSplat = useRef(0)
+  const received = useRef(new Map<string, number>())
+  const receivedSplat = useRef(new Map<string, number>())
   const previousPair = useRef<{ room: string; own: Point; other: Point; time: number } | null>(null)
   const react = useRef<(kind: 'ambient' | 'brush' | 'contact') => void>(() => {})
   const reactToKick = useRef(kick)
   reactToKick.current = kick
   const ensureSplat = useRef(receiveSplat)
   ensureSplat.current = receiveSplat
+  const members: FlowParticipant[] = network?.selfId ? network.members ?? [] : network ? [{
+    id: 'legacy', name: network.peer, group: false, cursor: null, mascot: network.mascot, meeting: network.meeting, splats: network.splats,
+  }] : []
+  const visibilityFor = (id: string) => preferences.paused ? 'hidden' : preferences.byPeer[id] ?? preferences.remote
+  const quiet = preferences.paused || (!!members.length && members.every(({ id }) => visibilityFor(id) === 'hidden'))
+  const visible = members.flatMap<VisibleMascot>((member) => {
+    const visibility = visibilityFor(member.id)
+    return visibility === 'hidden' || !member.mascot ? [] : [{
+      member, visibility, appearance: { ...member.mascot, point: project(member.mascot.position, bounds) },
+    }]
+  })
+  const nearest = visible.reduce<VisibleMascot | undefined>((closest, candidate) => {
+    if (!closest) return candidate
+    const distance = ({ appearance }: VisibleMascot) => Math.hypot(appearance.point.x - position.x, appearance.point.y - position.y)
+    return distance(candidate) < distance(closest) ? candidate : closest
+  }, undefined)
+  const selectedPeer = nearest?.member.id
+  const peer = nearest?.appearance ?? null
+  const room = network
   const localOnly = !!practice
   const roomId = localOnly ? 'mascot-clone' : room?.id
   const rich = localOnly || !!room?.rich
-  const peer = preferences.remote === 'hidden' ? null : room?.mascot
-  const other = practice?.point ?? (peer ? project(peer.position, bounds) : null)
+  const other = practice?.point ?? peer?.point ?? null
   const gap = other ? Math.hypot(position.x - other.x, position.y - other.y) : Infinity
-  const shouldReact = (localOnly || preferences.shareOwn) && !!other
-  const event = shown && shown.room === roomId && shouldReact ? shown.event : null
+  const shouldReact = (localOnly || preferences.shareOwn) && !quiet && !!other
+  const event = shown && shown.room === roomId && shown.peer === selectedPeer && shouldReact ? shown.event : null
   const midpoint = other ? { x: (position.x + other.x) / 2, y: (position.y + other.y) / 2 } : null
   const moving = pose === 'held' || !!flight
   const practiceMoving = !!practice && (practice.held || !!practice.flight)
   const peerMoving = !!(practiceMoving || peer?.pose === 'held' || peer?.flight)
   const hugging = event?.kind === 'hug' && gap < separateDistance && !moving && !peerMoving
   const scene = useRef({ room, bounds, midpoint, gap, share: preferences.shareOwn })
-  scene.current = { room, bounds, midpoint, gap, share: preferences.shareOwn }
+  scene.current = { room, bounds, midpoint, gap, share: preferences.shareOwn && !quiet }
 
-  latest.current = preferences.shareOwn ? {
+  latest.current = preferences.shareOwn && !quiet ? {
     position: normalize(position, bounds),
     hat, pose,
     flight: flight ? { edge: flight.edge, velocityX: flight.velocity.x, squash: flight.squash } : null,
@@ -116,8 +140,8 @@ export function useSharedMascot(room: MascotRoom | null, {
       ).finally(() => { pending = false })
     }
     contact.current = false
-    received.current = 0
-    receivedSplat.current = 0
+    received.current.clear()
+    receivedSplat.current.clear()
     lastInteraction.current = -Infinity
     lastImpact.current = -Infinity
     if (localOnly) ambientSequence.current = 0
@@ -137,35 +161,32 @@ export function useSharedMascot(room: MascotRoom | null, {
     if (shown?.event.kind === 'hug' && !hugging) setShown((current) => current === shown ? null : current)
   }, [hugging, shown])
 
-  const incoming = room?.meeting
+  const incoming = nearest?.member.meeting
   useEffect(() => {
-    if (!incoming) {
-      received.current = 0
-      return
-    }
-    if (received.current === incoming.id) return
-    received.current = incoming.id
+    if (!incoming || !selectedPeer || (incoming.peer && incoming.peer !== room?.selfId)) return
+    if (received.current.get(selectedPeer) === incoming.id) return
+    received.current.set(selectedPeer, incoming.id)
     if (!roomId || !shouldReact) return
     lastInteraction.current = performance.now()
-    setShown({ room: roomId, source: 'remote', event: incoming })
+    setShown({ room: roomId, peer: selectedPeer, source: 'remote', event: incoming })
     if (incoming.impulse) {
       lastImpact.current = performance.now()
       reactToKick.current(incoming.impulse, 'remote')
     }
-  }, [incoming, roomId, shouldReact])
+  }, [incoming, roomId, selectedPeer, shouldReact])
 
   useEffect(() => {
-    const list = room?.splats
-    if (!list?.length) {
-      receivedSplat.current = 0
-      return
+    for (const member of members) {
+      if (!member.splats.length) receivedSplat.current.delete(member.id)
+      for (const mark of member.splats) {
+        if (mark.id <= (receivedSplat.current.get(member.id) ?? 0)) continue
+        receivedSplat.current.set(member.id, mark.id)
+        if (visibilityFor(member.id) !== 'hidden' && member.mascot) {
+          ensureSplat.current?.({ ...project(mark.position, scene.current.bounds), edge: mark.edge, slide: mark.slide, strength: mark.strength }, member.id)
+        }
+      }
     }
-    for (const mark of list) {
-      if (mark.id <= receivedSplat.current) continue
-      receivedSplat.current = mark.id
-      if (peer) ensureSplat.current?.({ ...project(mark.position, scene.current.bounds), edge: mark.edge, slide: mark.slide, strength: mark.strength })
-    }
-  }, [room?.splats, peer])
+  }, [members, preferences])
 
   useEffect(() => {
     if (!roomId || !other || !shouldReact) {
@@ -182,7 +203,7 @@ export function useSharedMascot(room: MascotRoom | null, {
     const otherVelocity = practice?.flight?.velocity ?? (previous?.room === roomId ? {
       x: (other.x - previous.other.x) / elapsed, y: (other.y - previous.other.y) / elapsed,
     } : { x: 0, y: 0 })
-    const defaultDirection = { x: room?.host === false ? -1 : 1, y: 0 }
+    const defaultDirection = { x: room?.selfId && selectedPeer ? (room.selfId < selectedPeer ? 1 : -1) : room?.host === false ? -1 : 1, y: 0 }
     const fallback = previous ? unit(previous.other.x - previous.own.x, previous.other.y - previous.own.y, defaultDirection) : defaultDirection
     const direction = unit(other.x - position.x, other.y - position.y, fallback)
     const separated = gap < 49.5 ? separateMascots(position, other, bounds, direction) : null
@@ -215,7 +236,8 @@ export function useSharedMascot(room: MascotRoom | null, {
     if (hugging && !hit) return
     if (localOnly && trigger === 'contact' && !hit) return
     if (!hit && now - lastInteraction.current < (trigger === 'ambient' ? 1880 : 1300)) return
-    if (trigger === 'ambient' && ((!localOnly && !room?.host) || !rich || moving || peerMoving)) return
+    if (trigger === 'ambient' && ((!localOnly && !(room?.selfId && selectedPeer && selectedPeer !== 'legacy'
+      ? room.selfId < selectedPeer : room?.host)) || !rich || moving || peerMoving)) return
     if (trigger === 'brush' && (!rich || moving || peerMoving)) return
 
     let kind: MascotMeetingKind
@@ -300,19 +322,24 @@ export function useSharedMascot(room: MascotRoom | null, {
 
   function announce(id: string, kind: MascotMeetingKind, point: Point, impulse?: MascotImpulse) {
     lastInteraction.current = performance.now()
-    const meeting = { id: ++sequence.current, kind, position: normalize(point, bounds), impulse }
-    setShown({ room: id, source: 'local', event: meeting })
+    const meeting = { id: ++sequence.current, kind, position: normalize(point, bounds), impulse,
+      peer: room?.selfId && selectedPeer !== 'legacy' ? selectedPeer : undefined }
+    setShown({ room: id, peer: selectedPeer, source: 'local', event: meeting })
     if (!localOnly) void flowCollaboration.command(id, { type: 'mascotMeeting', meeting }).catch(() => {})
   }
 
   function savePreferences(next: MascotPreferences) {
     setPreferences(next)
-    try { localStorage.setItem(preferenceKey, JSON.stringify(next)) } catch { /* A seleção continua ativa nesta sessão. */ }
+    try {
+      const { byPeer: _room, ...saved } = next
+      localStorage.setItem(preferenceKey, JSON.stringify(saved))
+    } catch { /* A seleção continua ativa nesta sessão. */ }
   }
 
   return {
     preferences, savePreferences, shareImpact, pushPeer,
     remote: peer && other ? { ...peer, point: other } : null,
+    members, visible, selectedPeer, visibilityFor, quiet,
     hug: hugging && midpoint && shown ? { key: shown.source + '-' + event.id, point: midpoint } : null,
     meeting: event ? { ...event, point: project(event.position, bounds),
       source: shown?.source, near: event.kind === 'hug' ? hugging : gap < separateDistance } : null,

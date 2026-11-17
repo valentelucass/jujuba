@@ -128,7 +128,7 @@ pub fn flow_project_load(app: AppHandle, id: Uuid) -> Result<Workspace> {
     let directory = directory(&app)?;
     let mut workspace = load(&directory, id)?;
     workspace.returning_guest =
-        flow_access::read(&directory, id)?.is_some_and(|sharing| sharing.guest.is_some());
+        flow_access::read(&directory, id)?.is_some_and(|sharing| !sharing.guests.is_empty());
     Ok(workspace)
 }
 

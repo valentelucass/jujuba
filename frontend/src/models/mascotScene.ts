@@ -15,11 +15,13 @@ export type SharedCompanion = {
 export type SharedYoung = {
   id: number; point: Point; phase: 'egg' | 'young' | 'popping'; rotation: number; squash: number; held: boolean
 }
-export type SceneHit = { id: number; target: 'main' | 'clone' | `young:${number}`; impulse: MascotImpulse; pop: boolean }
+export type SceneHit = { id: number; target: 'main' | 'clone' | `young:${number}`; impulse: MascotImpulse; pop: boolean; peer?: string }
 export type SceneSoundKind = 'throw' | 'slimeKick' | 'bounceOffWall' | 'hatch'
 export type SceneSound = { id: number; kind: SceneSoundKind; strength: number }
+export type GooBurst = { id: number; point: Point; members?: string[] }
 export type MascotScene = {
   epoch: number; origin: Point; toy: ToyVisual | null; clone: SharedCompanion | null; young: SharedYoung[]; hits: SceneHit[]; sounds: SceneSound[]
+  burst?: GooBurst | null
 }
 
 export function mapToy(toy: ToyVisual, project: (point: Point) => Point): ToyVisual {

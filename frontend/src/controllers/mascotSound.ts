@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MascotMeetingKind } from '../models/flowMascot'
 import { makeGelAudio, type GelEffect } from './mascotGelAudio'
 
-type Sound = MascotMeetingKind | GelEffect | 'click' | 'blaster' | 'bow' | 'hit' | 'hatch' | 'ricochet'
+type Sound = MascotMeetingKind | GelEffect | 'click' | 'blaster' | 'bow' | 'hit' | 'hatch' | 'ricochet' | 'bombCharge' | 'bombBurst'
 type SoundSettings = { muted: boolean; volume: number }
 type Note = [start: number, length: number, pitch: number, endPitch: number, emphasis?: number]
 type BowCreak = { noise: AudioBufferSourceNode; filter: BiquadFilterNode; gain: GainNode; vibrato: OscillatorNode; depth: GainNode }
@@ -22,11 +22,14 @@ const notes: Record<Exclude<Sound, GelEffect | 'blaster'>, Note[]> = {
   hit: [[0, .11, 220, 85], [.052, .13, 635, 345, .58]],
   hatch: [[0, .06, 245, 102], [.095, .12, 698, 790], [.18, .13, 880, 980], [.255, .24, 1175, 1320, .74]],
   ricochet: [[0, .09, 425, 208], [.021, .16, 310, 830, .55]],
+  bombCharge: [[0, .71, 68, 350, .42], [.16, .53, 124, 610, .4], [.49, .29, 330, 880, .58], [.70, .20, 570, 1230, .48]],
+  bombBurst: [[0, .66, 186, 33, .95], [.028, .41, 486, 81, .6], [.1, .24, 205, 73, .5], [.21, .22, 620, 188, .38]],
 }
 
 const wetSounds: Partial<Record<Sound, number>> = {
   kiss: .11, squeeze: .16, bounce: .22,
   push: .17, bump: .23, hit: .19, bow: .15, ricochet: .13,
+  bombCharge: .26, bombBurst: .29,
 }
 const storageKey = 'jujuba.assistant.sounds'
 function readSoundSettings(): SoundSettings {

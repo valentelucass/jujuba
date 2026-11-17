@@ -4,7 +4,7 @@ const directions = { top: 0, right: 90, bottom: 180, left: -90 }
 const colors = ['#df2885', '#ff65af', '#f2459d']
 
 type Drop = { x: number; y: number; width: number; height: number; rotation: number; color: string; delay: number }
-export type Splat = Point & { remote?: boolean; id: number; edge: Impact['edge']; angle: number; width: number; duration: number; path: string; highlight: string; drops: Drop[] }
+export type Splat = Point & { remote?: string; id: number; edge: Impact['edge']; angle: number; width: number; duration: number; path: string; highlight: string; drops: Drop[] }
 
 const vary = (min: number, max: number) => min + Math.random() * (max - min)
 

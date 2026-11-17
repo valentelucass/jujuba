@@ -100,7 +100,7 @@ function FitNewStages({ nodeIds }: { nodeIds: string }) {
   return null
 }
 
-export function SystemFlowCanvas({ diagram, selected, choose, connect, move, rename, disabled, peerCursor, sendCursor }: {
+export function SystemFlowCanvas({ diagram, selected, choose, connect, move, rename, disabled, peerCursors, sendCursor }: {
   diagram: SystemDiagram | null
   selected: string | null
   choose: (id: string | null) => void
@@ -108,7 +108,7 @@ export function SystemFlowCanvas({ diagram, selected, choose, connect, move, ren
   move: (id: string, position: StagePosition) => void
   rename: (id: string, label: string) => void
   disabled: boolean
-  peerCursor: (StagePosition & { name: string }) | null
+  peerCursors: (StagePosition & { id: string; name: string })[]
   sendCursor?: (position: StagePosition | null) => void
 }) {
   const flow = useRef<ReactFlowInstance<FlowNode, RoutedFlowEdge> | null>(null)
@@ -196,12 +196,12 @@ export function SystemFlowCanvas({ diagram, selected, choose, connect, move, ren
       onNodeClick={(_, node) => choose(node.id)} onPaneClick={() => choose(null)} onConnect={add}>
       <FitNewStages nodeIds={elementIds} />
       <Background id="system-flow-dots" gap={20} size={1.4} color="var(--canvas-dot)" />
-      {peerCursor && <ViewportPortal>
-        <div className="flow-peer-cursor" style={{ left: peerCursor.x, top: peerCursor.y }}
+      {peerCursors.length > 0 && <ViewportPortal>
+        {peerCursors.map((peerCursor) => <div key={peerCursor.id} className="flow-peer-cursor" style={{ left: peerCursor.x, top: peerCursor.y }}
           aria-label={'Cursor de ' + peerCursor.name}>
           <MousePointer2 size={19} fill="currentColor" />
           <span>{peerCursor.name}</span>
-        </div>
+        </div>)}
       </ViewportPortal>}
       {elementIds && <Controls showInteractive={false} />}
     </ReactFlow>

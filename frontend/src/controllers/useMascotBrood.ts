@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { throwVelocity, type FlightBounds, type FlightFrame, type Impact, type ImpactEdge, type Point, type PointerSample } from './mascotMotion'
-import type { MascotImpulse } from '../models/flowMascot'
+import type { ChildDrag, MascotImpulse } from '../models/flowMascot'
 
 export type Hug = { key: string; point: Point }
 export type Offspring = { id: number; x: number; phase: 'egg' | 'young' | 'popping'; flight: FlightFrame | null; held?: boolean }
@@ -55,6 +55,8 @@ export function useMascotBrood(area: FlightBounds, onImpact: (mark: Impact) => v
   scene.current = { area, onImpact, actors: scene.current.actors }
   const bodies = useRef(new Map<number, Body>())
   const drag = useRef<{ id: number; pointer: number; offset: Point; moved: boolean; origin: Point; samples: PointerSample[] } | null>(null)
+  const remote = useRef(new Map<number, string>())
+  const pull = useRef<Point | null>(null)
   const animation = useRef(0)
   const capacity = useRef(limit)
 
@@ -108,6 +110,14 @@ export function useMascotBrood(area: FlightBounds, onImpact: (mark: Impact) => v
             body.y = heldTarget.from.y + (heldTarget.to.y - heldTarget.from.y) * (step + 1) / steps
             continue
           }
+          if (pull.current) {
+            const strength = Math.min(1, dt * 7)
+            body.vx = body.vy = 0
+            body.x += (pull.current.x - body.x) * strength
+            body.y += (pull.current.y - body.y) * strength
+            changed = true
+            continue
+          }
           const airborne = body.y < bounds.bottom - .15 || Math.abs(body.vy) > 1
           if (airborne || Math.abs(body.vx) > 1 || body.squash > .001) changed = true
           body.squash = Math.max(0, body.squash - dt * 5)
@@ -152,6 +162,17 @@ export function useMascotBrood(area: FlightBounds, onImpact: (mark: Impact) => v
             impact(body, approach, 'bottom')
             changed = true
           }
+        }
+        if (pull.current) {
+          for (const child of live.current) {
+            if (child.phase !== 'egg') continue
+            const body = bodies.current.get(child.id)
+            if (!body) continue
+            body.x += (pull.current.x - body.x) * dt * 7
+            body.y += (pull.current.y - body.y) * dt * 7
+            changed = true
+          }
+          continue
         }
         // Neighbouring buckets bound collision work when many children pile up.
         const buckets = new Map<string, Array<{ id: number; body: Body }>>()
@@ -263,7 +284,7 @@ export function useMascotBrood(area: FlightBounds, onImpact: (mark: Impact) => v
 
   function grab(id: number, event: PointerEvent<HTMLButtonElement>) {
     const body = bodies.current.get(id)
-    if (!body || event.button !== 0 || !event.isPrimary || drag.current) return
+    if (!body || body.held || pull.current || event.button !== 0 || !event.isPrimary || drag.current) return
     event.preventDefault()
     body.held = true
     body.vx = body.vy = 0
@@ -312,6 +333,53 @@ export function useMascotBrood(area: FlightBounds, onImpact: (mark: Impact) => v
     bump(id, { direction: { x: id % 2 ? .7 : -.7, y: -.71 }, strength: 335 })
   }
 
+  function remoteDrag(peer: string, action: ChildDrag) {
+    const { id, kind, point, velocity } = action
+    const body = bodies.current.get(id)
+    if (!body || pull.current || live.current.find((child) => child.id === id)?.phase !== 'young') return
+    if (kind === 'grab') {
+      if (body.held) return
+      remote.current.set(id, peer)
+      body.held = true
+      body.vx = body.vy = 0
+    } else if (remote.current.get(id) !== peer) return
+    body.x = constrain(point.x * window.innerWidth, area.left, area.right)
+    body.y = constrain(point.y * window.innerHeight, area.top, area.bottom)
+    if (kind === 'release') {
+      body.held = false
+      remote.current.delete(id)
+      body.vx = velocity ? constrain(velocity.x * window.innerWidth, -2600, 2600) : 0
+      body.vy = velocity ? constrain(velocity.y * window.innerHeight, -2600, 2600) : 0
+    }
+    publish(live.current.map((child) => child.id === id ? { ...child, held: body.held, x: body.x, flight: {
+      x: body.x, y: body.y, velocity: { x: body.vx, y: body.vy }, edge: 'bottom', squash: 0,
+    } } : child))
+  }
+
+  function releaseHidden(visible: Set<string>) {
+    for (const [id, peer] of remote.current) {
+      if (visible.has(peer)) continue
+      remote.current.delete(id)
+      const body = bodies.current.get(id)
+      if (!body) continue
+      body.held = false
+      body.vx = body.vy = 0
+      publish(live.current.map((child) => child.id === id ? { ...child, held: false } : child))
+    }
+  }
+
+  function startPull(point: Point) {
+    pull.current = point
+    drag.current = null
+    remote.current.clear()
+    for (const body of bodies.current.values()) body.held = false
+  }
+
+  function endPull(explode: boolean) {
+    pull.current = null
+    if (explode) publish(live.current.map((child) => ({ ...child, held: false, phase: 'popping' })))
+  }
+
   function collideWith(actors: BroodActor[]) {
     scene.current.actors = actors
   }
@@ -319,5 +387,6 @@ export function useMascotBrood(area: FlightBounds, onImpact: (mark: Impact) => v
     capacity.current = Math.max(0, limit - count)
   }
 
-  return { children, lay, hatch, position, bump, pop, remove, grab, move, release, touch, collideWith, setPeerCount }
+  return { children, lay, hatch, position, bump, pop, remove, grab, move, release, touch, collideWith, setPeerCount,
+    remoteDrag, releaseHidden, startPull, endPull }
 }

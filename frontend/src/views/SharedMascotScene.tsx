@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import { useEffect, type CSSProperties } from 'react'
 import type { Point } from '../controllers/mascotMotion'
 import { mapToy, type MascotScene } from '../models/mascotScene'
 import type { MascotVisibility } from '../models/flowMascot'
@@ -7,13 +7,19 @@ import { MascotToyIcon } from './MascotAim'
 import { hats, type Hat } from './MascotHat'
 import { MascotYoung } from './SharedMascot'
 import { ToyBow } from './ToyBow'
+import { useRemoteYoungDrag } from '../controllers/useRemoteYoungDrag'
 
 const angle = (direction: Point) => Math.atan2(direction.y, direction.x) * 180 / Math.PI
 const noop = () => {}
 
-export function SharedMascotScene({ scene, project, visibility, peer }: {
-  scene: MascotScene; project: (point: Point) => Point; visibility: MascotVisibility; peer: string
+export function SharedMascotScene({ scene, project, unproject, visibility, peer, peerId, room }: {
+  scene: MascotScene; project: (point: Point) => Point; unproject: (point: Point) => Point
+  visibility: MascotVisibility; peer: string; peerId: string; room?: string
 }) {
+  const drag = useRemoteYoungDrag(room, peerId, unproject)
+  useEffect(() => {
+    if (drag.held && !scene.young.some((child) => child.id === drag.held?.id && child.phase === 'young')) drag.cancel()
+  }, [scene.young, drag.held])
   const toy = scene.toy && mapToy(scene.toy, project)
   const companion = scene.clone
   const clonePoint = companion && project(companion.point)
@@ -27,12 +33,13 @@ export function SharedMascotScene({ scene, project, visibility, peer }: {
       <span className="mascot-clone-label" aria-hidden="true">Clone</span>
     </div>}
     {scene.young.map((child) => {
-      const at = project(child.point)
+      const at = drag.held?.id === child.id ? drag.held.point : project(child.point)
       return <div key={child.id} className="mascot-shared-young">
-        <MascotYoung at={at} child={{ id: child.id, x: at.x, phase: child.phase, held: child.held,
+        <MascotYoung at={at} child={{ id: child.id, x: at.x, phase: child.phase, held: child.held || drag.held?.id === child.id,
           flight: child.rotation || child.squash || child.held ? { ...at, velocity: { x: child.rotation * 95, y: 0 },
             squash: child.squash, edge: 'bottom' } : null }}
-          interactive={false} onHatch={noop} onGone={noop} onTouch={noop} onGrab={noop} onMove={noop} onRelease={noop} />
+          interactive={!!room} onHatch={noop} onGone={noop} onTouch={noop}
+          onGrab={(event) => drag.grab(child.id, at, child.held, event)} onMove={drag.move} onRelease={drag.release} />
       </div>
     })}
     {toy && <>

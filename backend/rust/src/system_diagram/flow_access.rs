@@ -10,7 +10,10 @@ use crate::error::Result;
 pub(super) struct Sharing {
     pub key: [u8; 32],
     pub name: String,
-    pub guest: Option<Guest>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    guest: Option<Guest>,
+    #[serde(default)]
+    pub guests: Vec<Guest>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub invitation: Option<StoredInvitation>,
 }
@@ -21,7 +24,7 @@ pub(super) struct StoredInvitation {
     pub expires_at: u64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(super) struct Guest {
     pub id: EndpointId,
     pub name: String,
@@ -34,13 +37,22 @@ impl Sharing {
             key: SecretKey::generate().to_bytes(),
             name,
             guest: None,
+            guests: Vec::new(),
             invitation: None,
         }
     }
 }
 
 pub(super) fn read(directory: &Path, project: Uuid) -> Result<Option<Sharing>> {
-    read_json(&directory.join(format!("{project}.sharing")))
+    let mut saved: Option<Sharing> = read_json(&directory.join(format!("{project}.sharing")))?;
+    if let Some(sharing) = &mut saved {
+        if let Some(guest) = sharing.guest.take() {
+            if !sharing.guests.iter().any(|entry| entry.id == guest.id) {
+                sharing.guests.push(guest);
+            }
+        }
+    }
+    Ok(saved)
 }
 
 pub(super) fn write(directory: &Path, project: Uuid, sharing: &Sharing) -> Result<()> {

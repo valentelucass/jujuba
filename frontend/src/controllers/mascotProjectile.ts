@@ -1,6 +1,6 @@
 import type { FlightBounds, Point } from './mascotMotion'
 
-export type MascotTarget = 'own' | 'peer' | 'clone' | 'remoteClone' | `young:${number}` | `remoteYoung:${number}`
+export type MascotTarget = 'own' | 'clone' | `young:${number}` | `remote:${string}:${'main' | 'clone' | `young:${number}`}`
 export type ShotTarget = { target: MascotTarget; point: Point; radius?: number }
 export type ShotContact = { distance: number; normal: Point; target?: MascotTarget }
 

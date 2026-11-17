@@ -1,22 +1,33 @@
 import { Heart, Sparkles, Zap } from 'lucide-react'
-import type { CSSProperties, PointerEvent } from 'react'
+import { useEffect, useState, type CSSProperties, type PointerEvent } from 'react'
 import jujuba from '../assets/jujuba.png'
 import { JujubaMascot } from './JujubaMascot'
 import { hats, type Hat } from './MascotHat'
 import type { Point } from '../controllers/mascotMotion'
 import type { Offspring } from '../controllers/useMascotBrood'
-import type { MascotMeetingKind, MascotPresence, MascotVisibility } from '../models/flowMascot'
+import type { MascotMeeting, MascotMeetingKind, MascotPresence, MascotVisibility } from '../models/flowMascot'
 
-export function SharedMascot({ peer, appearance, visibility, greeting, direction }: {
+export function SharedMascot({ peer, appearance, visibility, greeting, direction, witnessed }: {
   peer: string
   appearance: MascotPresence & { point: Point }
   visibility: MascotVisibility
   greeting?: MascotMeetingKind
   direction: Point
+  witnessed?: MascotMeeting
 }) {
+  const [observed, setObserved] = useState<MascotMeetingKind>()
+  const observedId = witnessed?.id
+  const observedKind = witnessed?.kind
+  useEffect(() => {
+    setObserved(observedKind)
+    if (observedKind) {
+      const timer = window.setTimeout(() => setObserved(undefined), observedKind === 'hug' ? 7200 : 1320)
+      return () => window.clearTimeout(timer)
+    }
+  }, [observedId, observedKind])
   const { point, hat, pose, flight } = appearance
   const clonePair = appearance.scene?.clone
-  const shownGreeting = clonePair?.greeting ?? greeting
+  const shownGreeting = clonePair?.greeting ?? greeting ?? observed
   const shownDirection = clonePair?.greeting && clonePair.direction
     ? { x: -clonePair.direction.x, y: -clonePair.direction.y } : direction
   const classes = ['assistant-peer', 'is-' + visibility]

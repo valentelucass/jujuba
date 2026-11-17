@@ -1,5 +1,6 @@
 use super::model::Position;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -22,6 +23,16 @@ pub struct Scene {
     pub hits: Vec<TargetHit>,
     #[serde(default)]
     pub sounds: Vec<SceneSound>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub burst: Option<GooBurst>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct GooBurst {
+    pub id: u32,
+    pub point: Position,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub members: Option<Vec<Uuid>>,
 }
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
@@ -118,6 +129,8 @@ pub struct TargetHit {
     pub target: String,
     pub impulse: Impulse,
     pub pop: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub peer: Option<Uuid>,
 }
 
 fn valid_direction(direction: Position) -> bool {
@@ -139,6 +152,14 @@ impl Scene {
             && self.young.len() <= 100
             && self.hits.len() <= 16
             && self.sounds.len() <= 16
+            && self.burst.as_ref().is_none_or(|burst| {
+                burst.id > 0
+                    && valid_point(burst.point)
+                    && burst
+                        .members
+                        .as_ref()
+                        .is_none_or(|members| members.len() <= 7)
+            })
             && self
                 .sounds
                 .iter()
@@ -228,6 +249,35 @@ pub struct Meeting {
     pub kind: MeetingKind,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub impulse: Option<Impulse>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub peer: Option<Uuid>,
+}
+
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DragKind {
+    Grab,
+    Move,
+    Release,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ChildDrag {
+    pub id: u32,
+    pub kind: DragKind,
+    pub point: Position,
+    #[serde(default)]
+    pub velocity: Option<Position>,
+}
+
+impl ChildDrag {
+    pub fn valid(&self) -> bool {
+        self.id > 0
+            && valid_point(self.point)
+            && self
+                .velocity
+                .is_none_or(|velocity| velocity.x.abs() <= 8.0 && velocity.y.abs() <= 8.0)
+    }
 }
 
 #[derive(Clone, Copy, Serialize, Deserialize)]

@@ -101,6 +101,11 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
   const sessionId = session?.id
   const guest = !!session && session.projectId === null
   const disabled = !!busy || (!!session && !session.canEdit && (guest || session.phase !== 'ended'))
+  const approval = session?.approval ?? (session?.phase === 'approval' && session.peer
+    ? { id: undefined, peer: session.peer, version: session.peerVersion } : null)
+  const trustedGuests = session?.trustedGuests ?? (session?.trustedPeer ? [session.trustedPeer] : [])
+  const names = session?.selfId && session.members?.length
+    ? session.members.map(({ name }) => name).join(', ') : session?.peer
 
   useEffect(() => {
     if (!upgrade || resumedUpgrade.current) return
@@ -119,9 +124,11 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
       onMascotRoom(null)
     } else {
       onMascotRoom({ id: sessionId, peer: session.peer, host: session.projectId !== null, rich: !!session.peerVersion,
-        mascot: session.mascot ?? null, meeting: session.mascotMeeting ?? null, splats: session.mascotSplats ?? [] })
+        mascot: session.mascot ?? null, meeting: session.mascotMeeting ?? null, splats: session.mascotSplats ?? [],
+        selfId: session.selfId, members: session.members, childDrags: session.childDrags })
     }
-  }, [sessionId, session?.phase, session?.peer, session?.peerVersion, session?.mascotSupported, session?.mascotVersion, onMascotRoom])
+  }, [sessionId, session?.phase, session?.peer, session?.peerVersion, session?.mascotSupported, session?.mascotVersion,
+    session?.selfId, session?.childDrags, onMascotRoom])
 
   useEffect(() => {
     function resize() {
@@ -163,7 +170,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
           return
         }
         known = view.liveVersion
-        if (view.phase === 'approval' && active.current.phase !== 'approval') setRemember(false)
+        if ((view.phase === 'approval' && active.current.phase !== 'approval') || active.current.approval?.id !== view.approval?.id) setRemember(false)
         active.current = view
         setSession(view)
         if (view.diagram && pendingEdits.current === 0 && generation === editGeneration.current) {
@@ -270,6 +277,7 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
     } else if (current) {
       if (current.phase === 'connected') {
         void flowCollaboration.command(current.id, { type: 'cursor', position: null }).catch(() => {})
+        if (current.mascotSupported) void flowCollaboration.command(current.id, { type: 'mascot', mascot: null }).catch(() => {})
       }
       setActive(null)
     }
@@ -578,12 +586,15 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
         </div>
         {session?.phase === 'connected' && <div className="flow-share-presence" aria-label="Compartilhamento do fluxograma">
           <Users size={17} />
-          <span><strong>{session.peer}</strong> está no fluxograma{session.peerVersion === buildVersion && <> · v{session.peerVersion}</>}</span>
+          <span title={names ?? undefined}><strong>{names}</strong> {(session.members?.length ?? 0) > 1 ? 'estão' : 'está'} no fluxograma</span>
         </div>}
         <div className="system-doc-actions">
           {session?.phase === 'connected' && <>
-            {!guest && session.trustedPeer && <button className="button" disabled={!!busy}
-              onClick={() => sessionCommand({ type: 'revoke' }, 'Revogando acesso…')}>Revogar acesso salvo</button>}
+            {!guest && <button className="button design-accent" disabled={!!busy}
+              onClick={() => {
+                setPanel(panel === 'share' ? null : 'share')
+                if (panel !== 'share' && !session.code) sessionCommand({ type: 'invite' }, 'Gerando convite…')
+              }}><Users size={15} />Convidar</button>}
             <button className="button" disabled={!!busy} onClick={closeSharing}>
               {guest ? 'Sair da sessão' : 'Encerrar sessão'}
             </button>
@@ -637,20 +648,19 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
         </button>
         <button type="button" className="button" disabled={!!busy} onClick={() => setPanel(null)}>Cancelar</button>
       </form>}
-      {session && session.phase !== 'connected' && (session.phase !== 'available' || panel === 'share') && <div className="flow-share-bar" aria-label="Compartilhamento do fluxograma">
+      {session && ((session.phase !== 'connected' && (session.phase !== 'available' || panel === 'share')) ||
+        approval || (session.phase === 'connected' && panel === 'share')) && <div className="flow-share-bar" aria-label="Compartilhamento do fluxograma">
         <Users size={17} />
         {session.phase === 'starting' && <span role="status">Estabelecendo conexão…</span>}
         {session.phase === 'available' && <>
-          {session.trustedPeer && <span><strong>{session.trustedPeer}</strong> tem acesso salvo</span>}
+          {!!trustedGuests.length && <span>Acesso salvo para <strong>{trustedGuests.join(', ')}</strong></span>}
           <button className="button design-accent" disabled={!!busy}
             onClick={() => { setPanel(null); sessionCommand({ type: 'invite' }, 'Gerando convite…') }}>Gerar convite</button>
-          {session.trustedPeer && <button className="button" disabled={!!busy}
-            onClick={() => sessionCommand({ type: 'revoke' }, 'Revogando acesso…')}>Revogar acesso salvo</button>}
         </>}
         {session.phase === 'joining' && <span role="status">{session.peer ? <>Aguardando a aprovação de <strong>{session.peer}</strong>…</> : 'Aguardando aprovação do dono do projeto…'}</span>}
-        {(session.phase === 'approval' || (session.phase === 'joining' && session.peerVersion)) &&
-          <FlowRoomVersion peerVersion={session.peerVersion} prepare={prepareFlowUpdate} disabled={!!busy} />}
-        {session.code && <><label>Código do convite
+        {(approval || (session.phase === 'joining' && session.peerVersion)) &&
+          <FlowRoomVersion peerVersion={approval?.version ?? session.peerVersion} prepare={prepareFlowUpdate} disabled={!!busy} />}
+        {session.code && (!approval || panel === 'share') && <><label>Código do convite
           <input className="flow-invite-code" readOnly value={session.code} onFocus={(event) => event.target.select()} />
         </label>
           <button className="button" disabled={!!busy} onClick={() => {
@@ -660,25 +670,28 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
           }}><Copy size={15} />Copiar código</button>
           <small>Válido por 10 min</small>
         </>}
-        {session.phase === 'approval' && <>
-          <span role="status"><strong>{session.peer}</strong> quer entrar neste projeto.</span>
+        {approval && <>
+          <span role="status"><strong>{approval.peer}</strong> quer entrar neste projeto.</span>
           <label>
             <input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} />
             Permitir que volte enquanto o JujubaSQL estiver aberto
           </label>
-          {remember && session.trustedPeer && session.trustedPeer !== session.peer &&
-            <small>Substitui o acesso salvo de {session.trustedPeer}.</small>}
           <button className="button design-accent" disabled={!!busy}
-            onClick={() => sessionCommand({ type: 'accept', remember }, 'Aceitando pedido…')}>Aceitar</button>
+            onClick={() => sessionCommand({ type: 'accept', remember, request: approval.id }, 'Aceitando pedido…')}>Aceitar</button>
           <button className="button" disabled={!!busy}
-            onClick={() => sessionCommand({ type: 'reject' }, 'Recusando pedido…')}>Recusar</button>
+            onClick={() => sessionCommand({ type: 'reject', request: approval.id }, 'Recusando pedido…')}>Recusar</button>
         </>}
+        {!guest && !!trustedGuests.length && (session.phase === 'available' || panel === 'share') &&
+          <button className="button" disabled={!!busy}
+            onClick={() => sessionCommand({ type: 'revoke' }, 'Revogando acessos…')}>
+            {trustedGuests.length > 1 ? 'Revogar acessos salvos' : 'Revogar acesso salvo'}
+          </button>}
         {session.phase === 'ended' && <span role="status">{session.message}</span>}
         {session.phase === 'ended' && guest && attemptedJoin.current && <button className="button"
           disabled={!!busy} onClick={retryEntry}>Tentar entrar novamente</button>}
-        <button className="button flow-end-share" disabled={!!busy} onClick={closeSharing}>
+        {session.phase !== 'connected' && <button className="button flow-end-share" disabled={!!busy} onClick={closeSharing}>
           {session.phase === 'ended' ? 'Fechar sessão' : guest ? 'Cancelar entrada' : 'Encerrar sessão'}
-        </button>
+        </button>}
       </div>}
       {session?.phase === 'connected' && session.peerVersion !== buildVersion &&
         <div className="flow-share-bar"><FlowRoomVersion peerVersion={session.peerVersion}
@@ -715,7 +728,8 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
         <SystemFlowCanvas key={fitKey} diagram={diagram} selected={selected}
           choose={(id) => { setSelected(id); if (id) setTab('flow') }} connect={addEdge}
           move={moveStep} rename={renameStep} disabled={disabled} sendCursor={session?.phase === 'connected' ? sendCursor : undefined}
-          peerCursor={session?.cursor && session.peer ? { ...session.cursor, name: session.peer } : null} />
+          peerCursors={session?.selfId ? session.members?.flatMap(({ id, name, cursor }) => cursor ? [{ ...cursor, id, name }] : []) ?? []
+            : session?.cursor && session.peer ? [{ ...session.cursor, id: session.id, name: session.peer }] : []} />
         <SidebarDivider side="right" width={panelWidth} minimum={inspectorMinimum} maximum={inspectorLimit}
           defaultWidth={inspectorDefault} label="Largura do painel de fluxograma" controls="flow-inspector"
           onDrag={setInspectorSizing} onWidth={(next, settled) => {
