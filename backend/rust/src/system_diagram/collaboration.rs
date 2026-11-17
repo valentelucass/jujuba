@@ -1343,6 +1343,19 @@ mod tests {
             position: Position { x: 0.31, y: 0.72 },
             hat: "leather".into(),
             pose: super::super::flow_mascot::Pose::Idle,
+            scene: Some(serde_json::from_value(serde_json::json!({
+                "epoch": 1, "origin": {"x":0.4,"y":0.6},
+                "toy": {
+                    "epoch":3, "kind":"bow", "anchor":{"x":0.5,"y":0.4}, "direction":{"x":1.0,"y":0.0},
+                    "shoulder":{"x":0.4,"y":0.6}, "hand":{"x":0.42,"y":0.6}, "stretch":0.7, "boost":0.5, "power":1.15,
+                    "shots":[{"id":1,"point":{"x":0.6,"y":0.4},"direction":{"x":1.0,"y":0.0},"power":1.15}],
+                    "sparks":[{"id":2,"point":{"x":0.7,"y":0.4},"kind":"impact"}]
+                },
+                "clone":{"point":{"x":0.3,"y":0.6},"hat":"pirate","pose":"idle","flight":null},
+                "young":[{"id":1,"point":{"x":0.2,"y":0.9},"phase":"young","rotation":5.0,"squash":0.2,"held":false}],
+                "hits":[{"id":1,"target":"young:1","impulse":{"direction":{"x":1.0,"y":0.0},"strength":800.0},"pop":true}],
+                "sounds":[{"id":2,"kind":"bounceOffWall","strength":0.8}]
+            })).unwrap()),
             flight: Some(super::super::flow_mascot::Flight {
                 velocity_x: -1040.0,
                 squash: 0.4,
@@ -1363,6 +1376,12 @@ mod tests {
             .unwrap();
         assert_eq!(remote.hat, "leather");
         assert_eq!(remote.position, mascot.position);
+        let scene = remote.scene.as_ref().unwrap();
+        assert_eq!(scene.toy.as_ref().unwrap().shots[0].id, 1);
+        assert_eq!(scene.clone.as_ref().unwrap().hat, "pirate");
+        assert_eq!(scene.young.len(), 1);
+        assert!(scene.hits[0].pop);
+        assert_eq!(scene.sounds[0].strength, 0.8);
         assert_eq!(remote.flight.unwrap().velocity_x, -1040.0);
         submit(
             host_tx.clone(),

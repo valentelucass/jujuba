@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { flowCollaboration } from './api'
 import type { FlightBounds, FlightFrame, Impact, Point } from './mascotMotion'
 import { separateMascots } from './mascotMotion'
+import type { MascotScene } from '../models/mascotScene'
 import type { MascotImpulse, MascotMeeting, MascotMeetingKind, MascotPose, MascotPreferences, MascotPresence, MascotRoom } from '../models/flowMascot'
 
 const preferenceKey = 'jujuba.flow.mascots'
@@ -51,13 +52,14 @@ type Practice = {
 }
 
 export function useSharedMascot(room: MascotRoom | null, {
-  position, bounds, hat, pose, flight, kick, relocate, receiveSplat, practice,
+  position, bounds, hat, pose, flight, kick, relocate, receiveSplat, practice, scene: sharedScene,
 }: {
   position: Point; bounds: FlightBounds; hat: string; pose: MascotPose; flight: FlightFrame | null
   kick: (impulse: MascotImpulse, source: 'local' | 'remote', from?: Point) => void
   relocate: (point: Point) => void
   receiveSplat?: (impact: Impact) => void
   practice?: Practice | null
+  scene?: RefObject<MascotScene | null>
 }) {
   const [preferences, setPreferences] = useState(readPreferences)
   const [shown, setShown] = useState<{ source: 'local' | 'remote'; room: string; event: MascotMeeting } | null>(null)
@@ -104,7 +106,7 @@ export function useSharedMascot(room: MascotRoom | null, {
     let pending = false
     let lastSent: string | undefined
     function publish() {
-      const mascot = latest.current
+      const mascot = latest.current ? { ...latest.current, scene: sharedScene?.current ?? undefined } : null
       const snapshot = JSON.stringify(mascot)
       if (pending || lastSent === snapshot || !roomId) return
       pending = true
@@ -187,12 +189,12 @@ export function useSharedMascot(room: MascotRoom | null, {
       relocate(separated.first)
       practice?.relocate(separated.second)
     }
-    if (gap > 55 || !rich || now - lastImpact.current < 230) return
+    if (gap > 55 || !rich || now - lastImpact.current < 420) return
     const approach = (ownVelocity.x - otherVelocity.x) * direction.x + (ownVelocity.y - otherVelocity.y) * direction.y
-    if (approach < 85 || (!moving && !practiceMoving && !peerMoving)) return
+    if (approach < 900 || (!moving && !practiceMoving && !peerMoving)) return
     const fromPeer = otherVelocity.x * direction.x + otherVelocity.y * direction.y < -(ownVelocity.x * direction.x + ownVelocity.y * direction.y)
     const impulse = { direction: fromPeer ? { x: -direction.x, y: -direction.y } : direction,
-      strength: Math.max(160, Math.min(1800, approach * .76)) }
+      strength: Math.max(180, Math.min(1250, approach * .46)) }
     lastImpact.current = now
     announce(roomId, 'bump', midpoint ?? position, impulse)
     practice?.boost(impulse, fromPeer, separated?.second)
@@ -213,7 +215,7 @@ export function useSharedMascot(room: MascotRoom | null, {
     if (localOnly && trigger === 'contact' && !hit) return
     if (!hit && now - lastInteraction.current < (trigger === 'ambient' ? 1880 : 1300)) return
     if (trigger === 'ambient' && ((!localOnly && !room?.host) || !rich || moving || peerMoving)) return
-    if (trigger === 'brush' && !rich) return
+    if (trigger === 'brush' && (!rich || moving || peerMoving)) return
 
     let kind: MascotMeetingKind
     let impulse: MascotImpulse | undefined
@@ -255,7 +257,7 @@ export function useSharedMascot(room: MascotRoom | null, {
     let travel = 0
     function rubbing(event: PointerEvent) {
       const { midpoint: center, gap: distance } = scene.current
-      if (event.pointerType === 'touch' || !center || distance > separateDistance ||
+      if (event.pointerType === 'touch' || event.buttons !== 0 || !center || distance > separateDistance ||
         Math.hypot(event.clientX - center.x - 33, event.clientY - center.y - 33) > 75) {
         previous = null
         travel = 0

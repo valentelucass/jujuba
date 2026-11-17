@@ -15,6 +15,10 @@ export function SharedMascot({ peer, appearance, visibility, greeting, direction
   direction: Point
 }) {
   const { point, hat, pose, flight } = appearance
+  const clonePair = appearance.scene?.clone
+  const shownGreeting = clonePair?.greeting ?? greeting
+  const shownDirection = clonePair?.greeting && clonePair.direction
+    ? { x: -clonePair.direction.x, y: -clonePair.direction.y } : direction
   const classes = ['assistant-peer', 'is-' + visibility]
   if (pose === 'held') classes.push('is-grabbed')
   if (pose === 'wary' || pose === 'scared') classes.push('is-' + pose)
@@ -22,7 +26,8 @@ export function SharedMascot({ peer, appearance, visibility, greeting, direction
   return <div className={classes.join(' ')} role="img" aria-label={'Jujuba de ' + peer}
     data-pose={flight ? 'flight' : pose} style={{ left: point.x, top: point.y }}>
     <JujubaMascot hat={Object.hasOwn(hats, hat) ? hat as Hat : 'none'} grabbed={pose === 'held'}
-      reaction={pose === 'wary' || pose === 'scared' ? pose : null} greeting={greeting} direction={direction}
+      reaction={pose === 'wary' || pose === 'scared' ? pose : null} greeting={shownGreeting} direction={shownDirection}
+      equipped={appearance.scene?.toy?.kind === 'blaster'}
       flight={flight ? { ...point, edge: flight.edge, squash: flight.squash, velocity: { x: flight.velocityX, y: 0 } } : null} />
   </div>
 }
@@ -42,18 +47,20 @@ const tones = [
   ['#b9acff', '#7669c2', -46], ['#91dfef', '#428fa9', 226], ['#ffa98f', '#d26657', 49],
 ] as const
 
-export function MascotYoung({ child, at, onHatch, onTouch, onGone, onGrab, onMove, onRelease }: {
+export function MascotYoung({ child, at, onHatch, onTouch, onGone, onGrab, onMove, onRelease, interactive = true }: {
   child: Offspring; at: Point; onHatch: () => void; onTouch: () => void; onGone: () => void
   onGrab: (event: PointerEvent<HTMLButtonElement>) => void
   onMove: (event: PointerEvent<HTMLButtonElement>) => void
   onRelease: (event: PointerEvent<HTMLButtonElement>) => void
+  interactive?: boolean
 }) {
   const { id, phase, flight } = child
   const [shell, spot, hue] = tones[(id - 1) % tones.length]
   const squash = flight?.squash ?? 0
   const side = flight?.edge === 'left' || flight?.edge === 'right'
   return <button type="button" className={`jujuba-offspring is-${phase}${flight ? ' is-flying' : ''}${child.held ? ' is-held' : ''}`}
-    disabled={phase !== 'young'} aria-label="Cutucar ou arrastar mini-Jujuba" title="Arraste para arremessar"
+    disabled={!interactive || phase !== 'young'} aria-label={interactive ? 'Cutucar ou arrastar mini-Jujuba' : 'Mini-Jujuba compartilhada'}
+    title={interactive ? 'Arraste para arremessar' : undefined}
     onClick={(event) => { if (!event.detail) onTouch() }}
     onPointerDown={onGrab} onPointerMove={onMove} onPointerUp={onRelease} onPointerCancel={onRelease} onLostPointerCapture={onRelease}
     style={{ left: at.x, top: at.y, '--shell': shell, '--shell-spot': spot, '--young-hue': hue + 'deg',

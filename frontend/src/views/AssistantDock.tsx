@@ -4,6 +4,10 @@ import { JujubaMascot } from './JujubaMascot'
 import { MascotMeetingEffect, MascotYoung, SharedMascot } from './SharedMascot'
 import { useSharedMascot } from '../controllers/useSharedMascot'
 import { useMascotClone } from '../controllers/useMascotClone'
+import { useMascotScene } from '../controllers/useMascotScene'
+import { useRemoteMascotCollisions } from '../controllers/useRemoteMascotCollisions'
+import type { MascotScene } from '../models/mascotScene'
+import { SharedMascotScene } from './SharedMascotScene'
 import { useEggSchedule, useMascotBrood, type BroodActor } from '../controllers/useMascotBrood'
 import type { ShotTarget } from '../controllers/mascotProjectile'
 import { useMascotSound } from '../controllers/mascotSound'
@@ -42,8 +46,8 @@ function pointBetween(from: Point, toward?: Point | null) {
   if (!toward) return { x: 1, y: 0 }
   const x = toward.x - from.x
   const y = toward.y - from.y
-  const length = Math.max(1, Math.hypot(x, y))
-  return { x: x / length, y: y / length }
+  const length = Math.hypot(x, y)
+  return length > .001 ? { x: x / length, y: y / length } : { x: 1, y: 0 }
 }
 
 function center(point: Point) {
@@ -125,7 +129,9 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const [pointerNear, setPointerNear] = useState(false)
   const [trail, setTrail] = useState<Trail[]>([])
   const [flight, setFlight] = useState<FlightFrame | null>(null)
+  const [collisionRest, setCollisionRest] = useState<Point | null>(null)
   const [splats, setSplats] = useState<Splat[]>([])
+  const outgoingScene = useRef<MascotScene | null>(null)
   const drag = useRef<{ id: number; origin: Point; offset: Point; moved: boolean; samples: PointerSample[] } | null>(null)
   const cancelFlight = useRef<(() => void) | null>(null)
   const nextSplat = useRef(0)
@@ -181,29 +187,70 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const floor = Math.max(startY, height - footer - launcherSize)
   const bounds: FlightBounds = { left: 6, top: header + 5, right: Math.max(6, width - launcherSize - 6), bottom: floor }
   const brood = useMascotBrood({ left: 22, top: header + 22, right: Math.max(22, width - 22), bottom: floor + 39 },
-    (mark) => playSound('bounceOffWall', .35 + mark.strength * .5))
+    (mark) => {
+      const strength = .35 + mark.strength * .5
+      playSound('bounceOffWall', strength)
+      scene.shareSound('bounceOffWall', strength)
+    })
   const boundsRef = useRef(bounds)
   boundsRef.current = bounds
   const resting = placement?.side === 'bottom'
     ? { x: bounds.left + placement.ratio * (bounds.right - bounds.left), y: floor }
     : { x: placement?.side === 'left' ? launcherMargin : endX, y: clamp(placement?.y ?? endY, endY, startY) }
   const side = placement?.side === 'bottom' ? edgeAt(resting.x, width) : placement?.side ?? 'right'
-  const point = dragPoint ?? flight ?? resting
+  const point = dragPoint ?? flight ?? collisionRest ?? resting
   const expression = grabbed ? null : frightened && !flight ? (pointerNear ? 'scared' : 'wary') : reaction
   const pose: MascotPose = grabbed ? 'held' : expression === 'scared' || expression === 'wary' ? expression : 'idle'
   const pairing = { position: point, bounds, hat, flight, pose, kick: collide, relocate: relocateMascot }
   const clone = useMascotClone(bounds, (impact) => {
     playSound('bounceOffWall', .64 + impact.strength * .7)
+    scene.shareSound('bounceOffWall', .64 + impact.strength * .7)
     const mark = makeSplat(impact, launcherSize, ++nextSplat.current)
     setSplats((previous) => [...previous.slice(-31), mark])
-  }, (sound, speed) => playSound(sound, .64 + Math.min(1, speed / 2200) * .61))
+  }, (sound, speed) => {
+    const strength = .64 + Math.min(1, speed / 2200) * .61
+    playSound(sound, strength)
+    scene.shareSound(sound, strength)
+  })
   const { preferences: mascotPreferences, savePreferences, shareImpact, pushPeer, remote, meeting, hug } =
-    useSharedMascot(mascotRoom, { ...pairing, receiveSplat: addRemoteSplat })
+    useSharedMascot(mascotRoom, { ...pairing, receiveSplat: addRemoteSplat, scene: outgoingScene })
   const practice = useSharedMascot(null, {
     ...pairing, practice: clone.point ? { ...clone, point: clone.point } : null,
   })
-  useEggSchedule(hug, brood.lay)
+  useEggSchedule(mascotRoom?.host ? hug : null, brood.lay)
   useEggSchedule(practice.hug, brood.lay)
+  const scene = useMascotScene(outgoingScene, {
+    room: mascotRoom, own: center(point), clone: { ...clone,
+      greeting: practice.meeting?.near ? practice.meeting.kind : undefined,
+      direction: pointBetween(clone.point ?? point, point) },
+    hat, children: brood.children, childPosition: brood.position,
+    peerPoint: remote ? center(remote.point) : null,
+    receiveHit: (hit) => {
+      if (hit.target === 'main') collide(hit.impulse, 'remote')
+      else if (hit.target === 'clone') clone.boost(hit.impulse)
+      else {
+        const id = Number(hit.target.slice('young:'.length))
+        if (hit.pop) brood.pop(id)
+        else brood.bump(id, hit.impulse)
+      }
+      playSound('slimeKick', .8)
+    },
+    fireSound: (kind, strength = .75) => playSound(kind, strength),
+  })
+  brood.setPeerCount(scene.incoming?.young.length ?? 0)
+  const otherClone = scene.incoming?.clone ? scene.project(scene.incoming.clone.point) : null
+  const cloneObstacle = otherClone ? [{ target: 'clone' as const, point: { x: otherClone.x - 33, y: otherClone.y - 33 } }] : []
+  useRemoteMascotCollisions({
+    point, flight, held: grabbed, bounds, obstacles: cloneObstacle, relocate: relocateMascot,
+    kick: (impulse, recoil, from) => collide(impulse, recoil ? 'local' : 'remote', from),
+    hitPeer: (target, impulse) => scene.hitPeer(target, impulse, false),
+  })
+  useRemoteMascotCollisions({
+    point: clone.point, flight: clone.flight, held: clone.held, bounds,
+    obstacles: [...cloneObstacle, ...(remote ? [{ target: 'main' as const, point: remote.point }] : [])],
+    relocate: clone.relocate, kick: clone.boost,
+    hitPeer: (target, impulse) => scene.hitPeer(target, impulse, false),
+  })
   const showingRemote = !!remote
   useEffect(() => {
     if (!showingRemote) setSplats((marks) => marks.some((mark) => mark.remote) ? marks.filter((mark) => !mark.remote) : marks)
@@ -223,8 +270,16 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const broodActors: BroodActor[] = [{ id: 'own', point: center(point), active: grabbed || !!flight }]
   if (mascotRoom?.rich && remote && mascotPreferences.shareOwn) targets.push({ target: 'peer', point: center(remote.point) })
   if (clone.point) targets.push({ target: 'clone', point: center(clone.point) })
+  if (scene.incoming?.clone) targets.push({ target: 'remoteClone', point: scene.project(scene.incoming.clone.point) })
+  for (const child of scene.incoming?.young ?? []) {
+    if (child.phase === 'young' && !child.held) targets.push({ target: `remoteYoung:${child.id}`, point: scene.project(child.point), radius: 17 })
+  }
   if (clone.point) broodActors.push({ id: 'clone', point: center(clone.point), active: clone.held || !!clone.flight })
   if (remote) broodActors.push({ id: 'peer', point: center(remote.point), active: remote.pose === 'held' || !!remote.flight })
+  if (otherClone) broodActors.push({ id: 'peer-clone', point: otherClone, active: true })
+  for (const child of scene.incoming?.young ?? []) {
+    if (child.phase === 'young') broodActors.push({ id: 'peer-young-' + child.id, point: scene.project(child.point), active: true, radius: 17 })
+  }
   brood.collideWith(broodActors)
   for (const child of brood.children) {
     if (child.phase === 'young' && !child.held) targets.push({ target: `young:${child.id}`, point: brood.position(child), radius: 17 })
@@ -243,6 +298,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   }
 
   function savePosition(next: LauncherPosition) {
+    setCollisionRest(null)
     setPlacement(next)
     try { localStorage.setItem(launcherPreference, JSON.stringify(next)) } catch { /* Placement remains active. */ }
   }
@@ -366,7 +422,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     cancelFlight.current = null
     setFlight(null)
     if (drag.current) setDragPoint(next)
-    else throwMascot(next, { x: 0, y: 0 })
+    else setCollisionRest(next)
   }
 
   function throwMascot(from: Point, velocity: Point) {
@@ -617,8 +673,10 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
       appearance={remote} visibility={mascotPreferences.remote} greeting={greeting}
       direction={{ x: -pairDirection.x, y: -pairDirection.y }} />}
     {meeting && <MascotMeetingEffect key={meeting.source + '-' + meeting.id} kind={meeting.kind} point={meeting.point} />}
+    {scene.incoming && <SharedMascotScene scene={scene.incoming} project={scene.project}
+      visibility={mascotPreferences.remote} peer={mascotRoom?.peer ?? ''} />}
     {brood.children.map((child) => <MascotYoung key={child.id} child={child} at={brood.position(child)}
-      onHatch={() => { brood.hatch(child.id); playSound('hatch') }}
+      onHatch={() => { brood.hatch(child.id); playSound('hatch'); scene.shareSound('hatch', .65) }}
       onTouch={() => {
         brood.touch(child.id)
         playSound('bounce', .52)
@@ -650,9 +708,12 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
       onExit={() => { setTool(null); launcher.current?.focus() }}
       onFire={(power) => playSound(tool, .64 + power * .5)}
       onTension={tension}
+      onVisual={scene.setToy}
       onRicochet={() => { if (tool === 'bow') playSound('ricochet') }}
       onHit={(target, impulse) => {
         if (target === 'peer') pushPeer(impulse)
+        else if (target === 'remoteClone') scene.hitPeer('clone', impulse, false)
+        else if (target.startsWith('remoteYoung:')) scene.hitPeer(`young:${Number(target.slice('remoteYoung:'.length))}`, impulse, tool === 'blaster')
         else if (target === 'clone') practice.pushPeer(impulse)
         else if (target === 'own') collide(impulse)
         else {

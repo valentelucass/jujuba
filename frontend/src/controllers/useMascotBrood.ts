@@ -4,7 +4,7 @@ import type { MascotImpulse } from '../models/flowMascot'
 
 export type Hug = { key: string; point: Point }
 export type Offspring = { id: number; x: number; phase: 'egg' | 'young' | 'popping'; flight: FlightFrame | null; held?: boolean }
-export type BroodActor = { id: string; point: Point; active: boolean }
+export type BroodActor = { id: string; point: Point; active: boolean; radius?: number }
 type Body = { x: number; y: number; vx: number; vy: number; squash: number; edge: ImpactEdge; lastImpact: number; held: boolean }
 const limit = 100
 const radius = 17
@@ -56,6 +56,7 @@ export function useMascotBrood(area: FlightBounds, onImpact: (mark: Impact) => v
   const bodies = useRef(new Map<number, Body>())
   const drag = useRef<{ id: number; pointer: number; offset: Point; moved: boolean; origin: Point; samples: PointerSample[] } | null>(null)
   const animation = useRef(0)
+  const capacity = useRef(limit)
 
   function publish(next: Offspring[]) {
     live.current = next
@@ -137,12 +138,13 @@ export function useMascotBrood(area: FlightBounds, onImpact: (mark: Impact) => v
             const dx = body.x - px
             const dy = body.y - py
             const distance = Math.hypot(dx, dy)
-            if (distance >= radius + 24 || !distance) continue
+            const contactRadius = radius + (parent.radius ?? 24)
+            if (distance >= contactRadius || !distance) continue
             const nx = dx / distance
             const ny = dy / distance
             const approach = (parent.vx - body.vx) * nx + (parent.vy - body.vy) * ny
             if (approach <= 22 || (!parent.active && Math.hypot(body.vx, body.vy) < 25)) continue
-            const push = radius + 24 - distance + .5
+            const push = contactRadius - distance + .5
             body.x = constrain(body.x + nx * push, bounds.left, bounds.right)
             body.y = constrain(body.y + ny * push, bounds.top, bounds.bottom)
             body.vx += nx * approach * 1.48
@@ -225,7 +227,7 @@ export function useMascotBrood(area: FlightBounds, onImpact: (mark: Impact) => v
   }, [children.length])
 
   function lay(near: Point, ordinal: number) {
-    if (live.current.length >= limit) return
+    if (live.current.length >= capacity.current) return
     const id = ++nextId.current
     const point = birthSpot(near.x, ordinal, bodies.current, scene.current.area)
     bodies.current.set(id, { ...point, vx: 0, vy: 0, squash: 0, edge: 'bottom', lastImpact: -Infinity, held: false })
@@ -313,6 +315,9 @@ export function useMascotBrood(area: FlightBounds, onImpact: (mark: Impact) => v
   function collideWith(actors: BroodActor[]) {
     scene.current.actors = actors
   }
+  function setPeerCount(count: number) {
+    capacity.current = Math.max(0, limit - count)
+  }
 
-  return { children, lay, hatch, position, bump, pop, remove, grab, move, release, touch, collideWith }
+  return { children, lay, hatch, position, bump, pop, remove, grab, move, release, touch, collideWith, setPeerCount }
 }

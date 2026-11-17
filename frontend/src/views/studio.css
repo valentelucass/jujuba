@@ -1115,6 +1115,11 @@ dialog.connection-dialog {
 .flow-room-version { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 9px; }
 
 .jujuba-splat.is-remote { filter: opacity(.55); }
+.mascot-shared-scene { position: fixed; z-index: 12; inset: 0; pointer-events: none; }
+.mascot-shared-scene.is-dim { opacity: .55; }
+.mascot-shared-scene.is-hidden { display: none; }
+.mascot-shared-scene .mascot-shot { transition: left 65ms linear, top 65ms linear; }
+.mascot-shared-scene .jujuba-offspring { transition: left 65ms linear, top 65ms linear; }
 .jujuba-pair-gaze { visibility: visible; }
 .jujuba-pair-gaze .jujuba-glints {
   animation: none;
