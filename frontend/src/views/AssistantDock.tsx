@@ -1,10 +1,10 @@
-import { Copy, Eye, EyeOff, FolderOpen, LoaderCircle, Paperclip, Send, Sparkles, Volume2, Wrench, X } from 'lucide-react'
+import { Copy, Eye, EyeOff, FolderOpen, LoaderCircle, Paperclip, Play, Send, Sparkles, Volume2, VolumeX, Wrench, X } from 'lucide-react'
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { JujubaMascot } from './JujubaMascot'
 import { MascotHatchlings, MascotMeetingEffect, SharedMascot } from './SharedMascot'
 import { useSharedMascot } from '../controllers/useSharedMascot'
 import { useMascotClone } from '../controllers/useMascotClone'
-import { soundStyles, useMascotSound, type SoundStyle } from '../controllers/mascotSound'
+import { useMascotSound } from '../controllers/mascotSound'
 import type { MascotImpulse, MascotPose, MascotRoom, MascotVisibility } from '../models/flowMascot'
 import { MascotAim, MascotToyIcon, toyLabels, type MascotTool } from './MascotAim'
 import { makeSplat, MascotSplat, type Splat } from './MascotSplat'
@@ -189,7 +189,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const pose: MascotPose = grabbed ? 'held' : expression === 'scared' || expression === 'wary' ? expression : 'idle'
   const pairing = { position: point, bounds, hat, flight, pose, kick: collide }
   const clone = useMascotClone(bounds, (impact) => {
-    playSound('bounceOffWall')
+    playSound('bounceOffWall', .64 + impact.strength * .7)
     const mark = makeSplat(impact, launcherSize, ++nextSplat.current)
     setSplats((previous) => [...previous.slice(-31), mark])
   })
@@ -366,7 +366,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
       }
       setTrail((previous) => [...previous.slice(-17), mark])
     }, (impact) => {
-      playSound('bounceOffWall')
+      playSound('bounceOffWall', .64 + impact.strength * .7)
       const mark = makeSplat(impact, launcherSize, ++nextSplat.current)
       setSplats((previous) => [...previous.slice(-31), mark])
       shareImpact(impact)
@@ -493,15 +493,13 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
             onClick={() => chooseTool(option)}><MascotToyIcon tool={option} />{toyLabels[option]}</button>)}
         </div>
         <div className="assistant-sounds">
-          <label htmlFor="jujuba-sound-style">Som</label>
-          <select id="jujuba-sound-style" value={sound.style}
-            onChange={(event) => saveSound({ ...sound, style: event.target.value as SoundStyle })}>
-            {Object.entries(soundStyles).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-          </select>
-          <input type="range" min={0} max={100} value={Math.round(sound.volume * 100)} aria-label="Volume das Jujubas"
-            disabled={sound.style === 'silent'} onChange={(event) => saveSound({ ...sound, volume: Number(event.target.value) / 100 })} />
+          <label htmlFor="jujuba-volume">Gelatina</label>
+          <input id="jujuba-volume" type="range" min={0} max={100} value={Math.round(sound.volume * 100)} aria-label="Volume das Jujubas"
+            onChange={(event) => saveSound({ muted: false, volume: Number(event.target.value) / 100 })} />
+          <button className="icon-button" type="button" aria-label="Silenciar Jujubas" title="Silenciar Jujubas" aria-pressed={sound.muted}
+            onClick={() => saveSound({ ...sound, muted: !sound.muted })}>{sound.muted ? <VolumeX size={16} /> : <Volume2 size={16} />}</button>
           <button className="icon-button" type="button" aria-label="Ouvir exemplo" title="Ouvir exemplo"
-            disabled={sound.style === 'silent' || !sound.volume} onClick={() => playSound('kiss')}><Volume2 size={16} /></button>
+            disabled={sound.muted || !sound.volume} onClick={() => playSound('bounceOffWall')}><Play size={15} aria-hidden="true" /></button>
         </div>
       </div>}
       {hatsOpen && <div id="assistant-hats" className="assistant-hats" role="group" aria-label="Chapéus da Jujuba">
@@ -619,6 +617,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
       own={center(point)} targets={targets}
       onExit={() => { setTool(null); launcher.current?.focus() }}
       onFire={() => playSound(tool)}
+      onRicochet={() => { if (tool === 'bow') playSound('ricochet') }}
       onHit={(target, impulse) => {
         if (target === 'peer') pushPeer(impulse)
         else if (target === 'clone') practice.pushPeer(impulse)
@@ -648,7 +647,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
         if (open) close()
         else setOpen(true)
       }}>
-      <JujubaMascot followPointer grabbed={grabbed} reaction={expression} flight={flight} hat={hat} greeting={cloneGreeting ?? greeting}
+      <JujubaMascot followPointer grabbed={grabbed} equipped={!!tool} reaction={expression} flight={flight} hat={hat} greeting={cloneGreeting ?? greeting}
         direction={cloneGreeting ? cloneDirection : pairDirection} />
     </button>
   </>

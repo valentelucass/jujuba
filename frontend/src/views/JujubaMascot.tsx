@@ -4,8 +4,8 @@ import type { MascotMeetingKind } from '../models/flowMascot'
 import type { FlightFrame, Point } from '../controllers/mascotMotion'
 import { MascotHat, type Hat } from './MascotHat'
 
-export function JujubaMascot({ hero = false, followPointer = false, grabbed = false, reaction, flight, hat = 'none', greeting, direction }: {
-  hero?: boolean; followPointer?: boolean; grabbed?: boolean
+export function JujubaMascot({ hero = false, followPointer = false, grabbed = false, equipped = false, reaction, flight, hat = 'none', greeting, direction }: {
+  hero?: boolean; followPointer?: boolean; grabbed?: boolean; equipped?: boolean
   reaction?: 'protesting' | 'scared' | 'wary' | 'relieved' | null
   flight?: FlightFrame | null
   hat?: Hat
@@ -26,9 +26,9 @@ export function JujubaMascot({ hero = false, followPointer = false, grabbed = fa
   const relieved = reaction === 'relieved'
   const kissing = greeting === 'kiss' && !flight
   const watching = !!direction && !flight && !!greeting && ['look', 'hug', 'squeeze', 'kiss', 'dance'].includes(greeting)
-  const embracing = !!direction && !grabbed && !flight && !!greeting && ['hug', 'squeeze', 'push', 'kiss'].includes(greeting)
-  const flailing = !embracing && (grabbed || scared)
-  const wiping = relieved && !embracing && !flailing
+  const embracing = !!direction && !equipped && !grabbed && !flight && !!greeting && ['hug', 'squeeze', 'push', 'kiss'].includes(greeting)
+  const flailing = !equipped && !embracing && (grabbed || scared)
+  const wiping = !equipped && relieved && !embracing && !flailing
   const towardLeft = (direction?.x ?? 0) < 0
   const squash = flight?.squash ?? 0
   const sideImpact = flight?.edge === 'left' || flight?.edge === 'right'
