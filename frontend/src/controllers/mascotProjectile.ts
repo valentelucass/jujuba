@@ -1,10 +1,8 @@
 import type { FlightBounds, Point } from './mascotMotion'
 
-export type MascotTarget = 'own' | 'peer' | 'clone'
-export type ShotTarget = { target: MascotTarget; point: Point }
+export type MascotTarget = 'own' | 'peer' | 'clone' | `young:${number}`
+export type ShotTarget = { target: MascotTarget; point: Point; radius?: number }
 export type ShotContact = { distance: number; normal: Point; target?: MascotTarget }
-
-const hitRadius = 24
 
 export function unitVector(x: number, y: number, fallback: Point = { x: -1, y: 0 }): Point {
   const length = Math.hypot(x, y)
@@ -27,15 +25,15 @@ export function traceProjectile(origin: Point, direction: Point, distance: numbe
     distance: edge, normal: { x: horizontal <= vertical ? -Math.sign(dx) : 0, y: vertical <= horizontal ? -Math.sign(dy) : 0 },
   } : null
   if (horizontal === vertical && contact) contact.normal = unitVector(contact.normal.x, contact.normal.y)
-  for (const { target, point } of targets) {
+  for (const { target, point, radius = 24 } of targets) {
     if (touched.has(target)) continue
     const x = point.x - origin.x
     const y = point.y - origin.y
     const toward = x * dx + y * dy
     if (toward <= 0) continue
     const sideways = Math.abs(x * dy - y * dx)
-    if (sideways > hitRadius) continue
-    const entry = Math.max(0, toward - Math.sqrt(hitRadius ** 2 - sideways ** 2))
+    if (sideways > radius) continue
+    const entry = Math.max(0, toward - Math.sqrt(radius ** 2 - sideways ** 2))
     if (entry > (contact?.distance ?? distance)) continue
     contact = { distance: entry, target, normal: unitVector(dx * entry - x, dy * entry - y, { x: -dx, y: -dy }) }
   }

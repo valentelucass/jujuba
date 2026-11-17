@@ -768,7 +768,6 @@ dialog.connection-dialog {
   position: absolute; top: -8px; padding: 1px 5px; border: 1px solid var(--line-strong); border-radius: 4px;
   background: var(--surface); color: var(--quiet); font-size: 10px; line-height: 14px; pointer-events: none;
 }
-.mascot-clone-toggle { justify-self: start; }
 .jujuba-mascot {
   --mascot-cycle: 11s;
   --mascot-delay: 0s;
@@ -1173,15 +1172,15 @@ dialog.connection-dialog {
   :is(.assistant-launch, .assistant-peer, .assistant-clone) .jujuba-mascot[class*='jujuba-greeting-'] { animation: none !important; }
 }
 
-.jujuba-egg {
-  --shell: #f596c2;
-  --shell-spot: #c65394;
-  position: fixed; z-index: 14; width: 26px; height: 32px;
-  transform: translateX(-50%); pointer-events: none;
-  animation: jujuba-egg-life 4500ms ease both;
+.jujuba-offspring {
+  position: fixed; z-index: 12; width: 48px; height: 48px; padding: 0; border: 0;
+  transform: translate(-50%, -50%); background: transparent; border-radius: 6px;
 }
-.jujuba-egg-1 { --shell: #f8d381; --shell-spot: #ba7827; }
-.jujuba-egg-2 { --shell: #a8e3c5; --shell-spot: #4c9e81; }
+.jujuba-offspring:disabled { opacity: 1; pointer-events: none; }
+.jujuba-egg {
+  position: absolute; top: 8px; left: 11px; width: 26px; height: 32px;
+  animation: jujuba-egg-appear 220ms ease both;
+}
 .jujuba-egg-top, .jujuba-egg-bottom {
   position: absolute; inset: 0; border-radius: 48% 48% 44% 44% / 60% 60% 40% 40%;
   background:
@@ -1199,18 +1198,17 @@ dialog.connection-dialog {
   clip-path: polygon(0 56%, 19% 61%, 35% 54%, 56% 62%, 72% 53%, 100% 56%, 100% 100%, 0 100%);
   animation: jujuba-egg-bottom 1100ms 720ms ease-out both;
 }
+.jujuba-young-body {
+  position: absolute; inset: 0; transform-origin: center 87%;
+  animation: jujuba-young-idle var(--young-idle) ease-in-out infinite var(--young-delay);
+}
+.jujuba-offspring:is(.is-egg, .is-flying) .jujuba-young-body { animation-play-state: paused; }
 .jujuba-hatchling {
-  position: absolute; width: 38px; height: 38px; left: -6px; bottom: 0;
-  object-fit: contain; opacity: 0; filter: drop-shadow(0 2px 5px var(--shadow));
-  animation: jujuba-hatch 920ms 730ms ease-out both;
+  width: 100%; height: 100%; object-fit: contain; opacity: 0; transform-origin: center 87%;
+  filter: hue-rotate(var(--young-hue)) drop-shadow(0 2px 5px var(--shadow));
+  animation: jujuba-hatch 920ms 730ms ease-out both, jujuba-young-grow 8s 1.65s ease-out both;
 }
-.jujuba-egg-1 .jujuba-hatchling { filter: hue-rotate(42deg) drop-shadow(0 2px 5px var(--shadow)); }
-.jujuba-egg-2 .jujuba-hatchling { filter: hue-rotate(182deg) drop-shadow(0 2px 5px var(--shadow)); }
-@keyframes jujuba-egg-life {
-  0% { opacity: 0; scale: .58; }
-  9%, 77% { opacity: 1; scale: 1; }
-  100% { opacity: 0; scale: .8; }
-}
+@keyframes jujuba-egg-appear { from { opacity: 0; scale: .58; } to { opacity: 1; scale: 1; } }
 @keyframes jujuba-egg-top {
   0% { opacity: 1; transform: none; }
   100% { opacity: 0; transform: translate(-15px, -25px) rotate(-55deg); }
@@ -1222,12 +1220,36 @@ dialog.connection-dialog {
   64% { opacity: 1; transform: translateY(-1px) scale(.91, 1.07); }
   100% { opacity: 1; transform: none; }
 }
+@keyframes jujuba-young-grow { from { scale: .60; } to { scale: 1; } }
+@keyframes jujuba-young-idle {
+  0%, 76%, 100% { transform: none; }
+  81% { transform: scale(1.09, .9) rotate(4deg); }
+  90% { transform: translateY(-6px) scale(.94, 1.04) rotate(-7deg); }
+}
+.jujuba-young-pop {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(circle at 52% 45%, var(--shell) 0 9%, transparent 11%),
+    radial-gradient(circle at 19% 24%, var(--shell-spot) 0 8%, transparent 10%),
+    radial-gradient(circle at 82% 28%, var(--shell) 0 7%, transparent 9%),
+    radial-gradient(circle at 26% 76%, var(--shell) 0 8%, transparent 10%),
+    radial-gradient(circle at 78% 80%, var(--shell-spot) 0 8%, transparent 10%);
+  animation: jujuba-young-pop 390ms ease-out both;
+}
+@keyframes jujuba-young-pop { from { opacity: 1; scale: .48; } to { opacity: 0; scale: 1.55; } }
 
-.assistant-tools { display: grid; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--line); font-size: 12px; }
+.assistant-tools { display: grid; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); font-size: 12px; }
 .assistant-toys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-.assistant-toys button { min-width: 0; white-space: normal; padding: 4px 5px; line-height: 1.2; }
+.assistant-toys button { min-width: 0; justify-content: flex-start; white-space: normal; padding: 5px 8px; text-align: start; line-height: 1.2; }
 .assistant-toys svg { flex: none; color: var(--berry); }
-.assistant-sounds { display: grid; grid-template-columns: auto minmax(40px, 1fr) auto auto; gap: 7px; align-items: center; }
+.assistant-toys button:last-child svg { color: var(--gold); }
+.assistant-tool-row { border-top: 1px solid var(--line); padding-top: 8px; min-width: 0; }
+.mascot-clone-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.mascot-clone-row > span { display: inline-flex; align-items: center; gap: 8px; }
+.mascot-clone-row > span svg { color: var(--berry); }
+.mascot-clone-row .button { min-height: 28px; padding-block: 4px; }
+.assistant-sounds { display: grid; grid-template-columns: max-content minmax(36px, 1fr) auto auto; gap: 7px; align-items: center; }
+.assistant-sounds .icon-button { width: 28px; height: 28px; }
 .assistant-sounds .icon-button[aria-pressed='true'] { color: var(--berry); border-color: var(--berry-line); }
 .assistant-sounds input[type='range'] { width: 100%; min-width: 0; margin: 0; accent-color: var(--berry); }
 .mascot-aim {
@@ -1244,10 +1266,16 @@ dialog.connection-dialog {
 }
 .mascot-aim-status > svg { color: var(--berry); }
 .mascot-aim-status .icon-button { width: 28px; height: 28px; }
+.mascot-aim-instruction { display: grid; gap: 2px; }
+.mascot-aim-instruction small { color: var(--quiet); font-size: 10px; }
 .mascot-held-toy { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; color: var(--berry); }
 .mascot-held-toy.is-bow { color: var(--gold); }
 .mascot-held-toy g { filter: drop-shadow(0 1px 3px var(--shadow)); }
 .mascot-toy-arm { fill: none; stroke: #f169b5; stroke-width: 5.5; stroke-linecap: round; }
+.mascot-bow-limbs, .mascot-bow-string, .mascot-bow-loaded { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.mascot-bow-limbs { stroke: var(--gold); stroke-width: 3.6; }
+.mascot-bow-string { stroke: var(--text); stroke-width: 1.4; }
+.mascot-bow-loaded { stroke: var(--gold); stroke-width: 2; }
 .mascot-aim-guide { stroke: currentColor; stroke-width: 1.5; stroke-dasharray: 4 6; opacity: .58; }
 .mascot-toy-cursor { position: fixed; color: var(--berry); width: 0; height: 0; pointer-events: none; }
 .mascot-toy-cursor > svg { position: absolute; inset: -10px; filter: drop-shadow(0 0 3px var(--workspace)); }
@@ -1272,9 +1300,10 @@ dialog.connection-dialog {
 .mascot-shot-spark.is-muzzle { width: 13px; height: 13px; background: #ffc0e4; }
 @keyframes mascot-shot-spark { from { scale: .72; opacity: .95; } to { scale: 1.4; opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .jujuba-egg { animation-name: jujuba-meeting-fade; }
+  .jujuba-egg { animation-name: jujuba-hatch-fade; }
   .jujuba-egg-top, .jujuba-egg-bottom { animation-name: jujuba-egg-bottom; }
-  .jujuba-hatchling { animation-name: jujuba-hatch-fade; }
-  .mascot-shot-spark { animation-name: jujuba-meeting-fade; }
+  .jujuba-hatchling { animation-name: jujuba-hatch-fade, jujuba-young-grow; }
+  .jujuba-young-body { animation: none; }
+  .mascot-shot-spark, .jujuba-young-pop { animation-name: jujuba-meeting-fade; }
 }
 @keyframes jujuba-hatch-fade { from { opacity: 0; } to { opacity: 1; } }

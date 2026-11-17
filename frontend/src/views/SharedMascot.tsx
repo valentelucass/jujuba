@@ -1,9 +1,10 @@
 import { Heart, Sparkles, Zap } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import jujuba from '../assets/jujuba.png'
 import { JujubaMascot } from './JujubaMascot'
 import { hats, type Hat } from './MascotHat'
 import type { Point } from '../controllers/mascotMotion'
+import type { Offspring } from '../controllers/useMascotBrood'
 import type { MascotMeetingKind, MascotPresence, MascotVisibility } from '../models/flowMascot'
 
 export function SharedMascot({ peer, appearance, visibility, greeting, direction }: {
@@ -36,33 +37,30 @@ export function MascotMeetingEffect({ kind, point }: { kind: MascotMeetingKind; 
   </div>
 }
 
-export function MascotHatchlings({ hug, size, onHatch }: {
-  hug: { key: string; point: Point } | null; size: number; onHatch: () => void
-}) {
-  const [eggs, setEggs] = useState<Array<{ id: string; point: Point; color: number }>>([])
-  const center = useRef(hug?.point)
-  center.current = hug?.point
-  const hugKey = hug?.key
-  useEffect(() => {
-    if (!hugKey) return
-    const timers = [3200, 4500, 5800].map((delay, index) => window.setTimeout(() => {
-      if (!center.current) return
-      const x = center.current.x + size / 2 + (index - 1) * 34
-      const point = {
-        x: Math.max(20, Math.min(window.innerWidth - 20, x)),
-        y: Math.max(90, center.current.y - 10 - (index % 2) * 24),
-      }
-      setEggs((previous) => [...previous, { id: hugKey + '-' + index, point, color: index }])
-    }, delay))
-    return () => timers.forEach((id) => window.clearTimeout(id))
-  }, [hugKey, size])
+const tones = [
+  ['#f596c2', '#c65394', 0], ['#f8d381', '#ba7827', 83], ['#a8e3c5', '#4c9e81', 184],
+  ['#b9acff', '#7669c2', -46], ['#91dfef', '#428fa9', 226], ['#ffa98f', '#d26657', 49],
+] as const
 
-  return eggs.map(({ id, point, color }) => <div key={id} className={`jujuba-egg jujuba-egg-${color}`}
-    aria-hidden="true" style={{ left: point.x, top: point.y }}
-    onAnimationEnd={(event) => {
-      if (event.target === event.currentTarget) setEggs((previous) => previous.filter((egg) => egg.id !== id))
-    }}>
-    <span className="jujuba-egg-top" /><span className="jujuba-egg-bottom" />
-    <img className="jujuba-hatchling" src={jujuba} alt="" draggable={false} onAnimationStart={onHatch} />
-  </div>)
+export function MascotYoung({ child, at, onHatch, onTouch, onGone }: {
+  child: Offspring; at: Point; onHatch: () => void; onTouch: () => void; onGone: () => void
+}) {
+  const { id, phase, flight } = child
+  const [shell, spot, hue] = tones[(id - 1) % tones.length]
+  return <button type="button" className={`jujuba-offspring is-${phase}${flight ? ' is-flying' : ''}`}
+    disabled={phase !== 'young'} aria-label="Cutucar mini-Jujuba" onClick={onTouch}
+    style={{ left: at.x, top: at.y, '--shell': shell, '--shell-spot': spot, '--young-hue': hue + 'deg',
+      '--young-idle': `${4 + (id % 5) * .43}s`, '--young-delay': `${-id * .44}s`,
+    } as CSSProperties}>
+    {phase === 'popping' ? <span className="jujuba-young-pop" onAnimationEnd={onGone} aria-hidden="true" /> : <>
+      <span className="jujuba-egg" aria-hidden="true">
+        <span className="jujuba-egg-top" /><span className="jujuba-egg-bottom" />
+      </span>
+      <span className="jujuba-young-body">
+        <img className="jujuba-hatchling" src={jujuba} alt="" draggable={false} onAnimationStart={() => {
+          if (phase === 'egg') onHatch()
+        }} />
+      </span>
+    </>}
+  </button>
 }

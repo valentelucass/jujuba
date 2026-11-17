@@ -1,9 +1,11 @@
 import { Copy, Eye, EyeOff, FolderOpen, LoaderCircle, Paperclip, Play, Send, Sparkles, Volume2, VolumeX, Wrench, X } from 'lucide-react'
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { JujubaMascot } from './JujubaMascot'
-import { MascotHatchlings, MascotMeetingEffect, SharedMascot } from './SharedMascot'
+import { MascotMeetingEffect, MascotYoung, SharedMascot } from './SharedMascot'
 import { useSharedMascot } from '../controllers/useSharedMascot'
 import { useMascotClone } from '../controllers/useMascotClone'
+import { useEggSchedule, useMascotBrood } from '../controllers/useMascotBrood'
+import type { ShotTarget } from '../controllers/mascotProjectile'
 import { useMascotSound } from '../controllers/mascotSound'
 import type { MascotImpulse, MascotPose, MascotRoom, MascotVisibility } from '../models/flowMascot'
 import { MascotAim, MascotToyIcon, toyLabels, type MascotTool } from './MascotAim'
@@ -178,6 +180,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const endY = Math.max(startY, height - footer - launcherSize - 6)
   const floor = Math.max(startY, height - footer - launcherSize)
   const bounds: FlightBounds = { left: 6, top: header + 5, right: Math.max(6, width - launcherSize - 6), bottom: floor }
+  const brood = useMascotBrood({ left: 22, top: header + 22, right: Math.max(22, width - 22), bottom: floor + 39 })
   const boundsRef = useRef(bounds)
   boundsRef.current = bounds
   const resting = placement?.side === 'bottom'
@@ -198,6 +201,8 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const practice = useSharedMascot(null, {
     ...pairing, practice: clone.point ? { ...clone, point: clone.point } : null,
   })
+  useEggSchedule(hug, brood.lay)
+  useEggSchedule(practice.hug, brood.lay)
   const showingRemote = !!remote
   useEffect(() => {
     if (!showingRemote) setSplats((marks) => marks.some((mark) => mark.remote) ? marks.filter((mark) => !mark.remote) : marks)
@@ -213,9 +218,12 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   useEffect(() => { if (cloneSound) playSound(cloneSound) }, [cloneKey, cloneSound, playSound])
   const pairDirection = pointBetween(point, remote?.point)
   const cloneDirection = pointBetween(point, clone.point)
-  const targets: Array<{ target: 'peer' | 'clone'; point: Point }> = []
+  const targets: ShotTarget[] = []
   if (mascotRoom?.rich && remote && mascotPreferences.shareOwn) targets.push({ target: 'peer', point: center(remote.point) })
   if (clone.point) targets.push({ target: 'clone', point: center(clone.point) })
+  for (const child of brood.children) {
+    if (child.phase === 'young') targets.push({ target: `young:${child.id}`, point: brood.position(child), radius: 17 })
+  }
   const dockAnchor = flight ? resting : point
   const dockWidth = Math.min(415, width - 28)
   const dockHeight = Math.min(615, height - 28)
@@ -483,17 +491,20 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
         </div>
       </header>
       {toolsOpen && <div id="assistant-tools" className="assistant-tools" role="group" aria-label="Ferramentas e sons da Jujuba">
-        <button className="button mascot-clone-toggle" type="button" aria-pressed={!!clone.point} onClick={() => {
-          clone.keepOrRemove(point)
-          setToolsOpen(false)
-          close()
-        }}><Copy size={16} />{clone.point ? 'Remover clone de teste' : 'Criar clone de teste'}</button>
-        <div className="assistant-toys">
+        <div className="assistant-toys" role="group" aria-label="Brinquedos">
           {(Object.keys(toyLabels) as MascotTool[]).map((option) => <button className="button" type="button" key={option}
             onClick={() => chooseTool(option)}><MascotToyIcon tool={option} />{toyLabels[option]}</button>)}
         </div>
-        <div className="assistant-sounds">
-          <label htmlFor="jujuba-volume">Gelatina</label>
+        <div className="assistant-tool-row mascot-clone-row">
+          <span><Copy size={16} aria-hidden="true" />Clone de teste</span>
+          <button className="button" type="button" aria-label={clone.point ? 'Remover clone de teste' : 'Criar clone de teste'} onClick={() => {
+            clone.keepOrRemove(point)
+            setToolsOpen(false)
+            close()
+          }}>{clone.point ? 'Remover' : 'Criar'}</button>
+        </div>
+        <div className="assistant-tool-row assistant-sounds">
+          <label htmlFor="jujuba-volume">Som Gelatina</label>
           <input id="jujuba-volume" type="range" min={0} max={100} value={Math.round(sound.volume * 100)} aria-label="Volume das Jujubas"
             onChange={(event) => saveSound({ muted: false, volume: Number(event.target.value) / 100 })} />
           <button className="icon-button" type="button" aria-label="Silenciar Jujubas" title="Silenciar Jujubas" aria-pressed={sound.muted}
@@ -589,9 +600,15 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     {mascotRoom && remote && <SharedMascot key={'peer-' + mascotRoom.id} peer={mascotRoom.peer}
       appearance={remote} visibility={mascotPreferences.remote} greeting={greeting}
       direction={{ x: -pairDirection.x, y: -pairDirection.y }} />}
-    {mascotRoom && remote && mascotPreferences.shareOwn && <MascotHatchlings key={'eggs-' + mascotRoom.id} hug={hug}
-      size={launcherSize} onHatch={() => playSound('hatch')} />}
     {meeting && <MascotMeetingEffect key={meeting.source + '-' + meeting.id} kind={meeting.kind} point={meeting.point} />}
+    {brood.children.map((child) => <MascotYoung key={child.id} child={child} at={brood.position(child)}
+      onHatch={() => { brood.hatch(child.id); playSound('hatch') }}
+      onTouch={() => {
+        const direction = { x: child.id % 2 ? .7 : -.7, y: -.71 }
+        brood.bump(child.id, { direction, strength: 335 })
+        playSound('bounce', .52)
+      }}
+      onGone={() => brood.remove(child.id)} />)}
     {clone.point && <>
       <button type="button" aria-label="Clone de teste da Jujuba" title="Clone de teste · arraste para mover"
         className={`assistant-clone${clone.held ? ' is-grabbed is-dragging' : ''}${clone.flight ? ' is-flying' : ''}`}
@@ -610,18 +627,23 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
           direction={{ x: -cloneDirection.x, y: -cloneDirection.y }} />
         <span className="mascot-clone-label" aria-hidden>Clone</span>
       </button>
-      <MascotHatchlings hug={practice.hug} size={launcherSize} onHatch={() => playSound('hatch')} />
       {practice.meeting && <MascotMeetingEffect key={practice.meeting.id} kind={practice.meeting.kind} point={practice.meeting.point} />}
     </>}
     {tool && <MascotAim key={mascotRoom?.id ?? screen} tool={tool}
       own={center(point)} targets={targets}
       onExit={() => { setTool(null); launcher.current?.focus() }}
-      onFire={() => playSound(tool)}
+      onFire={(power) => playSound(tool, .64 + power * .5)}
       onRicochet={() => { if (tool === 'bow') playSound('ricochet') }}
       onHit={(target, impulse) => {
         if (target === 'peer') pushPeer(impulse)
         else if (target === 'clone') practice.pushPeer(impulse)
-        else { playSound('hit'); collide(impulse) }
+        else if (target === 'own') { playSound('hit'); collide(impulse) }
+        else {
+          const id = Number(target.slice('young:'.length))
+          if (tool === 'blaster') brood.pop(id)
+          else brood.bump(id, impulse)
+          playSound('hit', .65)
+        }
       }} />}
     <button ref={launcher} className={`assistant-launch${grabbed ? ' is-grabbed' : ''}${dragPoint ? ' is-dragging' : ''}${flight ? ' is-flying' : ''}${expression ? ' is-' + expression : ''}`}
       style={{ left: point.x, top: point.y }} aria-label={open ? 'Fechar assistente' : 'Abrir assistente de IA'}
