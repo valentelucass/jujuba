@@ -4,8 +4,8 @@ import type { Point } from '../controllers/mascotMotion'
 import type { MascotImpulse } from '../models/flowMascot'
 
 export type MascotTool = 'blaster' | 'bow'
-type Target = 'own' | 'peer'
-type Shot = { id: number; from: Point; to: Point; distance: number; angle: number; direction: Point; target?: Target }
+export type MascotTarget = 'own' | 'peer' | 'clone'
+type Shot = { id: number; from: Point; to: Point; distance: number; angle: number; direction: Point; target?: MascotTarget }
 const radius = 25
 export const toyLabels: Record<MascotTool, string> = { blaster: 'Pistola de geleia', bow: 'Arco de repulsão' }
 
@@ -21,9 +21,9 @@ export function MascotToyIcon({ tool, size = 22 }: { tool: MascotTool; size?: nu
   </svg>
 }
 
-export function MascotAim({ tool, own, peer, onExit, onFire, onHit }: {
-  tool: MascotTool; own: Point; peer: Point | null
-  onExit: () => void; onFire: () => void; onHit: (target: Target, impulse: MascotImpulse) => void
+export function MascotAim({ tool, own, targets, onExit, onFire, onHit }: {
+  tool: MascotTool; own: Point; targets: Array<{ point: Point; target: 'peer' | 'clone' }>
+  onExit: () => void; onFire: () => void; onHit: (target: MascotTarget, impulse: MascotImpulse) => void
 }) {
   const [cursor, setCursor] = useState<Point | null>(null)
   const [shots, setShots] = useState<Shot[]>([])
@@ -38,23 +38,25 @@ export function MascotAim({ tool, own, peer, onExit, onFire, onHit }: {
     const length = Math.hypot(dx, dy)
     const direction = length > 1 ? { x: dx / length, y: dy / length } : { x: 0, y: -1 }
     const angle = Math.atan2(direction.y, direction.x) * 180 / Math.PI
-    if (length <= radius && (!peer || length <= Math.hypot(where.x - peer.x, where.y - peer.y))) {
+    if (length <= radius && targets.every(({ point }) => length <= Math.hypot(where.x - point.x, where.y - point.y))) {
       return { from: { x: own.x - direction.x * 45, y: own.y - direction.y * 45 },
         to: own, direction, angle, distance: 45, target: 'own' }
     }
-    if (peer) {
-      const x = peer.x - own.x
-      const y = peer.y - own.y
+    let distance = length
+    let target: MascotTarget | undefined
+    for (const candidate of targets) {
+      const x = candidate.point.x - own.x
+      const y = candidate.point.y - own.y
       const along = x * direction.x + y * direction.y
       const sideways = Math.abs(x * direction.y - y * direction.x)
       const entry = along - Math.sqrt(Math.max(0, radius ** 2 - sideways ** 2))
-      if (along > 0 && sideways <= radius && entry <= length) {
-        const distance = Math.max(6, entry)
-        return { from: own, to: { x: own.x + direction.x * distance, y: own.y + direction.y * distance },
-          direction, angle, distance, target: 'peer' }
+      if (along > 0 && sideways <= radius && entry <= distance) {
+        distance = Math.max(6, entry)
+        target = candidate.target
       }
     }
-    return { from: own, to: where, direction, angle, distance: length }
+    return { from: own, to: { x: own.x + direction.x * distance, y: own.y + direction.y * distance },
+      direction, angle, distance, target }
   }
 
   function fire(point: Point) {
@@ -75,7 +77,7 @@ export function MascotAim({ tool, own, peer, onExit, onFire, onHit }: {
         return
       }
       if (event.target !== event.currentTarget) return
-      const position = cursor ?? peer ?? own
+      const position = cursor ?? targets[0]?.point ?? own
       const x = event.key === 'ArrowRight' ? 16 : event.key === 'ArrowLeft' ? -16 : 0
       const y = event.key === 'ArrowDown' ? 16 : event.key === 'ArrowUp' ? -16 : 0
       if (x || y) {
