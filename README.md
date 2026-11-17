@@ -107,7 +107,7 @@ Os formulários de MySQL e PostgreSQL abrem com os dados da última conexão bem
 
 ## Atualizações no Windows
 
-Instale a versão 0.1.14 ou posterior uma vez. O JujubaSQL procura uma release ao abrir, ao voltar à janela e a cada cinco minutos. Ele destaca **Atualizações** na barra superior quando encontra uma versão mais recente. Abra **Atualizações**, salve seu trabalho e clique em **Atualizar agora**. O aplicativo valida a assinatura do instalador antes de iniciá-lo e reinicia após a instalação.
+Instale a versão 0.1.14 ou posterior uma vez. O JujubaSQL procura uma release ao abrir, ao voltar à janela e a cada cinco minutos. Ele destaca **Atualizações** no rodapé, ao lado do estado da conexão, quando encontra uma versão mais recente. Abra **Atualizações**, salve seu trabalho e clique em **Atualizar agora**. O aplicativo valida a assinatura do instalador antes de iniciá-lo e reinicia após a instalação.
 
 Para distribuir uma versão, atualize as versões do frontend e do backend, incluindo os arquivos de dependências, e envie a tag correspondente, como `v0.1.15`. O workflow **Release Windows** compila o instalador x64, assina o pacote e publica os arquivos em uma Release. A chave pública está na configuração do Tauri. A chave privada fica no secret `TAURI_SIGNING_PRIVATE_KEY` do GitHub Actions e deve ter uma cópia protegida. As instalações existentes confiam nessa chave.
 

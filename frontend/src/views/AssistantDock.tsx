@@ -18,11 +18,16 @@ const launcherSize = 66
 const launcherMargin = 10
 
 type Point = { x: number; y: number }
+type LauncherPosition = { side: 'left' | 'right'; y: number }
 
-function readLauncherPosition(): Point | null {
+function readLauncherPosition(): LauncherPosition | null {
   try {
     const point = JSON.parse(localStorage.getItem(launcherPreference) ?? 'null')
-    if (Number.isFinite(point?.x) && Number.isFinite(point?.y)) return point
+    if (!Number.isFinite(point?.y)) return null
+    if (point.side === 'left' || point.side === 'right') return point
+    if (Number.isFinite(point.x)) {
+      return { side: edgeAt(point.x, window.innerWidth), y: point.y }
+    }
   } catch { /* The launcher still works without browser storage. */ }
   return null
 }
@@ -33,6 +38,10 @@ function viewport() {
 
 function clamp(value: number, max: number, min = launcherMargin) {
   return Math.max(min, Math.min(max, value))
+}
+
+function edgeAt(x: number, width: number) {
+  return x + launcherSize / 2 < width / 2 ? 'left' : 'right'
 }
 
 type Turn = ChatMessage & { diagram?: SystemDiagram; revisionOf?: SystemDiagram | null }
@@ -64,7 +73,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const [verifyOpen, setVerifyOpen] = useState(false)
   const [screenSize, setScreenSize] = useState(viewport)
   const [placement, setPlacement] = useState(readLauncherPosition)
-  const [dragging, setDragging] = useState(false)
+  const [dragPoint, setDragPoint] = useState<Point | null>(null)
   const drag = useRef<{ id: number; origin: Point; offset: Point; moved: boolean } | null>(null)
   const moved = useRef(false)
   const lock = useRef(false)
@@ -83,8 +92,8 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const { width, height } = screenSize
   const endX = width - launcherSize - launcherMargin
   const endY = height - launcherSize - launcherMargin
-  const point = {
-    x: clamp(placement?.x ?? width - launcherSize - 18, endX),
+  const point = dragPoint ?? {
+    x: placement?.side === 'left' ? launcherMargin : endX,
     y: clamp(placement?.y ?? height - launcherSize - 40, endY),
   }
   const dockWidth = Math.min(415, width - 28)
@@ -99,12 +108,10 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     else if (point.x + launcherSize + dockWidth + 22 <= width) panel.left = point.x + launcherSize + 8
   }
 
-  function place(next: Point, save = false) {
-    const bounded = { x: clamp(next.x, endX), y: clamp(next.y, endY) }
-    setPlacement(bounded)
-    if (save) {
-      try { localStorage.setItem(launcherPreference, JSON.stringify(bounded)) } catch { /* Placement remains active. */ }
-    }
+  function place(side: LauncherPosition['side'], y: number) {
+    const next = { side, y: clamp(y, endY) }
+    setPlacement(next)
+    try { localStorage.setItem(launcherPreference, JSON.stringify(next)) } catch { /* Placement remains active. */ }
   }
 
   function grab(event: PointerEvent<HTMLButtonElement>) {
@@ -124,19 +131,21 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     if (!active || active.id !== event.pointerId) return
     if (!active.moved && Math.hypot(event.clientX - active.origin.x, event.clientY - active.origin.y) < 4) return
     active.moved = true
-    setDragging(true)
-    place({ x: event.clientX - active.offset.x, y: event.clientY - active.offset.y })
+    setDragPoint({
+      x: clamp(event.clientX - active.offset.x, endX),
+      y: clamp(event.clientY - active.offset.y, endY),
+    })
   }
 
   function release(event: PointerEvent<HTMLButtonElement>) {
     const active = drag.current
     if (!active || active.id !== event.pointerId) return
     drag.current = null
-    setDragging(false)
+    setDragPoint(null)
     moved.current = active.moved
-    if (active.moved) place(event.type === 'pointerup'
-      ? { x: event.clientX - active.offset.x, y: event.clientY - active.offset.y }
-      : point, true)
+    if (active.moved && event.type === 'pointerup') {
+      place(edgeAt(event.clientX - active.offset.x, width), event.clientY - active.offset.y)
+    }
   }
 
   function close() {
@@ -268,16 +277,21 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
         </div>
       </form>
     </section>}
-    <button ref={launcher} className={'assistant-launch' + (dragging ? ' is-dragging' : '')}
+    <button ref={launcher} className={'assistant-launch' + (dragPoint ? ' is-dragging' : '')}
       style={{ left: point.x, top: point.y }} aria-label={open ? 'Fechar assistente' : 'Abrir assistente de IA'}
       title="Assistente de IA · clique para abrir ou arraste para mover" aria-expanded={open} aria-controls={open ? 'assistant-dock' : undefined}
       onPointerDown={grab} onPointerMove={move} onPointerUp={release} onPointerCancel={release} onLostPointerCapture={release}
       onKeyDown={(event) => {
-        const directions: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }
-        const direction = directions[event.key]
-        if (!direction) return
-        event.preventDefault()
-        place({ x: point.x + direction[0] * 12, y: point.y + direction[1] * 12 }, true)
+        const side = placement?.side ?? 'right'
+        const locations: Record<string, LauncherPosition> = {
+          ArrowLeft: { side: 'left', y: point.y }, ArrowRight: { side: 'right', y: point.y },
+          ArrowUp: { side, y: point.y - 12 }, ArrowDown: { side, y: point.y + 12 },
+        }
+        const next = locations[event.key]
+        if (next) {
+          event.preventDefault()
+          place(next.side, next.y)
+        }
       }}
       onClick={(event) => {
         if (event.detail && moved.current) return

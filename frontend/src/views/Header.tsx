@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Braces, ChartNoAxesCombined, Check, ChevronDown, Database, GitBranch, GitFork, Moon, Plug, Power, Search, Sun } from 'lucide-react'
 import jujuba from '../assets/jujuba.png'
 import type { Connection, Database as DatabaseName } from '../models/sql'
-import { UpdateButton } from './DesktopUpdates'
 import { useTheme } from './Theme'
 
 const bankTools = [
@@ -91,6 +90,5 @@ export function Header({ connection, database, onConnect, onDisconnect, onDataba
     </button>
     {onDiagrams && <button className="button system-tab" aria-pressed={!!diagramActive}
       onClick={diagramActive ? undefined : onDiagrams}><GitBranch size={15} />Fluxogramas</button>}
-    <UpdateButton />
   </header>
 }

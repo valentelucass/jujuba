@@ -358,12 +358,16 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
         </div>
         <div className="system-doc-actions">
           {hasProject ? <>
-            <button className="button" disabled={!!busy} onClick={library}><ArrowLeft size={15} />Meus projetos</button>
+            <button className="icon-button" disabled={!!busy} onClick={library}
+              aria-label="Voltar para Meus projetos" title="Voltar para Meus projetos"><ArrowLeft size={17} /></button>
             {workspace && !session && <button className="button design-accent" disabled={!!busy}
               onClick={() => setPanel(panel === 'share' ? null : 'share')}><Users size={15} />Compartilhar</button>}
-            {guest ? <button className="button" disabled={!!busy} onClick={saveCopy}><Copy size={15} />Salvar cópia</button>
-              : <button className="button" disabled={!diagram || !!busy} onClick={save}><Save size={15} />Salvar arquivo</button>}
-            <button className="button" disabled={!diagram || !!busy} onClick={exportMarkdown}><FileDown size={15} />Markdown</button>
+            {guest ? <button className="icon-button" disabled={!!busy} onClick={saveCopy}
+              aria-label="Salvar cópia" title="Salvar cópia"><Copy size={17} /></button>
+              : <button className="icon-button" disabled={!diagram || !!busy} onClick={save}
+                aria-label="Salvar arquivo" title="Salvar arquivo"><Save size={17} /></button>}
+            <button className="icon-button" disabled={!diagram || !!busy} onClick={exportMarkdown}
+              aria-label="Exportar Markdown" title="Exportar Markdown"><FileDown size={17} /></button>
           </> : <>
             <button className="button design-accent" disabled={!!busy || !!session}
               onClick={() => setPanel(panel === 'create' ? null : 'create')}><FilePlus2 size={15} />Novo projeto</button>

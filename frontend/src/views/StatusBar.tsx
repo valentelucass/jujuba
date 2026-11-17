@@ -6,6 +6,7 @@ import { Database as DatabaseIcon, ExternalLink, ShieldCheck } from 'lucide-reac
 import { engines, type Engine } from '../models/engines'
 import type { Database } from '../models/sql'
 import { version as buildVersion } from '../../package.json'
+import { UpdateButton } from './DesktopUpdates'
 
 const links = [
   { label: 'Referências', url: 'https://github.com/valentelucass/jujubasql#referências' },
@@ -31,6 +32,7 @@ export function StatusBar({ engine, endpoint, database, passwordSaveFailed }: {
 
   return <footer className="statusbar">
     <span className={`connection-status${engine ? ' online' : ''}`} role="status"><i />{engine ? 'Conectado' : 'Desconectado'}</span>
+    <UpdateButton />
     {engine && <span className="status-permissions"><ShieldCheck size={13} /> {engines[engine].name}</span>}
     {database && <span className="status-context"><DatabaseIcon size={12} /> <span>{database}</span></span>}
     <span className="status-end status-context">{endpoint ?? 'Sessão local'}</span>

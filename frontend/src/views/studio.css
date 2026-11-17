@@ -107,7 +107,7 @@ code { font-family: var(--mono); }
   .topbar .wordmark strong { display: none; }
   .topbar .header-divider { margin-inline: 2px; }
   .bank-tools .button { padding-inline: 7px; }
-  .bank-tools .bank-data span, .topbar .update-button span { display: none; }
+  .bank-tools .bank-data span { display: none; }
 }
 .wordmark { display: flex; gap: 10px; align-items: center; white-space: nowrap; }
 .wordmark strong { font-size: 17px; letter-spacing: -.055em; font-weight: 680; }
@@ -456,14 +456,15 @@ code { font-family: var(--mono); }
 .status-links a:hover { text-decoration: underline; }
 .update-button {
   display: inline-flex; flex: none; align-items: center; gap: 6px; white-space: nowrap;
-  height: 33px; padding: 0 9px; border: 1px solid transparent; border-radius: 7px;
-  background: transparent; color: var(--text); text-decoration: none;
+  height: 22px; padding: 0 6px; border: 1px solid transparent; border-radius: 5px;
+  background: transparent; color: var(--quiet); font: inherit; text-decoration: none;
 }
+.statusbar .update-button svg { color: currentColor; }
 .update-button:not(.available):hover { background: var(--hover); }
 .update-button.available {
   background: var(--berry-selected); border-color: var(--berry-line); color: var(--berry-text);
 }
-.update-button.available svg { color: var(--berry); }
+.statusbar .update-button.available svg { color: var(--berry); }
 .status-version { font-variant-numeric: tabular-nums; color: var(--quiet); }
 .update-dialog progress { width: 100%; margin-top: 10px; accent-color: var(--berry); }
 .update-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
