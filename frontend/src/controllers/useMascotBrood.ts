@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { animateThrow, type FlightBounds, type FlightFrame, type Point } from './mascotMotion'
+import { animateThrow, type FlightBounds, type FlightFrame, type Impact, type Point } from './mascotMotion'
 import type { MascotImpulse } from '../models/flowMascot'
 
 export type Hug = { key: string; point: Point }
@@ -38,7 +38,7 @@ export function useEggSchedule(hug: Hug | null, lay: (near: Point, ordinal: numb
   }, [key])
 }
 
-export function useMascotBrood(area: FlightBounds) {
+export function useMascotBrood(area: FlightBounds, onImpact: (mark: Impact) => void) {
   const [children, setChildren] = useState<Offspring[]>([])
   const nextId = useRef(0)
   const bounds = useRef(area)
@@ -79,7 +79,7 @@ export function useMascotBrood(area: FlightBounds) {
       y: Math.min(-85, impulse.direction.y * strength - 165),
     }, () => bounds.current, (frame) => {
       setChildren((previous) => previous.map((entry) => entry.id === id ? { ...entry, flight: frame } : entry))
-    }, () => {}, (rest) => {
+    }, onImpact, (rest) => {
       animations.current.delete(id)
       setChildren((previous) => previous.map((entry) => entry.id === id ? { ...entry, x: rest.x, flight: null } : entry))
     })

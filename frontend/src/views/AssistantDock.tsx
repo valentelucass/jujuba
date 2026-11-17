@@ -117,7 +117,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const [mascotOptions, setMascotOptions] = useState(false)
   const [toolsOpen, setToolsOpen] = useState(false)
   const [tool, setTool] = useState<MascotTool | null>(null)
-  const { settings: sound, save: saveSound, play: playSound } = useMascotSound()
+  const { settings: sound, save: saveSound, play: playSound, tension } = useMascotSound()
   const [grabbed, setGrabbed] = useState(false)
   const [reaction, setReaction] = useState<Reaction | null>(null)
   const [dragPoint, setDragPoint] = useState<Point | null>(null)
@@ -180,7 +180,8 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const endY = Math.max(startY, height - footer - launcherSize - 6)
   const floor = Math.max(startY, height - footer - launcherSize)
   const bounds: FlightBounds = { left: 6, top: header + 5, right: Math.max(6, width - launcherSize - 6), bottom: floor }
-  const brood = useMascotBrood({ left: 22, top: header + 22, right: Math.max(22, width - 22), bottom: floor + 39 })
+  const brood = useMascotBrood({ left: 22, top: header + 22, right: Math.max(22, width - 22), bottom: floor + 39 },
+    (mark) => playSound('bounceOffWall', .35 + mark.strength * .5))
   const boundsRef = useRef(bounds)
   boundsRef.current = bounds
   const resting = placement?.side === 'bottom'
@@ -195,7 +196,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     playSound('bounceOffWall', .64 + impact.strength * .7)
     const mark = makeSplat(impact, launcherSize, ++nextSplat.current)
     setSplats((previous) => [...previous.slice(-31), mark])
-  })
+  }, (sound, speed) => playSound(sound, .64 + Math.min(1, speed / 2200) * .61))
   const { preferences: mascotPreferences, savePreferences, shareImpact, pushPeer, remote, meeting, hug } =
     useSharedMascot(mascotRoom, { ...pairing, receiveSplat: addRemoteSplat })
   const practice = useSharedMascot(null, {
@@ -214,8 +215,8 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const meetingKey = meeting ? [mascotRoom?.id, meeting.source, meeting.id].join('-') : null
   const cloneSound = practice.meeting?.kind
   const cloneKey = practice.meeting?.id
-  useEffect(() => { if (meetingSound) playSound(meetingSound) }, [meetingKey, meetingSound, playSound])
-  useEffect(() => { if (cloneSound) playSound(cloneSound) }, [cloneKey, cloneSound, playSound])
+  useEffect(() => { if (meetingSound) playSound(meetingSound === 'bump' ? 'slimeKick' : meetingSound) }, [meetingKey, meetingSound, playSound])
+  useEffect(() => { if (cloneSound) playSound(cloneSound === 'bump' ? 'slimeKick' : cloneSound) }, [cloneKey, cloneSound, playSound])
   const pairDirection = pointBetween(point, remote?.point)
   const cloneDirection = pointBetween(point, clone.point)
   const targets: ShotTarget[] = []
@@ -312,6 +313,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     const velocity = throwVelocity(active.samples, { ...lastPointer.current, time: event.timeStamp })
     if (velocity && bounds.bottom - bounds.top > 72 && bounds.right - bounds.left > 72
       && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      playSound('throw', .7 + Math.min(1, Math.hypot(velocity.x, velocity.y) / 2350) * .65)
       throwMascot(from, velocity)
       return
     }
@@ -332,12 +334,14 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   }
 
   function addRemoteSplat(impact: Impact) {
+    playSound('bounceOffWall', .42 + impact.strength * .5)
     const mark = { ...makeSplat(impact, launcherSize, ++nextSplat.current), remote: true }
     setSplats((previous) => [...previous.slice(-31), mark])
   }
 
   function collide(impulse: MascotImpulse, source: 'local' | 'remote' | 'toy' = 'toy') {
     if (drag.current) return
+    playSound('slimeKick', .6 + Math.min(impulse.strength / 1700, 1) * .63)
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       setReaction('protesting')
       return
@@ -633,11 +637,12 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
       own={center(point)} targets={targets}
       onExit={() => { setTool(null); launcher.current?.focus() }}
       onFire={(power) => playSound(tool, .64 + power * .5)}
+      onTension={tension}
       onRicochet={() => { if (tool === 'bow') playSound('ricochet') }}
       onHit={(target, impulse) => {
         if (target === 'peer') pushPeer(impulse)
         else if (target === 'clone') practice.pushPeer(impulse)
-        else if (target === 'own') { playSound('hit'); collide(impulse) }
+        else if (target === 'own') collide(impulse)
         else {
           const id = Number(target.slice('young:'.length))
           if (tool === 'blaster') brood.pop(id)
@@ -669,7 +674,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
         if (open) close()
         else setOpen(true)
       }}>
-      <JujubaMascot followPointer grabbed={grabbed} equipped={!!tool} reaction={expression} flight={flight} hat={hat} greeting={cloneGreeting ?? greeting}
+      <JujubaMascot followPointer grabbed={grabbed} equipped={tool === 'blaster'} reaction={expression} flight={flight} hat={hat} greeting={cloneGreeting ?? greeting}
         direction={cloneGreeting ? cloneDirection : pairDirection} />
     </button>
   </>

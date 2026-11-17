@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { animateThrow, throwVelocity, type FlightBounds, type FlightFrame, type Impact, type Point, type PointerSample } from './mascotMotion'
 import type { MascotImpulse } from '../models/flowMascot'
 
-export function useMascotClone(bounds: FlightBounds, onImpact: (mark: Impact) => void) {
+export function useMascotClone(bounds: FlightBounds, onImpact: (mark: Impact) => void,
+  onLaunch: (sound: 'throw' | 'slimeKick', speed: number) => void) {
   const [position, setPosition] = useState<Point | null>(null)
   const [held, setHeld] = useState(false)
   const [flight, setFlight] = useState<FlightFrame | null>(null)
@@ -17,7 +18,8 @@ export function useMascotClone(bounds: FlightBounds, onImpact: (mark: Impact) =>
   const point = flight ?? (position && clamp(position))
   useEffect(() => () => cancel.current?.(), [])
 
-  function throwClone(from: Point, velocity: Point) {
+  function throwClone(from: Point, velocity: Point, sound: 'throw' | 'slimeKick') {
+    onLaunch(sound, Math.hypot(velocity.x, velocity.y))
     cancel.current?.()
     setFlight({ ...from, velocity, squash: 0, edge: 'bottom' })
     cancel.current = animateThrow(from, velocity, () => limits.current, setFlight, onImpact, (rest) => {
@@ -30,7 +32,7 @@ export function useMascotClone(bounds: FlightBounds, onImpact: (mark: Impact) =>
   function boost(impulse: MascotImpulse, recoil = false) {
     if (!point || drag.current || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
     const sign = recoil ? -.88 : 1
-    throwClone(point, { x: impulse.direction.x * impulse.strength * sign, y: impulse.direction.y * impulse.strength * sign - 180 })
+    throwClone(point, { x: impulse.direction.x * impulse.strength * sign, y: impulse.direction.y * impulse.strength * sign - 180 }, 'slimeKick')
   }
 
   function keepOrRemove(anchor: Point) {
@@ -73,7 +75,7 @@ export function useMascotClone(bounds: FlightBounds, onImpact: (mark: Impact) =>
     setHeld(false)
     if (event.type !== 'pointerup' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
     const velocity = throwVelocity(active.samples, { x: event.clientX, y: event.clientY, time: event.timeStamp })
-    if (velocity) throwClone(clamp({ x: event.clientX - active.offset.x, y: event.clientY - active.offset.y }), velocity)
+    if (velocity) throwClone(clamp({ x: event.clientX - active.offset.x, y: event.clientY - active.offset.y }), velocity, 'throw')
   }
 
   function nudge(x: number, y: number) {

@@ -1,12 +1,13 @@
 import { Crosshair, X } from 'lucide-react'
-import { useEffect, useRef, useState, type PointerEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
 import type { FlightBounds, Point } from '../controllers/mascotMotion'
 import { reflect, traceProjectile, unitVector, type MascotTarget, type ShotTarget } from '../controllers/mascotProjectile'
 import type { MascotImpulse } from '../models/flowMascot'
 
 export type MascotTool = 'blaster' | 'bow'
 type Shot = { id: number; point: Point; direction: Point; speed: number; power: number; rebounds: number; expires: number; touched: Set<MascotTarget> }
-type Hold = { id: number; start: Point; direction: Point }
+type Hold = { id: number; start: Point }
+type BowDraw = { anchor: Point; direction: Point; power: number }
 type Spark = { id: number; point: Point; kind: 'muzzle' | 'impact' }
 export const toyLabels: Record<MascotTool, string> = { blaster: 'Pistola de geleia', bow: 'Arco de repulsão' }
 
@@ -14,8 +15,6 @@ const angle = (direction: Point) => Math.atan2(direction.y, direction.x) * 180 /
 const offset = (point: Point, direction: Point, distance: number): Point => ({
   x: point.x + direction.x * distance, y: point.y + direction.y * distance,
 })
-const drawPower = (hold: Hold, mouse: Point) => Math.max(0, Math.min(1,
-  ((hold.start.x - mouse.x) * hold.direction.x + (hold.start.y - mouse.y) * hold.direction.y) / 155))
 
 export function MascotToyIcon({ tool, size = 22 }: { tool: MascotTool; size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="2.2"
@@ -29,13 +28,13 @@ export function MascotToyIcon({ tool, size = 22 }: { tool: MascotTool; size?: nu
   </svg>
 }
 
-export function MascotAim({ tool, own, targets, onExit, onFire, onHit, onRicochet }: {
+export function MascotAim({ tool, own, targets, onExit, onFire, onTension, onHit, onRicochet }: {
   tool: MascotTool; own: Point; targets: ShotTarget[]
-  onExit: () => void; onFire: (power: number) => void; onRicochet: () => void
+  onExit: () => void; onFire: (power: number) => void; onTension: (power: number) => void; onRicochet: () => void
   onHit: (target: MascotTarget, impulse: MascotImpulse) => void
 }) {
   const [cursor, setCursor] = useState<Point | null>(null)
-  const [drawing, setDrawing] = useState<{ direction: Point; power: number } | null>(null)
+  const [drawing, setDrawing] = useState<BowDraw | null>(null)
   const [shots, setShots] = useState<Shot[]>([])
   const [sparks, setSparks] = useState<Spark[]>([])
   const engine = useRef({ shots: [] as Shot[], frame: 0, auto: 0, lastFrame: 0, lastShot: -Infinity, sequence: 0 })
@@ -43,8 +42,8 @@ export function MascotAim({ tool, own, targets, onExit, onFire, onHit, onRicoche
   const weapon = useRef<SVGGElement>(null)
   const held = useRef<Hold | null>(null)
   const lastPointer = useRef<Point | null>(null)
-  const runtime = useRef({ own, targets, onHit, onExit, onRicochet })
-  runtime.current = { own, targets, onHit, onExit, onRicochet }
+  const runtime = useRef({ own, targets, onHit, onExit, onRicochet, onTension })
+  runtime.current = { own, targets, onHit, onExit, onRicochet, onTension }
 
   useEffect(() => {
     surface.current?.focus()
@@ -66,6 +65,7 @@ export function MascotAim({ tool, own, targets, onExit, onFire, onHit, onRicoche
       window.clearInterval(animation.auto)
       animation.auto = 0
       setDrawing(null)
+      runtime.current.onTension(0)
     }
     window.addEventListener('keydown', cancelKey, true)
     window.addEventListener('contextmenu', cancelPointer, true)
@@ -81,6 +81,7 @@ export function MascotAim({ tool, own, targets, onExit, onFire, onHit, onRicoche
       animation.frame = 0
       animation.auto = 0
       animation.shots = []
+      runtime.current.onTension(0)
     }
   }, [])
 
@@ -88,14 +89,20 @@ export function MascotAim({ tool, own, targets, onExit, onFire, onHit, onRicoche
   function idleDirection(point: Point) {
     return { x: point.x > window.innerWidth / 2 ? -1 : 1, y: 0 }
   }
-  function pose(where: Point | null, fixed?: Point) {
+  function gunPose(where: Point | null) {
     const { own } = runtime.current
     const fallback = idleDirection(own)
-    const direction = fixed ?? (where ? unitVector(where.x - own.x, where.y - own.y, fallback) : fallback)
+    const direction = where ? unitVector(where.x - own.x, where.y - own.y, fallback) : fallback
     const side = Math.abs(direction.x) < .1 ? fallback.x : Math.sign(direction.x)
     const shoulder = { x: own.x + side * 16, y: own.y + 5 }
     const hand = offset(shoulder, direction, 10)
     return { direction, shoulder, hand, muzzle: offset(hand, direction, 18) }
+  }
+
+  function bowDraw(anchor: Point, mouse: Point): BowDraw {
+    const x = anchor.x - mouse.x
+    const y = anchor.y - mouse.y
+    return { anchor, direction: unitVector(x, y, idleDirection(anchor)), power: Math.min(1, Math.hypot(x, y) / 155) }
   }
 
   function sceneBounds(): FlightBounds {
@@ -145,12 +152,13 @@ export function MascotAim({ tool, own, targets, onExit, onFire, onHit, onRicoche
     if (flying.length) active.frame = requestAnimationFrame(tick)
   }
 
-  function fire(where: Point, power = bow ? .18 : 1, fixed?: Point) {
+  function fire(where: Point, draw?: BowDraw) {
     const active = engine.current
     const now = performance.now()
     if (now - active.lastShot < 140) return
     active.lastShot = now
-    const { muzzle, direction } = pose(where, fixed)
+    const power = draw?.power ?? 1
+    const { muzzle, direction } = draw ? { muzzle: draw.anchor, direction: draw.direction } : gunPose(where)
     const shot = { id: ++active.sequence, point: muzzle, direction, power, speed: bow ? 490 + 650 * power : 860,
       rebounds: bow ? 2 + Math.round(power * 3) : 0, expires: now + (bow ? 6500 : 3200), touched: new Set<MascotTarget>() }
     active.shots = [...active.shots.slice(-7), shot]
@@ -169,10 +177,15 @@ export function MascotAim({ tool, own, targets, onExit, onFire, onHit, onRicoche
   }
 
   function track(event: PointerEvent<HTMLDivElement>) {
+    if (held.current && event.pointerId !== held.current.id) return
     const where = { x: event.clientX, y: event.clientY }
     setCursor(where)
     lastPointer.current = where
-    if (bow && held.current) setDrawing({ direction: held.current.direction, power: drawPower(held.current, where) })
+    if (bow && held.current) {
+      const ready = bowDraw(held.current.start, where)
+      setDrawing(ready)
+      onTension(ready.power)
+    }
   }
 
   function start(event: PointerEvent<HTMLDivElement>) {
@@ -180,9 +193,9 @@ export function MascotAim({ tool, own, targets, onExit, onFire, onHit, onRicoche
       (event.target instanceof Element && event.target.closest('.mascot-aim-status'))) return
     const where = { x: event.clientX, y: event.clientY }
     track(event)
-    held.current = { id: event.pointerId, start: where, direction: pose(where).direction }
+    held.current = { id: event.pointerId, start: where }
     event.currentTarget.setPointerCapture(event.pointerId)
-    if (bow) setDrawing({ direction: held.current.direction, power: 0 })
+    if (bow) setDrawing(bowDraw(where, where))
     else {
       fire(where)
       engine.current.auto = window.setInterval(() => { if (lastPointer.current) fire(lastPointer.current) }, 210)
@@ -196,17 +209,22 @@ export function MascotAim({ tool, own, targets, onExit, onFire, onHit, onRicoche
     window.clearInterval(engine.current.auto)
     engine.current.auto = 0
     setDrawing(null)
+    onTension(0)
     if (bow && event.type === 'pointerup') {
       const where = { x: event.clientX, y: event.clientY }
-      fire(where, Math.max(.08, drawPower(hold, where)), hold.direction)
+      const draw = bowDraw(hold.start, where)
+      if (draw.power >= .045) fire(where, draw)
     }
   }
 
-  const { direction, hand, shoulder, muzzle } = pose(cursor, drawing?.direction)
-  const guide = offset(muzzle, direction, 55)
-  const pull = drawing ? 12 + drawing.power * 34 : 0
-  const drawHand = offset(hand, direction, -pull)
-  const freeShoulder = { x: own.x + (own.x - shoulder.x) * .71, y: own.y + 12 }
+  const gun = gunPose(cursor)
+  const anchor = drawing?.anchor ?? cursor ?? offset(own, idleDirection(own), 112)
+  const bowDirection = drawing?.direction ?? idleDirection(anchor)
+  const power = drawing?.power ?? 0
+  const pull = power * 42
+  const bowSight = offset(anchor, bowDirection, 70 + power * 115)
+  const crosshair = drawing ? bowSight : cursor
+  const guide = offset(gun.muzzle, gun.direction, 55)
   return <div ref={surface} className="mascot-aim" role="group" aria-label={'Mira da ferramenta: ' + toyLabels[tool]} tabIndex={0}
     onPointerMove={track} onPointerDown={start} onPointerUp={release} onPointerCancel={release} onLostPointerCapture={release}
     onPointerLeave={() => setCursor(null)}
@@ -221,34 +239,44 @@ export function MascotAim({ tool, own, targets, onExit, onFire, onHit, onRicoche
           y: Math.max(0, Math.min(window.innerHeight, position.y + y)) })
       } else if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault()
-        if (!event.repeat) fire(position, bow ? .6 : 1)
+        if (!event.repeat) {
+          const direction = unitVector(position.x - own.x, position.y - own.y, idleDirection(own))
+          fire(position, bow ? { anchor: offset(position, direction, -90), direction, power: .60 } : undefined)
+        }
       }
     }}>
     <div className="mascot-aim-status" onClick={(event) => event.stopPropagation()}>
       <MascotToyIcon tool={tool} />
       <span className="mascot-aim-instruction">
         <strong>{toyLabels[tool]}</strong>
-        <small>{bow ? 'Puxe para trás e solte' : 'Segure para disparar'}</small>
+        <small>{bow ? 'Clique para fixar. Puxe e solte.' : 'Segure para disparar'}</small>
       </span>
       <button className="icon-button" type="button" title="Guardar ferramenta (Esc ou botão direito)" aria-label="Guardar ferramenta"
         onClick={onExit}><X size={16} /></button>
     </div>
     <svg className={'mascot-held-toy is-' + tool} aria-hidden="true">
-      <line className="mascot-aim-guide" x1={muzzle.x} y1={muzzle.y} x2={guide.x} y2={guide.y} />
-      <path className="mascot-toy-arm" d={'M' + shoulder.x + ' ' + shoulder.y + ' Q' + shoulder.x + ' ' +
-        (hand.y + 9) + ' ' + hand.x + ' ' + hand.y} />
-      {drawing && <path className="mascot-toy-arm" d={`M${freeShoulder.x} ${freeShoulder.y} Q${drawHand.x} ${freeShoulder.y + 7} ${drawHand.x} ${drawHand.y}`} />}
-      <g ref={weapon} transform={`translate(${hand.x} ${hand.y}) rotate(${angle(direction)}) scale(1 ${direction.x < 0 ? -1 : 1})`}>
-        {bow ? <>
-          <path className="mascot-bow-limbs" d="M-4 -20Q19-9 11 0Q19 9 -4 20" />
-          <path className="mascot-bow-string" d={`M-4 -20 L${-pull - 4} 0 L-4 20`} />
-          {drawing && <path className="mascot-bow-loaded" d={`M${-pull - 4} 0H33m-5-4 5 4-5 4`} />}
-        </> : <g transform="translate(-15 -18)"><MascotToyIcon tool={tool} size={37} /></g>}
-      </g>
+      {bow ? <>
+        {drawing && <>
+          <circle className="mascot-bow-anchor" cx={anchor.x} cy={anchor.y} r="8" />
+          <line className="mascot-aim-guide" x1={anchor.x} y1={anchor.y} x2={bowSight.x} y2={bowSight.y} />
+        </>}
+        <g ref={weapon} className="mascot-bow-rig" transform={`translate(${anchor.x} ${anchor.y}) rotate(${angle(bowDirection)}) scale(${1 + power * .48})`}>
+          <path className="mascot-bow-limbs" d={`M${-4 - power * 8} -20Q19-9 11 0Q19 9 ${-4 - power * 8} 20`} />
+          <path className="mascot-bow-string" d={`M${-4 - power * 8} -20 L${-pull - 4} 0 L${-4 - power * 8} 20`} />
+          {drawing && <path className="mascot-bow-loaded" d={`M${-pull - 4} 0H${21 + 17 * power}m-5-4 5 4-5 4`} />}
+        </g>
+      </> : <>
+        <line className="mascot-aim-guide" x1={gun.muzzle.x} y1={gun.muzzle.y} x2={guide.x} y2={guide.y} />
+        <path className="mascot-toy-arm" d={`M${gun.shoulder.x} ${gun.shoulder.y} Q${gun.shoulder.x} ${gun.hand.y + 9} ${gun.hand.x} ${gun.hand.y}`} />
+        <g ref={weapon} transform={`translate(${gun.hand.x} ${gun.hand.y}) rotate(${angle(gun.direction)}) scale(1 ${gun.direction.x < 0 ? -1 : 1})`}>
+          <g transform="translate(-15 -18)"><MascotToyIcon tool={tool} size={37} /></g>
+        </g>
+      </>}
     </svg>
-    {cursor && <span className="mascot-toy-cursor" style={{ left: cursor.x, top: cursor.y }}><Crosshair size={20} /></span>}
+    {crosshair && <span className="mascot-toy-cursor" style={{ left: crosshair.x, top: crosshair.y }}><Crosshair size={20} /></span>}
     {shots.map((shot) => <span key={shot.id} className={'mascot-shot is-' + tool} aria-hidden="true"
-      style={{ left: shot.point.x, top: shot.point.y, rotate: angle(shot.direction) + 'deg' }}><span /></span>)}
+      style={{ left: shot.point.x, top: shot.point.y, rotate: angle(shot.direction) + 'deg',
+        '--arrow-size': .79 + shot.power * .64 } as CSSProperties}><span /></span>)}
     {sparks.map((mark) => <span key={mark.id} className={'mascot-shot-spark is-' + mark.kind} aria-hidden="true"
       style={{ left: mark.point.x, top: mark.point.y }}
       onAnimationEnd={() => setSparks((previous) => previous.filter(({ id }) => id !== mark.id))} />)}
