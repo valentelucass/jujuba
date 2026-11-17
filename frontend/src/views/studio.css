@@ -911,10 +911,12 @@ dialog.connection-dialog {
   background: var(--sidebar); border: 1px solid var(--line-strong); border-radius: 14px;
   box-shadow: 0 16px 55px var(--shadow); overflow: hidden;
 }
-.assistant-heading { display: flex; align-items: center; justify-content: space-between; padding: 12px; border-bottom: 1px solid var(--line); }
-.assistant-heading > div:first-child { min-width: 0; }
+.assistant-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 12px; border-bottom: 1px solid var(--line); }
 .assistant-heading-actions { display: flex; flex: none; align-items: center; gap: 6px; }
-.assistant-hats-trigger .hat-miniature { flex: none; width: 22px; height: 18px; }
+.assistant-heading-actions .icon-button { flex: none; }
+.assistant-hats-trigger { color: var(--berry); }
+.assistant-mascots-trigger:is(.is-dim, .is-hidden) { color: var(--quiet); }
+.assistant-heading-actions .icon-button[aria-expanded="true"] { color: var(--berry); border-color: var(--berry-line); background: var(--berry-selected); }
 .assistant-hats {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(min(97px, 100%), 1fr)); gap: 7px;
   max-height: 224px; overflow: auto; padding: 8px 12px; border-bottom: 1px solid var(--line);
@@ -926,10 +928,9 @@ dialog.connection-dialog {
 .assistant-hats .button span { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .assistant-hats .button[aria-pressed="true"] { border-color: var(--berry-line); background: var(--berry-selected); color: var(--berry); }
 .hat-miniature { display: grid; place-items: center; width: 68px; height: 43px; }
-.assistant-heading h2 { display: flex; align-items: center; gap: 7px; font-size: 15px; }
-.assistant-heading h2 svg { color: var(--berry); }
-.assistant-heading small, .assistant-workspace { display: block; color: var(--quiet); margin-top: 3px; }
-.assistant-heading small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.assistant-heading h2 { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 15px; }
+.assistant-heading h2 svg { flex: none; color: var(--berry); }
+.assistant-workspace { display: block; color: var(--quiet); margin-top: 3px; }
 .assistant-config { display: flex; gap: 6px; padding: 8px 12px; }
 .assistant-config select, .assistant-composer textarea {
   border: 1px solid var(--line-strong); border-radius: 7px; background: var(--workspace); color: var(--text); padding: 7px;
@@ -1098,9 +1099,6 @@ dialog.connection-dialog {
   25% { transform: translateY(-9px) rotate(-9deg); }
   58% { transform: translateY(1px) rotate(8deg); }
   77% { transform: translateY(-5px); }
-}
-@media (max-width: 380px) {
-  .assistant-mascots-trigger svg { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .assistant-peer { transition: none; }

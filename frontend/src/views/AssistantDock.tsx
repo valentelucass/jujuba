@@ -1,4 +1,4 @@
-import { FolderOpen, LoaderCircle, Paperclip, Send, Sparkles, Users, X } from 'lucide-react'
+import { Eye, EyeOff, FolderOpen, LoaderCircle, Paperclip, Send, Sparkles, X } from 'lucide-react'
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { JujubaMascot } from './JujubaMascot'
 import { MascotMeetingEffect, SharedMascot } from './SharedMascot'
@@ -177,6 +177,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   useEffect(() => {
     if (!showingRemote) setSplats((marks) => marks.some((mark) => mark.remote) ? marks.filter((mark) => !mark.remote) : marks)
   }, [showingRemote])
+  const VisibilityIcon = mascotPreferences.remote === 'hidden' ? EyeOff : Eye
   const greeting = meeting?.near ? meeting.kind : undefined
   const pairDelta = remote ? { x: remote.point.x - point.x, y: remote.point.y - point.y } : { x: 1, y: 0 }
   const pairLength = Math.max(1, Math.hypot(pairDelta.x, pairDelta.y))
@@ -413,14 +414,22 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     {open && <section ref={dock} id="assistant-dock" className="assistant-dock" aria-label="Assistente de IA" style={panel}
       onKeyDown={(event) => { if (event.key === 'Escape' && !event.defaultPrevented) close() }}>
       <header className="assistant-heading">
-        <div><h2><Sparkles size={17} />Assistente de IA</h2><small>{diagram?.title ? screen + ' · ' + diagram.title : screen}</small></div>
+        <h2><Sparkles size={17} />Assistente de IA</h2>
         <div className="assistant-heading-actions">
-          <button className="button assistant-hats-trigger" type="button" aria-expanded={hatsOpen} aria-controls={hatsOpen ? 'assistant-hats' : undefined}
-            onClick={() => { setHatsOpen(!hatsOpen); setMascotOptions(false) }}><MascotHat hat="topHat" miniature />Chapéus</button>
-          {mascotRoom && <button className="button assistant-mascots-trigger" type="button" aria-expanded={mascotOptions}
+          {mascotRoom && <button className={'icon-button assistant-mascots-trigger is-' + mascotPreferences.remote}
+            type="button" aria-label="Visibilidade das Jujubas" title="Visibilidade das Jujubas" aria-expanded={mascotOptions}
             aria-controls={mascotOptions ? 'assistant-mascots' : undefined}
-            onClick={() => { setMascotOptions(!mascotOptions); setHatsOpen(false) }}><Users size={15} />Jujubas</button>}
-          <button className="icon-button" onClick={close} aria-label="Fechar assistente"><X size={17} /></button>
+            onClick={() => { setMascotOptions(!mascotOptions); setHatsOpen(false) }}><VisibilityIcon size={18} aria-hidden="true" /></button>}
+          <button className="icon-button assistant-hats-trigger" type="button" aria-label="Chapéus" title="Chapéus"
+            aria-expanded={hatsOpen} aria-controls={hatsOpen ? 'assistant-hats' : undefined}
+            onClick={() => { setHatsOpen(!hatsOpen); setMascotOptions(false) }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"
+              strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m6 15-1-9c0-1.2 3-2 7-2s7 .8 7 2l-1 9M6 12c2.7 1 9.3 1 12 0" />
+              <path d="M6 15c-2.6.5-4 1.4-4 2.3 0 1.6 4.5 2.7 10 2.7s10-1.1 10-2.7c0-.9-1.4-1.8-4-2.3" />
+            </svg>
+          </button>
+          <button className="icon-button" onClick={close} aria-label="Fechar assistente" title="Fechar assistente"><X size={17} /></button>
         </div>
       </header>
       {hatsOpen && <div id="assistant-hats" className="assistant-hats" role="group" aria-label="Chapéus da Jujuba">
