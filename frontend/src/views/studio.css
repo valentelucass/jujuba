@@ -910,6 +910,7 @@ dialog.connection-dialog {
 }
 .assistant-heading { display: flex; align-items: center; justify-content: space-between; padding: 12px; border-bottom: 1px solid var(--line); }
 .assistant-heading-actions { display: flex; align-items: center; gap: 6px; }
+.assistant-hats-trigger .hat-miniature { flex: none; width: 22px; height: 18px; }
 .assistant-hats {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(min(97px, 100%), 1fr)); gap: 7px;
   max-height: 224px; overflow: auto; padding: 8px 12px; border-bottom: 1px solid var(--line);

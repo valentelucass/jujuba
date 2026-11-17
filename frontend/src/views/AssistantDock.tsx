@@ -107,12 +107,24 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const lastPointer = useRef<Point | null>(null)
   const moved = useRef(false)
   const lock = useRef(false)
+  const dock = useRef<HTMLElement>(null)
   const composer = useRef<HTMLTextAreaElement>(null)
   const launcher = useRef<HTMLButtonElement>(null)
   const end = useRef<HTMLLIElement>(null)
 
   useEffect(() => { if (open) composer.current?.focus() }, [open])
   useEffect(() => { if (open) end.current?.scrollIntoView({ block: 'nearest' }) }, [chat, busy, open])
+  useEffect(() => {
+    if (!open) return
+    function dismissOutside(event: MouseEvent) {
+      const target = event.target
+      if (target instanceof Node && !dock.current?.contains(target) && !launcher.current?.contains(target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('click', dismissOutside, true)
+    return () => document.removeEventListener('click', dismissOutside, true)
+  }, [open, setOpen])
   useEffect(() => {
     if (!reaction) return
     const timer = window.setTimeout(() => setReaction(null), 650)
@@ -361,13 +373,13 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   }
 
   return <>
-    {open && <section id="assistant-dock" className="assistant-dock" aria-label="Assistente de IA" style={panel}
+    {open && <section ref={dock} id="assistant-dock" className="assistant-dock" aria-label="Assistente de IA" style={panel}
       onKeyDown={(event) => { if (event.key === 'Escape' && !event.defaultPrevented) close() }}>
       <header className="assistant-heading">
         <div><h2><Sparkles size={17} />Assistente de IA</h2><small>{screen}</small></div>
         <div className="assistant-heading-actions">
-          <button className="button" type="button" aria-expanded={hatsOpen} aria-controls={hatsOpen ? 'assistant-hats' : undefined}
-            onClick={() => setHatsOpen(!hatsOpen)}>Chapéus</button>
+          <button className="button assistant-hats-trigger" type="button" aria-expanded={hatsOpen} aria-controls={hatsOpen ? 'assistant-hats' : undefined}
+            onClick={() => setHatsOpen(!hatsOpen)}><MascotHat hat="topHat" miniature />Chapéus</button>
           <button className="icon-button" onClick={close} aria-label="Fechar assistente"><X size={17} /></button>
         </div>
       </header>
