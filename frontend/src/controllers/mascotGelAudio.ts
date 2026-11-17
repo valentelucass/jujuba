@@ -1,57 +1,53 @@
 export type GelEffect = 'throw' | 'slimeKick' | 'bounceOffWall'
-type Bubble = [start: number, length: number, startHz: number, endHz: number, loudness: number, splash: number]
 
-const recipes: Record<GelEffect, Bubble[]> = {
-  throw: [
-    [0, .21, 630, 153, .47, .57], [.119, .17, 150, 473, .52, .40],
-    [.172, .083, 780, 320, .27, .58], [.227, .09, 525, 166, .16, .64],
-  ],
-  slimeKick: [
-    [0, .17, 188, 63, .81, .39], [.009, .20, 860, 175, .54, .83],
-    [.071, .098, 354, 126, .44, .28], [.130, .119, 214, 442, .28, .63],
-  ],
-  bounceOffWall: [
-    [0, .155, 205, 57, .85, .51], [.007, .17, 780, 147, .52, .96],
-    [.047, .106, 132, 434, .54, .39], [.091, .091, 576, 193, .33, .66],
-    [.146, .112, 318, 112, .34, .56], [.205, .083, 490, 182, .22, .69],
-    [.248, .086, 695, 210, .13, .66],
-  ],
-}
-
+// Damped air bubbles and filtered, pulsed noise form the wet impact.
 export function makeGelAudio(context: BaseAudioContext, effect: GelEffect) {
-  const bubbles = recipes[effect]
-  const duration = Math.max(...bubbles.map(([start, length]) => start + length))
+  const throwing = effect === 'throw'
+  const duration = throwing ? .39 : effect === 'slimeKick' ? .34 : .46
   const rate = context.sampleRate
-  const buffer = context.createBuffer(1, Math.ceil((duration + .012) * rate), rate)
+  const buffer = context.createBuffer(1, Math.ceil(duration * rate), rate)
   const wave = buffer.getChannelData(0)
   let seed = 1779033703
-
-  for (const [start, length, startHz, endHz, loudness, splash] of bubbles) {
-    const skip = Math.round(start * rate)
-    const samples = Math.min(wave.length - skip, Math.round(length * rate))
-    let phase = 0
-    let wobble = 0
-    let slowNoise = 0
-    let wetNoise = 0
-    for (let i = 0; i < samples; i++) {
-      const t = i / samples
-      const age = i / rate
-      wobble += Math.PI * 2 * (16 + startHz * .019) / rate
-      const frequency = startHz * (endHz / startHz) ** t * (1 + .105 * Math.sin(wobble))
-      phase += Math.PI * 2 * frequency / rate
-      const opening = Math.min(1, age / (start === 0 && effect !== 'throw' ? .004 : .014))
-      const air = opening * (1 - t) ** 2.05
-      const resonant = Math.sin(phase + .38 * Math.sin(phase * 1.14)) + .22 * Math.sin(phase * 2.07)
-
-      seed = (Math.imul(seed, 1664525) + 1013904223) | 0
-      const hiss = (seed >>> 0) / 2147483648 - 1
-      slowNoise += .019 * (hiss - slowNoise)
-      wetNoise += Math.min(.32, frequency * 18 / rate) * (hiss - wetNoise)
-      const spray = (wetNoise - slowNoise) * (2.9 + 1.3 * Math.sin(wobble * .73))
-      wave[skip + i] += air * loudness * ((1 - splash * .55) * resonant + spray * splash)
-    }
+  function random() {
+    seed = (Math.imul(seed, 1664525) + 1013904223) | 0
+    return (seed >>> 0) / 4294967296
   }
 
-  for (let i = 0; i < wave.length; i++) wave[i] = Math.tanh(wave[i] * 1.15) * .88
+  let body = 0
+  let film = 0
+  let spray = 0
+  for (let i = 0; i < wave.length; i++) {
+    const time = i / rate
+    const t = time / duration
+    const noise = random() * 2 - 1
+    const squeeze = throwing ? Math.sin(Math.PI * t) ** .65 : Math.exp(-time * 13)
+    const suction = .5 + .5 * Math.sin(2 * Math.PI * (22 * time + 32 * time * time))
+    body += .014 * (noise - body)
+    film += (.07 + .18 * squeeze) * (noise - film)
+    spray += .45 * (noise - spray)
+    const attack = Math.min(1, time / (throwing ? .026 : .0025))
+    const tail = Math.max(0, 1 - t) ** 1.8
+    wave[i] = attack * tail * squeeze * (body * 1.7 + (film - body) * 1.45 * (.38 + suction) + (spray - film) * .12)
+  }
+
+  // Very short resonances avoid a continuous pitched sweep.
+  const count = throwing ? 15 : 24
+  for (let bubble = 0; bubble < count; bubble++) {
+    const delay = (throwing ? .045 : .008) + random() ** 1.35 * (duration - .09)
+    const length = .009 + random() * .026
+    const frequency = 160 + random() ** 1.55 * 1500
+    const amplitude = (.12 + random() * .24) * (1 - delay / duration)
+    const skip = Math.floor(delay * rate)
+    const countSamples = Math.min(wave.length - skip, Math.ceil(length * rate))
+    let phase = 0
+    for (let i = 0; i < countSamples; i++) {
+      const time = i / rate
+      const t = time / length
+      phase += Math.PI * 2 * frequency * (1 - .23 * t) / rate
+      const envelope = Math.min(1, time / .0012) * Math.exp(-t * 5)
+      wave[skip + i] += amplitude * envelope * (Math.sin(phase) + (random() - .5) * 1.35)
+    }
+  }
+  for (let i = 0; i < wave.length; i++) wave[i] = Math.tanh(wave[i] * 2.1) * .86
   return buffer
 }

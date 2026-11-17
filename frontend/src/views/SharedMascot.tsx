@@ -1,5 +1,5 @@
 import { Heart, Sparkles, Zap } from 'lucide-react'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, PointerEvent } from 'react'
 import jujuba from '../assets/jujuba.png'
 import { JujubaMascot } from './JujubaMascot'
 import { hats, type Hat } from './MascotHat'
@@ -42,13 +42,20 @@ const tones = [
   ['#b9acff', '#7669c2', -46], ['#91dfef', '#428fa9', 226], ['#ffa98f', '#d26657', 49],
 ] as const
 
-export function MascotYoung({ child, at, onHatch, onTouch, onGone }: {
+export function MascotYoung({ child, at, onHatch, onTouch, onGone, onGrab, onMove, onRelease }: {
   child: Offspring; at: Point; onHatch: () => void; onTouch: () => void; onGone: () => void
+  onGrab: (event: PointerEvent<HTMLButtonElement>) => void
+  onMove: (event: PointerEvent<HTMLButtonElement>) => void
+  onRelease: (event: PointerEvent<HTMLButtonElement>) => void
 }) {
   const { id, phase, flight } = child
   const [shell, spot, hue] = tones[(id - 1) % tones.length]
-  return <button type="button" className={`jujuba-offspring is-${phase}${flight ? ' is-flying' : ''}`}
-    disabled={phase !== 'young'} aria-label="Cutucar mini-Jujuba" onClick={onTouch}
+  const squash = flight?.squash ?? 0
+  const side = flight?.edge === 'left' || flight?.edge === 'right'
+  return <button type="button" className={`jujuba-offspring is-${phase}${flight ? ' is-flying' : ''}${child.held ? ' is-held' : ''}`}
+    disabled={phase !== 'young'} aria-label="Cutucar ou arrastar mini-Jujuba" title="Arraste para arremessar"
+    onClick={(event) => { if (!event.detail) onTouch() }}
+    onPointerDown={onGrab} onPointerMove={onMove} onPointerUp={onRelease} onPointerCancel={onRelease} onLostPointerCapture={onRelease}
     style={{ left: at.x, top: at.y, '--shell': shell, '--shell-spot': spot, '--young-hue': hue + 'deg',
       '--young-idle': `${4 + (id % 5) * .43}s`, '--young-delay': `${-id * .44}s`,
     } as CSSProperties}>
@@ -56,10 +63,13 @@ export function MascotYoung({ child, at, onHatch, onTouch, onGone }: {
       <span className="jujuba-egg" aria-hidden="true">
         <span className="jujuba-egg-top" /><span className="jujuba-egg-bottom" />
       </span>
-      <span className="jujuba-young-body">
+      <span className="jujuba-young-motion" style={{ rotate: `${(flight?.velocity.x ?? 0) / 95}deg`,
+        scale: side ? `${1 - squash * .38} ${1 + squash * .29}` : `${1 + squash * .29} ${1 - squash * .38}` }}>
+        <span className="jujuba-young-body">
         <img className="jujuba-hatchling" src={jujuba} alt="" draggable={false} onAnimationStart={() => {
           if (phase === 'egg') onHatch()
         }} />
+        </span>
       </span>
     </>}
   </button>

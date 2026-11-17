@@ -4,7 +4,7 @@ import { JujubaMascot } from './JujubaMascot'
 import { MascotMeetingEffect, MascotYoung, SharedMascot } from './SharedMascot'
 import { useSharedMascot } from '../controllers/useSharedMascot'
 import { useMascotClone } from '../controllers/useMascotClone'
-import { useEggSchedule, useMascotBrood } from '../controllers/useMascotBrood'
+import { useEggSchedule, useMascotBrood, type BroodActor } from '../controllers/useMascotBrood'
 import type { ShotTarget } from '../controllers/mascotProjectile'
 import { useMascotSound } from '../controllers/mascotSound'
 import type { MascotImpulse, MascotPose, MascotRoom, MascotVisibility } from '../models/flowMascot'
@@ -191,7 +191,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const point = dragPoint ?? flight ?? resting
   const expression = grabbed ? null : frightened && !flight ? (pointerNear ? 'scared' : 'wary') : reaction
   const pose: MascotPose = grabbed ? 'held' : expression === 'scared' || expression === 'wary' ? expression : 'idle'
-  const pairing = { position: point, bounds, hat, flight, pose, kick: collide }
+  const pairing = { position: point, bounds, hat, flight, pose, kick: collide, relocate: relocateMascot }
   const clone = useMascotClone(bounds, (impact) => {
     playSound('bounceOffWall', .64 + impact.strength * .7)
     const mark = makeSplat(impact, launcherSize, ++nextSplat.current)
@@ -220,10 +220,14 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const pairDirection = pointBetween(point, remote?.point)
   const cloneDirection = pointBetween(point, clone.point)
   const targets: ShotTarget[] = []
+  const broodActors: BroodActor[] = [{ id: 'own', point: center(point), active: grabbed || !!flight }]
   if (mascotRoom?.rich && remote && mascotPreferences.shareOwn) targets.push({ target: 'peer', point: center(remote.point) })
   if (clone.point) targets.push({ target: 'clone', point: center(clone.point) })
+  if (clone.point) broodActors.push({ id: 'clone', point: center(clone.point), active: clone.held || !!clone.flight })
+  if (remote) broodActors.push({ id: 'peer', point: center(remote.point), active: remote.pose === 'held' || !!remote.flight })
+  brood.collideWith(broodActors)
   for (const child of brood.children) {
-    if (child.phase === 'young') targets.push({ target: `young:${child.id}`, point: brood.position(child), radius: 17 })
+    if (child.phase === 'young' && !child.held) targets.push({ target: `young:${child.id}`, point: brood.position(child), radius: 17 })
   }
   const dockAnchor = flight ? resting : point
   const dockWidth = Math.min(415, width - 28)
@@ -339,7 +343,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     setSplats((previous) => [...previous.slice(-31), mark])
   }
 
-  function collide(impulse: MascotImpulse, source: 'local' | 'remote' | 'toy' = 'toy') {
+  function collide(impulse: MascotImpulse, source: 'local' | 'remote' | 'toy' = 'toy', from?: Point) {
     if (drag.current) return
     playSound('slimeKick', .6 + Math.min(impulse.strength / 1700, 1) * .63)
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -354,7 +358,15 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
       y: direction.y * strength * sign + carry.y * .14 - 180,
     }
     cancelFlight.current?.()
-    throwMascot({ x: point.x, y: point.y }, motion)
+    throwMascot(from ?? { x: point.x, y: point.y }, motion)
+  }
+
+  function relocateMascot(next: Point) {
+    cancelFlight.current?.()
+    cancelFlight.current = null
+    setFlight(null)
+    if (drag.current) setDragPoint(next)
+    else throwMascot(next, { x: 0, y: 0 })
   }
 
   function throwMascot(from: Point, velocity: Point) {
@@ -608,10 +620,10 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     {brood.children.map((child) => <MascotYoung key={child.id} child={child} at={brood.position(child)}
       onHatch={() => { brood.hatch(child.id); playSound('hatch') }}
       onTouch={() => {
-        const direction = { x: child.id % 2 ? .7 : -.7, y: -.71 }
-        brood.bump(child.id, { direction, strength: 335 })
+        brood.touch(child.id)
         playSound('bounce', .52)
       }}
+      onGrab={(event) => brood.grab(child.id, event)} onMove={brood.move} onRelease={brood.release}
       onGone={() => brood.remove(child.id)} />)}
     {clone.point && <>
       <button type="button" aria-label="Clone de teste da Jujuba" title="Clone de teste · arraste para mover"

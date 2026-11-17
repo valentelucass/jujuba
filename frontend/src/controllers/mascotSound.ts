@@ -5,9 +5,9 @@ import { makeGelAudio, type GelEffect } from './mascotGelAudio'
 type Sound = MascotMeetingKind | GelEffect | 'click' | 'blaster' | 'bow' | 'hit' | 'hatch' | 'ricochet'
 type SoundSettings = { muted: boolean; volume: number }
 type Note = [start: number, length: number, pitch: number, endPitch: number, emphasis?: number]
-type BowCreak = { noise: AudioBufferSourceNode; filter: BiquadFilterNode; gain: GainNode }
+type BowCreak = { noise: AudioBufferSourceNode; filter: BiquadFilterNode; gain: GainNode; vibrato: OscillatorNode; depth: GainNode }
 
-const notes: Record<Exclude<Sound, GelEffect>, Note[]> = {
+const notes: Record<Exclude<Sound, GelEffect | 'blaster'>, Note[]> = {
   click: [[0, .075, 660, 440], [.028, .07, 990, 770, .45]],
   kiss: [[0, .085, 520, 260], [.086, .065, 840, 560], [.165, .13, 1047, 1175, .38]],
   hug: [[0, .19, 392, 440], [.07, .22, 523, 587], [.14, .28, 660, 784, .65]],
@@ -18,7 +18,6 @@ const notes: Record<Exclude<Sound, GelEffect>, Note[]> = {
   bounce: [[0, .20, 355, 104], [.042, .12, 145, 458, .7], [.14, .15, 415, 173, .48]],
   push: [[0, .17, 440, 140], [.05, .13, 270, 100, .54]],
   bump: [[0, .09, 380, 86], [.05, .16, 630, 380, .44]],
-  blaster: [[0, .18, 1030, 210], [.025, .08, 435, 167, .56]],
   bow: [[0, .048, 520, 130], [.020, .18, 1080, 350, .56], [.066, .15, 790, 110, .31]],
   hit: [[0, .11, 220, 85], [.052, .13, 635, 345, .58]],
   hatch: [[0, .06, 245, 102], [.095, .12, 698, 790], [.18, .13, 880, 980], [.255, .24, 1175, 1320, .74]],
@@ -27,7 +26,7 @@ const notes: Record<Exclude<Sound, GelEffect>, Note[]> = {
 
 const wetSounds: Partial<Record<Sound, number>> = {
   kiss: .11, squeeze: .16, bounce: .22,
-  push: .17, bump: .23, hit: .19, blaster: .21, bow: .15, ricochet: .13,
+  push: .17, bump: .23, hit: .19, bow: .15, ricochet: .13,
 }
 const storageKey = 'jujuba.assistant.sounds'
 function readSoundSettings(): SoundSettings {
@@ -87,6 +86,7 @@ export function useMascotSound() {
       if (bow.current) {
         bow.current.gain.gain.setTargetAtTime(.0001, now, .015)
         bow.current.noise.stop(now + .065)
+        bow.current.vibrato.stop(now + .065)
         bow.current = null
       }
       return
@@ -95,21 +95,29 @@ export function useMascotSound() {
       const source = context.createBufferSource()
       const filter = context.createBiquadFilter()
       const gain = context.createGain()
+      const vibrato = context.createOscillator()
+      const depth = context.createGain()
       source.buffer = noise
       source.loop = true
       filter.type = 'bandpass'
       filter.Q.value = 6.5
       gain.gain.value = .0001
       source.connect(filter).connect(gain).connect(master)
+      vibrato.connect(depth).connect(gain.gain)
+      depth.gain.value = .025
+      vibrato.frequency.value = 19
+      vibrato.start(now)
       source.start(now)
-      bow.current = { noise: source, filter, gain }
+      bow.current = { noise: source, filter, gain, vibrato, depth }
     }
     const creak = bow.current
-    creak.filter.frequency.setTargetAtTime(330 + 750 * power, now, .048)
-    creak.noise.playbackRate.setTargetAtTime(.58 + power * 1.12, now, .04)
+    const strength = Math.min(1.9, power)
+    creak.filter.frequency.setTargetAtTime(245 + 630 * strength, now, .048)
+    creak.noise.playbackRate.setTargetAtTime(.5 + strength * .9, now, .04)
+    creak.vibrato.frequency.setTargetAtTime(17 + strength * 16, now, .04)
+    creak.depth.gain.setTargetAtTime(.025 + strength * .038, now, .05)
     creak.gain.gain.cancelScheduledValues(now)
-    creak.gain.gain.setTargetAtTime(Math.min(.78, .2 + power * .52), now, .028)
-    creak.gain.gain.setTargetAtTime(.06 + power * .14, now + .15, .085)
+    creak.gain.gain.setTargetAtTime(.09 + strength * .14, now, .04)
   }, [])
 
   const play = useCallback((sound: Sound, intensity = 1) => {
@@ -120,6 +128,34 @@ export function useMascotSound() {
     played.current[sound] = now
     const { context, master, noise, gel } = active
     const variationRate = [1, .92, 1.08][variation.current++ % 3]
+    if (sound === 'blaster') {
+      const beam = context.createOscillator()
+      const overtone = context.createOscillator()
+      const filter = context.createBiquadFilter()
+      const envelope = context.createGain()
+      const start = context.currentTime
+      beam.type = 'sawtooth'
+      overtone.type = 'sine'
+      beam.frequency.setValueAtTime(1760 * variationRate, start)
+      beam.frequency.exponentialRampToValueAtTime(165, start + .155)
+      overtone.frequency.setValueAtTime(870 * variationRate, start)
+      overtone.frequency.exponentialRampToValueAtTime(94, start + .17)
+      filter.type = 'lowpass'
+      filter.Q.value = 3.2
+      filter.frequency.setValueAtTime(3350, start)
+      filter.frequency.exponentialRampToValueAtTime(240, start + .19)
+      envelope.gain.setValueAtTime(.0001, start)
+      envelope.gain.exponentialRampToValueAtTime(.11 * Math.min(1.4, intensity), start + .004)
+      envelope.gain.exponentialRampToValueAtTime(.0001, start + .195)
+      beam.connect(filter)
+      overtone.connect(filter)
+      filter.connect(envelope).connect(master)
+      beam.start(start)
+      overtone.start(start)
+      beam.stop(start + .20)
+      overtone.stop(start + .20)
+      return
+    }
     if (sound === 'throw' || sound === 'slimeKick' || sound === 'bounceOffWall') {
       const buffer = gel.get(sound) ?? makeGelAudio(context, sound)
       gel.set(sound, buffer)

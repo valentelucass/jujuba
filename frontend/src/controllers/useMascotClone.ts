@@ -29,10 +29,10 @@ export function useMascotClone(bounds: FlightBounds, onImpact: (mark: Impact) =>
     })
   }
 
-  function boost(impulse: MascotImpulse, recoil = false) {
+  function boost(impulse: MascotImpulse, recoil = false, from?: Point) {
     if (!point || drag.current || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
     const sign = recoil ? -.88 : 1
-    throwClone(point, { x: impulse.direction.x * impulse.strength * sign, y: impulse.direction.y * impulse.strength * sign - 180 }, 'slimeKick')
+    throwClone(from ?? point, { x: impulse.direction.x * impulse.strength * sign, y: impulse.direction.y * impulse.strength * sign - 180 }, 'slimeKick')
   }
 
   function keepOrRemove(anchor: Point) {
@@ -82,5 +82,12 @@ export function useMascotClone(bounds: FlightBounds, onImpact: (mark: Impact) =>
     if (point && !flight) setPosition(clamp({ x: point.x + x, y: point.y + y }))
   }
 
-  return { point, flight, held, grab, move, release, keepOrRemove, boost, nudge }
+  function relocate(next: Point) {
+    cancel.current?.()
+    cancel.current = null
+    setFlight(null)
+    setPosition(clamp(next))
+  }
+
+  return { point, flight, held, grab, move, release, keepOrRemove, boost, nudge, relocate }
 }

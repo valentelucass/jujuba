@@ -5,6 +5,30 @@ export type FlightBounds = { left: number; top: number; right: number; bottom: n
 export type FlightFrame = Point & { velocity: Point; squash: number; edge: ImpactEdge }
 export type Impact = Point & { edge: ImpactEdge; strength: number; slide: number }
 
+export function separateMascots(a: Point, b: Point, bounds: FlightBounds, fallback: Point = { x: 1, y: 0 }) {
+  const first = { ...a }
+  const second = { ...b }
+  for (let pass = 0; pass < 4; pass++) {
+    const dx = second.x - first.x
+    const dy = second.y - first.y
+    const distance = Math.hypot(dx, dy)
+    if (distance >= 49.5) break
+    const nx = distance > .001 ? dx / distance : fallback.x
+    const ny = distance > .001 ? dy / distance : fallback.y
+    const push = (50 - distance) / 2
+    const before = Math.hypot(first.x - second.x, first.y - second.y)
+    first.x = Math.max(bounds.left, Math.min(bounds.right, first.x - nx * push))
+    first.y = Math.max(bounds.top, Math.min(bounds.bottom, first.y - ny * push))
+    second.x = Math.max(bounds.left, Math.min(bounds.right, second.x + nx * push))
+    second.y = Math.max(bounds.top, Math.min(bounds.bottom, second.y + ny * push))
+    if (Math.hypot(first.x - second.x, first.y - second.y) <= before + .01) {
+      first.y = Math.max(bounds.top, first.y - push)
+      second.y = Math.min(bounds.bottom, second.y + push)
+    }
+  }
+  return { first, second }
+}
+
 export function throwVelocity(samples: PointerSample[], release: PointerSample): Point | null {
   const last = samples.at(-1)
   if (!last || release.time - last.time > 75) return null

@@ -1137,8 +1137,8 @@ dialog.connection-dialog {
 :is(.assistant-launch, .assistant-peer, .assistant-clone):not(.is-flying) :is(.jujuba-greeting-push, .jujuba-greeting-bump) { animation: jujuba-pair-push 610ms ease-out both; }
 @keyframes jujuba-pair-hug {
   0%, 100% { transform: none; }
-  5%, 31%, 58%, 95% { transform: translate(calc(var(--pair-x, 1) * 12px), calc(var(--pair-y, 0) * 10px)) rotate(calc(var(--pair-x, 1) * 9deg)) scale(1.04, .96); }
-  18%, 44%, 76% { transform: translate(calc(var(--pair-x, 1) * 15px), calc(var(--pair-y, 0) * 11px)) rotate(calc(var(--pair-x, 1) * 11deg)) scale(1.07, .93); }
+  5%, 31%, 58%, 95% { transform: translate(calc(var(--pair-x, 1) * 2px), calc(var(--pair-y, 0) * 2px)) rotate(calc(var(--pair-x, 1) * 4deg)) scale(1.02, .98); }
+  18%, 44%, 76% { transform: translate(calc(var(--pair-x, 1) * 2px), calc(var(--pair-y, 0) * 2px)) rotate(calc(var(--pair-x, 1) * 5deg)) scale(1.02, .96); }
 }
 @keyframes jujuba-hold-arms {
   0%, 100% { opacity: 0; transform: scale(.88); }
@@ -1146,8 +1146,8 @@ dialog.connection-dialog {
 }
 @keyframes jujuba-pair-squeeze {
   0%, 100% { transform: none; }
-  24%, 58% { transform: translate(calc(var(--pair-x, 1) * 16px), calc(var(--pair-y, 0) * 14px)) scale(.75, 1.16); }
-  41%, 73% { transform: translate(calc(var(--pair-x, 1) * 11px), calc(var(--pair-y, 0) * 11px)) scale(1.08, .92); }
+  24%, 58% { transform: translate(calc(var(--pair-x, 1) * 5px), calc(var(--pair-y, 0) * 3px)) scale(.80, 1.12); }
+  41%, 73% { transform: translate(calc(var(--pair-x, 1) * 2px), calc(var(--pair-y, 0) * 2px)) scale(1.02, .96); }
 }
 @keyframes jujuba-pair-look {
   0%, 100% { transform: none; }
@@ -1174,8 +1174,9 @@ dialog.connection-dialog {
 
 .jujuba-offspring {
   position: fixed; z-index: 12; width: 48px; height: 48px; padding: 0; border: 0;
-  transform: translate(-50%, -50%); background: transparent; border-radius: 6px;
+  transform: translate(-50%, -50%); background: transparent; border-radius: 6px; touch-action: none; user-select: none; cursor: grab;
 }
+.jujuba-offspring.is-held { cursor: grabbing; z-index: 14; }
 .jujuba-offspring:disabled { opacity: 1; pointer-events: none; }
 .jujuba-egg {
   position: absolute; top: 8px; left: 11px; width: 26px; height: 32px;
@@ -1202,6 +1203,7 @@ dialog.connection-dialog {
   position: absolute; inset: 0; transform-origin: center 87%;
   animation: jujuba-young-idle var(--young-idle) ease-in-out infinite var(--young-delay);
 }
+.jujuba-young-motion { position: absolute; inset: 0; transform-origin: center 70%; }
 .jujuba-offspring:is(.is-egg, .is-flying) .jujuba-young-body { animation-play-state: paused; }
 .jujuba-hatchling {
   width: 100%; height: 100%; object-fit: contain; opacity: 0; transform-origin: center 87%;
@@ -1272,10 +1274,24 @@ dialog.connection-dialog {
 .mascot-held-toy.is-bow { color: var(--gold); }
 .mascot-held-toy g { filter: drop-shadow(0 1px 3px var(--shadow)); }
 .mascot-toy-arm { fill: none; stroke: #f169b5; stroke-width: 5.5; stroke-linecap: round; }
-.mascot-bow-limbs, .mascot-bow-string, .mascot-bow-loaded { fill: none; stroke-linecap: round; stroke-linejoin: round; }
-.mascot-bow-limbs { stroke: var(--gold); stroke-width: 3.6; }
-.mascot-bow-string { stroke: var(--text); stroke-width: 1.4; }
-.mascot-bow-loaded { stroke: var(--gold); stroke-width: 2; }
+.mascot-bow-limbs, .mascot-bow-string, .mascot-bow-inlay, .mascot-bow-aura { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.mascot-bow-limbs { stroke-width: 6.4; }
+.mascot-bow-inlay { stroke: #ffedba; stroke-width: 1.4; }
+.mascot-bow-string { stroke: #ffefc6; stroke-width: 1.5; }
+.mascot-bow-aura { stroke: #ffcf65; stroke-width: 12; opacity: 0; filter: blur(5px); }
+.mascot-bow-grip { fill: #8d335c; stroke: #ffc675; stroke-width: 1.5; }
+.mascot-bow-grip-wrap { stroke: #e6a9bc; stroke-width: 1.1; }
+.mascot-bow-gem { fill: #96e4be; stroke: #e5ffe9; stroke-width: 1; }
+.mascot-bow-shaft { stroke: #ffe9a0; stroke-width: 2; stroke-linecap: round; }
+.mascot-bow-head { fill: #ffe8a1; stroke: #fff9d8; stroke-width: .7; }
+.mascot-bow-fletching { fill: #e88cbf; stroke: #ffc3e0; stroke-width: .7; }
+.mascot-bow-rig.is-drawn .mascot-bow-body { animation: mascot-bow-strain var(--bow-tremble) ease-in-out infinite alternate; }
+.mascot-bow-rig.is-boosted .mascot-bow-aura { opacity: .66; }
+.mascot-bow-rig.is-boosted .mascot-bow-nocked { filter: drop-shadow(0 0 5px #ffd46e); }
+@keyframes mascot-bow-strain {
+  from { translate: 0 calc(var(--bow-shake) * -1); }
+  to { translate: 0 var(--bow-shake); }
+}
 .mascot-bow-anchor { stroke: var(--gold); stroke-width: 1; fill: none; opacity: .66; }
 .mascot-aim-guide { stroke: currentColor; stroke-width: 1.5; stroke-dasharray: 4 6; opacity: .58; }
 .mascot-toy-cursor { position: fixed; color: var(--berry); width: 0; height: 0; pointer-events: none; }
@@ -1306,6 +1322,7 @@ dialog.connection-dialog {
   .jujuba-egg-top, .jujuba-egg-bottom { animation-name: jujuba-egg-bottom; }
   .jujuba-hatchling { animation-name: jujuba-hatch-fade, jujuba-young-grow; }
   .jujuba-young-body { animation: none; }
+  .mascot-bow-rig.is-drawn .mascot-bow-body { animation: none; }
   .mascot-shot-spark, .jujuba-young-pop { animation-name: jujuba-meeting-fade; }
 }
 @keyframes jujuba-hatch-fade { from { opacity: 0; } to { opacity: 1; } }

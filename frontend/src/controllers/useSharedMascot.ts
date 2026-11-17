@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { flowCollaboration } from './api'
 import type { FlightBounds, FlightFrame, Impact, Point } from './mascotMotion'
+import { separateMascots } from './mascotMotion'
 import type { MascotImpulse, MascotMeeting, MascotMeetingKind, MascotPose, MascotPreferences, MascotPresence, MascotRoom } from '../models/flowMascot'
 
 const preferenceKey = 'jujuba.flow.mascots'
@@ -45,14 +46,16 @@ function unit(x: number, y: number, fallback: Point = { x: 1, y: 0 }) {
 }
 
 type Practice = {
-  point: Point; held: boolean; flight: FlightFrame | null; boost: (impulse: MascotImpulse, recoil?: boolean) => void
+  point: Point; held: boolean; flight: FlightFrame | null; boost: (impulse: MascotImpulse, recoil?: boolean, from?: Point) => void
+  relocate: (point: Point) => void
 }
 
 export function useSharedMascot(room: MascotRoom | null, {
-  position, bounds, hat, pose, flight, kick, receiveSplat, practice,
+  position, bounds, hat, pose, flight, kick, relocate, receiveSplat, practice,
 }: {
   position: Point; bounds: FlightBounds; hat: string; pose: MascotPose; flight: FlightFrame | null
-  kick: (impulse: MascotImpulse, source: 'local' | 'remote') => void
+  kick: (impulse: MascotImpulse, source: 'local' | 'remote', from?: Point) => void
+  relocate: (point: Point) => void
   receiveSplat?: (impact: Impact) => void
   practice?: Practice | null
 }) {
@@ -68,6 +71,7 @@ export function useSharedMascot(room: MascotRoom | null, {
   const lastImpact = useRef(-Infinity)
   const received = useRef(0)
   const receivedSplat = useRef(0)
+  const previousPair = useRef<{ room: string; own: Point; other: Point; time: number } | null>(null)
   const react = useRef<(kind: 'ambient' | 'brush' | 'contact') => void>(() => {})
   const reactToKick = useRef(kick)
   reactToKick.current = kick
@@ -79,12 +83,6 @@ export function useSharedMascot(room: MascotRoom | null, {
   const peer = preferences.remote === 'hidden' ? null : room?.mascot
   const other = practice?.point ?? (peer ? project(peer.position, bounds) : null)
   const gap = other ? Math.hypot(position.x - other.x, position.y - other.y) : Infinity
-  const overlap = Math.max(0, 46 - gap)
-  const remotePoint = other ? {
-    ...other,
-    x: Math.max(bounds.left, Math.min(bounds.right,
-      other.x + (other.x > (bounds.left + bounds.right) / 2 ? -overlap : overlap))),
-  } : null
   const shouldReact = (localOnly || preferences.shareOwn) && !!other
   const event = shown && shown.room === roomId && shouldReact ? shown.event : null
   const midpoint = other ? { x: (position.x + other.x) / 2, y: (position.y + other.y) / 2 } : null
@@ -166,6 +164,41 @@ export function useSharedMascot(room: MascotRoom | null, {
     }
   }, [room?.splats, peer])
 
+  useEffect(() => {
+    if (!roomId || !other || !shouldReact) {
+      previousPair.current = null
+      return
+    }
+    const now = performance.now()
+    const previous = previousPair.current
+    previousPair.current = { room: roomId, own: { ...position }, other: { ...other }, time: now }
+    const elapsed = Math.max(.012, Math.min(.12, (now - (previous?.time ?? now)) / 1000))
+    const ownVelocity = flight?.velocity ?? (previous?.room === roomId ? {
+      x: (position.x - previous.own.x) / elapsed, y: (position.y - previous.own.y) / elapsed,
+    } : { x: 0, y: 0 })
+    const otherVelocity = practice?.flight?.velocity ?? (previous?.room === roomId ? {
+      x: (other.x - previous.other.x) / elapsed, y: (other.y - previous.other.y) / elapsed,
+    } : { x: 0, y: 0 })
+    const defaultDirection = { x: room?.host === false ? -1 : 1, y: 0 }
+    const fallback = previous ? unit(previous.other.x - previous.own.x, previous.other.y - previous.own.y, defaultDirection) : defaultDirection
+    const direction = unit(other.x - position.x, other.y - position.y, fallback)
+    const separated = gap < 49.5 ? separateMascots(position, other, bounds, direction) : null
+    if (separated) {
+      relocate(separated.first)
+      practice?.relocate(separated.second)
+    }
+    if (gap > 55 || !rich || now - lastImpact.current < 230) return
+    const approach = (ownVelocity.x - otherVelocity.x) * direction.x + (ownVelocity.y - otherVelocity.y) * direction.y
+    if (approach < 85 || (!moving && !practiceMoving && !peerMoving)) return
+    const fromPeer = otherVelocity.x * direction.x + otherVelocity.y * direction.y < -(ownVelocity.x * direction.x + ownVelocity.y * direction.y)
+    const impulse = { direction: fromPeer ? { x: -direction.x, y: -direction.y } : direction,
+      strength: Math.max(160, Math.min(1800, approach * .76)) }
+    lastImpact.current = now
+    announce(roomId, 'bump', midpoint ?? position, impulse)
+    practice?.boost(impulse, fromPeer, separated?.second)
+    reactToKick.current(impulse, fromPeer ? 'remote' : 'local', separated?.first)
+  }, [roomId, shouldReact, position.x, position.y, other?.x, other?.y, moving, practiceMoving, peerMoving])
+
   react.current = (trigger) => {
     if (!roomId || !other || !midpoint || !shouldReact || gap > separateDistance) return
     const now = performance.now()
@@ -212,7 +245,7 @@ export function useSharedMascot(room: MascotRoom | null, {
     }
     if (contact.current || gap > greetingDistance) return
     contact.current = true
-    if (moving || practiceMoving) react.current('contact')
+    if (!rich && (moving || practiceMoving)) react.current('contact')
   }, [gap, moving, practiceMoving, shouldReact])
 
   useEffect(() => {
@@ -276,7 +309,7 @@ export function useSharedMascot(room: MascotRoom | null, {
 
   return {
     preferences, savePreferences, shareImpact, pushPeer,
-    remote: peer && remotePoint ? { ...peer, point: remotePoint } : null,
+    remote: peer && other ? { ...peer, point: other } : null,
     hug: hugging && midpoint && shown ? { key: shown.source + '-' + event.id, point: midpoint } : null,
     meeting: event ? { ...event, point: project(event.position, bounds),
       source: shown?.source, near: event.kind === 'hug' ? hugging : gap < separateDistance } : null,
