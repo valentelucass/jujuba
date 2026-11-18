@@ -21,7 +21,17 @@ export type SceneSoundKind = 'throw' | 'slimeKick' | 'bounceOffWall' | 'hatch'
 export type SceneSound = { id: number; kind: SceneSoundKind; strength: number }
 export type GooBurst = { id: number; point: Point; members?: string[] }
 export type GooBombPhase = 'falling' | 'landed' | 'charging' | 'burst'
-export const gooBombTiming = { landing: 1560, pull: 2210, burst: 4960, end: 7390 }
+export type GooSplash = { colors: string[]; bodies: number }
+export const gooBombTiming = { landing: 1560, pull: 2210, burst: 4960, end: 7390, stainEnd: 10550 }
+
+const youngTones = [
+  ['#f596c2', '#c65394', 0], ['#f8d381', '#ba7827', 83], ['#a8e3c5', '#4c9e81', 184],
+  ['#b9acff', '#7669c2', -46], ['#91dfef', '#428fa9', 226], ['#ffa98f', '#d26657', 49],
+] as const
+
+export function youngTone(id: number) {
+  return youngTones[(id - 1) % youngTones.length]
+}
 export type MascotScene = {
   epoch: number; origin: Point; toy: ToyVisual | null; clone: SharedCompanion | null; young: SharedYoung[]; hits: SceneHit[]; sounds: SceneSound[]
   burst?: GooBurst | null

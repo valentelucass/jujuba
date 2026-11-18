@@ -6,7 +6,7 @@ import { useSharedMascot } from '../controllers/useSharedMascot'
 import { useMascotClone } from '../controllers/useMascotClone'
 import { useMascotScene } from '../controllers/useMascotScene'
 import { useRemoteMascotCollisions } from '../controllers/useRemoteMascotCollisions'
-import { gooBombTiming, type GooBombPhase, type MascotScene, type SceneHit } from '../models/mascotScene'
+import { gooBombTiming, youngTone, type GooBombPhase, type GooSplash, type MascotScene, type SceneHit } from '../models/mascotScene'
 import { SharedMascotScene } from './SharedMascotScene'
 import { GooBomb, GooBombAim } from './GooBomb'
 import { useEggSchedule, useMascotBrood, type BroodActor } from '../controllers/useMascotBrood'
@@ -123,7 +123,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const [toolsOpen, setToolsOpen] = useState(false)
   const [tool, setTool] = useState<MascotTool | null>(null)
   const [bombAim, setBombAim] = useState(false)
-  const [blast, setBlast] = useState<{ point: Point; phase: GooBombPhase; source?: string } | null>(null)
+  const [blast, setBlast] = useState<{ point: Point; phase: GooBombPhase; source?: string; splash?: GooSplash } | null>(null)
   const blastTimer = useRef<number[]>([])
   const seenDrag = useRef<{ room?: string; sequence: number }>({ sequence: 0 })
   const { settings: sound, save: saveSound, play: playSound, tension, stopBomb } = useMascotSound()
@@ -256,7 +256,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     }
   }, [mascotRoom?.id, mascotRoom?.childDrags, visible, interacting])
 
-  function startBlast(center: Point, affectsOwn: boolean, source?: string) {
+  function startBlast(center: Point, affectsOwn: boolean, source?: string, targets?: string[]) {
     if (blastTimer.current.length || quiet) return false
     const initial = { point: center, source }
     setBlast({ ...initial, phase: 'falling' })
@@ -274,15 +274,23 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
         if (affectsOwn) brood.startPull(center, burst - pull)
       }, pull),
       window.setTimeout(() => {
-        if (affectsOwn) brood.endPull(true)
-        setBlast({ ...initial, phase: 'burst' })
+        const participants = visibleBroods.current.filter(({ member }) => !targets || member.id === source || targets.includes(member.id))
+        const young = [
+          ...(affectsOwn ? broodRef.current.children : []), ...participants.flatMap(({ scene }) => scene.young),
+        ].filter(({ phase, dissolving }) => phase !== 'popping' || !!dissolving)
+        const splash = young.length ? {
+          colors: [...new Set(young.map(({ id }) => youngTone(id)[0]))],
+          bodies: young.length,
+        } : undefined
+        if (affectsOwn) broodRef.current.endPull(true)
+        setBlast({ ...initial, phase: 'burst', splash })
         playSound('bombBurst', 1.10)
+        blastTimer.current.push(window.setTimeout(() => {
+          setBlast(null)
+          blastTimer.current = []
+          stopBomb()
+        }, (splash ? gooBombTiming.stainEnd : end) - burst))
       }, burst),
-      window.setTimeout(() => {
-        setBlast(null)
-        blastTimer.current = []
-        stopBomb()
-      }, end),
     ]
     return true
   }
@@ -294,6 +302,8 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
 
   const broodRef = useRef(brood)
   broodRef.current = brood
+  const visibleBroods = useRef(scene.scenes)
+  visibleBroods.current = scene.scenes
   const blastHidden = !!blast?.source && !visibleIds.has(blast.source)
   useEffect(() => {
     if (!quiet && !blastHidden) return
@@ -805,7 +815,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
       {practice.meeting && <MascotMeetingEffect key={practice.meeting.id} kind={practice.meeting.kind} point={practice.meeting.point} />}
     </>}
     {bombAim && !quiet && <GooBombAim launch={launchBomb} cancel={() => setBombAim(false)} />}
-    {blast && !quiet && !blastHidden && <GooBomb point={blast.point} phase={blast.phase} />}
+    {blast && !quiet && !blastHidden && <GooBomb point={blast.point} phase={blast.phase} splash={blast.splash} />}
     {tool && !quiet && <MascotAim key={mascotRoom?.id ?? screen} tool={tool}
       own={center(point)} targets={targets}
       onExit={() => { setTool(null); launcher.current?.focus() }}

@@ -1,7 +1,7 @@
-import { useEffect, useId, useRef, type CSSProperties } from 'react'
+import { useEffect, useId, useMemo, useRef, type CSSProperties } from 'react'
 import { Crosshair } from 'lucide-react'
 import type { Point } from '../controllers/mascotMotion'
-import { gooBombTiming, type GooBombPhase } from '../models/mascotScene'
+import { gooBombTiming, type GooBombPhase, type GooSplash } from '../models/mascotScene'
 
 export function GooBombAim({ launch, cancel }: { launch: (point: Point) => void; cancel: () => void }) {
   const aim = useRef<HTMLButtonElement>(null)
@@ -32,7 +32,7 @@ const labels: Record<GooBombPhase, string> = {
   burst: 'Clarão da bomba de geleia',
 }
 
-export function GooBomb({ point, phase }: { point: Point; phase: GooBombPhase }) {
+export function GooBomb({ point, phase, splash }: { point: Point; phase: GooBombPhase; splash?: GooSplash }) {
   const key = useId()
   const body = key + '-body'
   const rim = key + '-rim'
@@ -50,6 +50,7 @@ export function GooBomb({ point, phase }: { point: Point; phase: GooBombPhase })
       <div className="goo-bomb-flare" />
       <div className="goo-bomb-wave" />
       <div className="goo-bomb-wave is-second" />
+      {splash && <GelSpatter point={point} splash={splash} />}
     </> : <>
       {phase === 'falling' && <div className="goo-bomb-target" />}
       {phase !== 'falling' && <div className="goo-bomb-landing-light" />}
@@ -100,5 +101,52 @@ export function GooBomb({ point, phase }: { point: Point; phase: GooBombPhase })
     {(charging || burst) && particles.map(({ id, x, y, size, delay, angle }) => <span key={id} className="goo-bomb-drop"
       style={{ '--drop-x': x + 'px', '--drop-y': y + 'px', '--drop-size': size + 'px',
         '--drop-delay': delay + 'ms', '--drop-angle': angle + 'deg' } as CSSProperties} />)}
+  </div>
+}
+
+const spatterEdges = [[.04, .10], [.51, .055], [.955, .14], [.96, .48], [.955, .88], [.5, .936], [.045, .90], [.044, .46]]
+const stainShapes = [
+  'M47 22C52 12 48 4 56 3C64 2 60 21 68 22C78 23 79 10 85 16C92 23 76 31 82 36C90 43 99 34 100 41C103 48 82 48 79 54C74 60 88 68 80 74C72 80 66 65 58 67C52 69 61 87 53 91C41 97 48 71 39 66C34 63 27 75 20 69C11 62 29 58 25 52C20 44 2 51 3 41C4 31 24 38 28 30C32 23 16 19 23 13C31 7 39 31 47 22Z',
+  'M36 25C44 21 39 7 48 6C56 5 52 27 63 27C69 26 69 14 76 18C83 22 73 32 83 35C91 37 96 31 100 38C105 46 80 48 79 55C76 64 89 69 83 77C77 83 65 68 58 69C48 69 53 95 42 94C31 92 43 67 34 64C25 60 21 83 13 76C5 68 27 56 23 49C20 41 3 43 3 36C3 29 23 35 27 30C30 25 10 18 17 11C24 4 29 27 36 25Z',
+]
+
+function GelSpatter({ point, splash }: { point: Point; splash: GooSplash }) {
+  const { innerWidth: width, innerHeight: height } = window
+  const stains = useMemo(() => {
+    const count = Math.min(52, 25 + splash.bodies * 3)
+    return Array.from({ length: count }, (_, id) => {
+      const [horizontal, vertical] = spatterEdges[id] ?? [.075 + (id * .618034 % 1) * .85, .09 + (id * .414214 % 1) * .80]
+      const x = width * horizontal - point.x
+      const y = height * vertical - point.y
+      const distance = Math.hypot(x, y)
+      const lift = Math.min(122, distance * .24)
+      const travel = Math.min(890, 330 + distance * .46)
+      const start = id * 37 % 177
+      const size = id * 19 % 56 + 26
+      const fade = 3260 + id * 83 % 1100
+      return {
+        shape: stainShapes[id % stainShapes.length],
+        style: {
+          '--gel-x': x + 'px', '--gel-y': y + 'px',
+          '--gel-mid-x': x * .48 + 'px', '--gel-mid-y': y * .44 - lift + 'px',
+          '--gel-flight': Math.round(travel) + 'ms', '--gel-start': start + 'ms',
+          '--gel-hit': Math.round(travel) + start + 'ms', '--gel-fade': fade + 'ms',
+          '--gel-size': size + 'px', '--gel-angle': (id * 53 % 121 - 60) + 'deg',
+          '--gel-drift': 8 + id * 11 % 21 + 'px', '--gel-color': splash.colors[id % splash.colors.length],
+        } as CSSProperties,
+      }
+    })
+  }, [point.x, point.y, splash, width, height])
+  return <div className="goo-bomb-spatter" aria-hidden="true">
+    {stains.map(({ style, shape }, id) => <span className="goo-gel" key={id} style={style}>
+      <i className="goo-gel-flight" />
+      <svg className="goo-gel-stain" viewBox="0 0 105 100">
+        <path className="goo-gel-shape" d={shape} />
+        <path className="goo-gel-gloss" d="M26 43q6-9 16-11m-14 17q2-3 5-4M74 54l-4 3" />
+        <circle className="goo-gel-shape" cx="7" cy="13" r="3.2" />
+        <circle className="goo-gel-shape" cx="96" cy="73" r="3.5" />
+        <circle className="goo-gel-shape" cx="19" cy="88" r="2.4" />
+      </svg>
+    </span>)}
   </div>
 }

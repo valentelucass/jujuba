@@ -6,6 +6,7 @@ import { hats, type Hat } from './MascotHat'
 import type { Point } from '../controllers/mascotMotion'
 import type { Offspring } from '../controllers/useMascotBrood'
 import type { MascotMeeting, MascotMeetingKind, MascotPresence, MascotVisibility } from '../models/flowMascot'
+import { youngTone } from '../models/mascotScene'
 
 export function SharedMascot({ peer, appearance, visibility, greeting, direction, witnessed }: {
   peer: string
@@ -53,11 +54,6 @@ export function MascotMeetingEffect({ kind, point }: { kind: MascotMeetingKind; 
   </div>
 }
 
-const tones = [
-  ['#f596c2', '#c65394', 0], ['#f8d381', '#ba7827', 83], ['#a8e3c5', '#4c9e81', 184],
-  ['#b9acff', '#7669c2', -46], ['#91dfef', '#428fa9', 226], ['#ffa98f', '#d26657', 49],
-] as const
-
 export function MascotYoung({ child, at, onHatch, onTouch, onGone, onGrab, onMove, onRelease, interactive = true }: {
   child: Offspring; at: Point; onHatch: () => void; onTouch: () => void; onGone: () => void
   onGrab: (event: PointerEvent<HTMLButtonElement>) => void
@@ -66,7 +62,7 @@ export function MascotYoung({ child, at, onHatch, onTouch, onGone, onGrab, onMov
   interactive?: boolean
 }) {
   const { id, phase, flight, dissolving } = child
-  const [shell, spot, hue] = tones[(id - 1) % tones.length]
+  const [shell, spot, hue] = youngTone(id)
   const squash = flight?.squash ?? 0
   const side = flight?.edge === 'left' || flight?.edge === 'right'
   return <button type="button" className={`jujuba-offspring is-${phase}${flight ? ' is-flying' : ''}${child.held ? ' is-held' : ''}`}

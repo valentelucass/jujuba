@@ -1276,17 +1276,62 @@ dialog.connection-dialog {
   71% { opacity: .71; }
   to { transform: translate(var(--drop-x), var(--drop-y)) rotate(calc(var(--drop-angle) + 190deg)) scale(.09); opacity: 0; }
 }
+.goo-bomb-spatter { width: 1px; height: 1px; }
+.goo-gel, .goo-gel-flight, .goo-gel-stain { position: absolute; left: 0; top: 0; }
+.goo-gel-flight {
+  width: calc(var(--gel-size) * .46); height: calc(var(--gel-size) * .32);
+  border-radius: 83% 50% 67% 45%;
+  background: radial-gradient(ellipse at 27% 25%, #fff5e6e6, var(--gel-color) 44%,
+    color-mix(in srgb, var(--gel-color), #3b1828 52%) 88%);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--gel-color), transparent 38%);
+  animation: goo-gel-fly var(--gel-flight) cubic-bezier(.12,.47,.55,.88) var(--gel-start) both;
+}
+.goo-gel-stain {
+  width: var(--gel-size); height: var(--gel-size); overflow: visible;
+  filter: drop-shadow(0 1px 2px #200d22a3); transform-origin: center 47%;
+  animation: goo-gel-dry var(--gel-fade) ease-out var(--gel-hit) both;
+}
+.goo-gel-shape {
+  fill: color-mix(in srgb, var(--gel-color), transparent 15%);
+  stroke: color-mix(in srgb, var(--gel-color), #47163b 34%); stroke-width: 1.45;
+}
+.goo-gel-gloss {
+  fill: none; stroke: #fff5ed9a; stroke-width: 2.4; stroke-linecap: round;
+}
+@keyframes goo-gel-fly {
+  from { transform: translate(-50%, -50%) rotate(var(--gel-angle)) scale(.16); opacity: .05; }
+  18% { opacity: 1; }
+  50% { transform: translate(-50%, -50%) translate(var(--gel-mid-x), var(--gel-mid-y)) rotate(var(--gel-angle)) scaleX(1.33); }
+  92% { opacity: .97; }
+  to { transform: translate(-50%, -50%) translate(var(--gel-x), var(--gel-y)) rotate(var(--gel-angle)) scale(.73); opacity: 0; }
+}
+@keyframes goo-gel-dry {
+  0% { transform: translate(-50%, -50%) translate(var(--gel-x), var(--gel-y)) rotate(var(--gel-angle)) scale(.23); opacity: 0; }
+  6% { transform: translate(-50%, -50%) translate(var(--gel-x), var(--gel-y)) rotate(var(--gel-angle)) scale(1.10, .91); opacity: .88; }
+  22% { transform: translate(-50%, -50%) translate(var(--gel-x), var(--gel-y)) rotate(var(--gel-angle)) scale(.98, 1.04); opacity: .81; }
+  59% { opacity: .57; }
+  100% {
+    transform: translate(-50%, -50%) translate(var(--gel-x), calc(var(--gel-y) + var(--gel-drift))) rotate(var(--gel-angle)) scale(.9, 1.18);
+    opacity: 0;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .goo-bomb > .goo-bomb-body, .goo-bomb-landing-light { animation: none !important; }
   .goo-bomb.is-falling .goo-bomb-body { opacity: .53; }
   .goo-bomb-ember { animation: none !important; }
   .goo-bomb-sky, .goo-bomb-vortex, .goo-bomb-pull-ring, .goo-bomb-flare,
   .goo-bomb-wave, .goo-bomb-drop, .goo-bomb-afterglow, .goo-bomb-target { display: none; }
+  .goo-gel-flight { display: none; }
+  .goo-gel-stain {
+    transform: translate(-50%, -50%) translate(var(--gel-x), var(--gel-y)) rotate(var(--gel-angle));
+    animation-name: goo-gel-fade;
+  }
   .goo-bomb.is-burst::after {
     content: ''; position: absolute; width: 130px; height: 130px; border: 1px solid #ffc58b8f;
     border-radius: 50%; translate: -50% -50%; background: #ffc47723;
   }
 }
+@keyframes goo-gel-fade { 0% { opacity: 0; } 12% { opacity: .71; } 52% { opacity: .55; } 100% { opacity: 0; } }
 
 .jujuba-pair-gaze { visibility: visible; }
 .jujuba-pair-gaze .jujuba-glints {
