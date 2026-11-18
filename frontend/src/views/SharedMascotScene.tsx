@@ -36,6 +36,7 @@ export function SharedMascotScene({ scene, project, unproject, visibility, peer,
       const at = drag.held?.id === child.id ? drag.held.point : project(child.point)
       return <div key={child.id} className="mascot-shared-young">
         <MascotYoung at={at} child={{ id: child.id, x: at.x, phase: child.phase, held: child.held || drag.held?.id === child.id,
+          dissolving: child.dissolving,
           flight: child.rotation || child.squash || child.held ? { ...at, velocity: { x: child.rotation * 95, y: 0 },
             squash: child.squash, edge: 'bottom' } : null }}
           interactive={!!room} onHatch={noop} onGone={noop} onTouch={noop}

@@ -121,6 +121,15 @@ pub struct Young {
     pub rotation: f64,
     pub squash: f64,
     pub held: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dissolving: Option<DissolvingBody>,
+}
+
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DissolvingBody {
+    Egg,
+    Young,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -176,6 +185,7 @@ impl Scene {
                     && valid_point(child.point)
                     && child.rotation.abs() <= 90.0
                     && (0.0..=1.0).contains(&child.squash)
+                    && (child.dissolving.is_none() || matches!(child.phase, YoungPhase::Popping))
             })
             && self.hits.iter().all(|hit| {
                 hit.id > 0

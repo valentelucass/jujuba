@@ -1262,7 +1262,7 @@ mod tests {
     }
 
     async fn exercise_group(relay: bool) {
-        use super::super::flow_mascot::DragKind;
+        use super::super::flow_mascot::{DissolvingBody, DragKind, YoungPhase};
 
         let directory = tempfile::tempdir().unwrap();
         let project = SharedProject {
@@ -1405,7 +1405,7 @@ mod tests {
         wait(&ste, None, merged).await;
         wait(&owner, Some(project.id), merged).await;
 
-        let mascot = serde_json::from_value(serde_json::json!({
+        let mut mascot: Mascot = serde_json::from_value(serde_json::json!({
             "position":{"x":0.4,"y":0.6}, "hat":"none", "pose":"idle", "flight":null,
             "scene": {"epoch":1, "origin":{"x":0.5,"y":0.7}, "toy":null, "clone":null, "hits":[],
                 "young":[{"id":9,"point":{"x":0.5,"y":0.9},"phase":"young","held":false,"rotation":0,"squash":0}]}
@@ -1413,7 +1413,7 @@ mod tests {
         submit(
             bia_tx.clone(),
             Command::Mascot {
-                mascot: Some(mascot),
+                mascot: Some(mascot.clone()),
             },
         )
         .await
@@ -1484,6 +1484,26 @@ mod tests {
         .await
         .unwrap();
         wait(&bia, None, |view| view.child_drags.len() == 2).await;
+
+        let young = &mut mascot.scene.as_mut().unwrap().young[0];
+        young.point = at;
+        young.phase = YoungPhase::Popping;
+        young.dissolving = Some(DissolvingBody::Young);
+        submit(
+            bia_tx,
+            Command::Mascot {
+                mascot: Some(mascot),
+            },
+        )
+        .await
+        .unwrap();
+        wait(&ste, None, |view| {
+            people(view).as_array().unwrap().iter().any(|peer| {
+                peer["name"] == "Bia"
+                    && peer["mascot"]["scene"]["young"][0]["dissolving"] == "young"
+            })
+        })
+        .await;
 
         ste.close(second.id).await.unwrap();
         wait(&bia, None, |view| view.members.len() == 1).await;

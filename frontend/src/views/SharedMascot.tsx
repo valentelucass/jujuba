@@ -65,7 +65,7 @@ export function MascotYoung({ child, at, onHatch, onTouch, onGone, onGrab, onMov
   onRelease: (event: PointerEvent<HTMLButtonElement>) => void
   interactive?: boolean
 }) {
-  const { id, phase, flight } = child
+  const { id, phase, flight, dissolving } = child
   const [shell, spot, hue] = tones[(id - 1) % tones.length]
   const squash = flight?.squash ?? 0
   const side = flight?.edge === 'left' || flight?.edge === 'right'
@@ -77,7 +77,13 @@ export function MascotYoung({ child, at, onHatch, onTouch, onGone, onGrab, onMov
     style={{ left: at.x, top: at.y, '--shell': shell, '--shell-spot': spot, '--young-hue': hue + 'deg',
       '--young-idle': `${4 + (id % 5) * .43}s`, '--young-delay': `${-id * .44}s`,
     } as CSSProperties}>
-    {phase === 'popping' ? <span className="jujuba-young-pop" onAnimationEnd={onGone} aria-hidden="true" /> : <>
+    {dissolving ? <span className="jujuba-young-dissolve" aria-hidden="true" onAnimationEnd={(event) => {
+      if (event.target === event.currentTarget) onGone()
+    }}>
+      <span className="jujuba-dissolve-ashes" />
+      {dissolving === 'egg' ? <span className="jujuba-dissolve-egg" />
+        : <img src={jujuba} alt="" draggable={false} />}
+    </span> : phase === 'popping' ? <span className="jujuba-young-pop" onAnimationEnd={onGone} aria-hidden="true" /> : <>
       <span className="jujuba-egg" aria-hidden="true">
         <span className="jujuba-egg-top" /><span className="jujuba-egg-bottom" />
       </span>

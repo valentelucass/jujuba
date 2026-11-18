@@ -3,9 +3,13 @@ import { throwVelocity, type FlightBounds, type FlightFrame, type Impact, type I
 import type { ChildDrag, MascotImpulse } from '../models/flowMascot'
 
 export type Hug = { key: string; point: Point }
-export type Offspring = { id: number; x: number; phase: 'egg' | 'young' | 'popping'; flight: FlightFrame | null; held?: boolean }
+export type Offspring = {
+  id: number; x: number; phase: 'egg' | 'young' | 'popping'; flight: FlightFrame | null
+  held?: boolean; dissolving?: 'egg' | 'young'
+}
 export type BroodActor = { id: string; point: Point; active: boolean; radius?: number }
 type Body = { x: number; y: number; vx: number; vy: number; squash: number; edge: ImpactEdge; lastImpact: number; held: boolean }
+type Pull = { center: Point; started: number; duration: number; origins: Map<number, Point> }
 const limit = 100
 const radius = 17
 const neighbours = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 0], [0, 1], [1, -1], [1, 0], [1, 1]]
@@ -56,7 +60,7 @@ export function useMascotBrood(area: FlightBounds, onImpact: (mark: Impact) => v
   const bodies = useRef(new Map<number, Body>())
   const drag = useRef<{ id: number; pointer: number; offset: Point; moved: boolean; origin: Point; samples: PointerSample[] } | null>(null)
   const remote = useRef(new Map<number, string>())
-  const pull = useRef<Point | null>(null)
+  const pull = useRef<Pull | null>(null)
   const animation = useRef(0)
   const capacity = useRef(limit)
 
@@ -74,6 +78,32 @@ export function useMascotBrood(area: FlightBounds, onImpact: (mark: Impact) => v
       const elapsed = Math.max(.001, Math.min(.05, (now - last) / 1000))
       last = now
       const { area: bounds, actors, onImpact: sound } = scene.current
+      const gathering = pull.current
+      if (gathering) {
+        const progress = constrain((now - gathering.started) / gathering.duration, 0, 1)
+        const easing = progress * progress * (2.15 - 1.15 * progress)
+        const { center } = gathering
+        publish(live.current.map((child) => {
+          const body = bodies.current.get(child.id)
+          const origin = gathering.origins.get(child.id)
+          if (!body || !origin || child.phase === 'popping') return child
+          const angle = (child.id % 2 ? 1 : -1) * progress * 1.3
+          const dx = origin.x - center.x
+          const dy = origin.y - center.y
+          const remaining = 1 - easing
+          const orbit = child.id * 2.39996 + progress * 5
+          const cluster = Math.min(13, Math.hypot(dx, dy)) * easing
+          const x = center.x + (dx * Math.cos(angle) - dy * Math.sin(angle)) * remaining + Math.cos(orbit) * cluster
+          const y = center.y + (dx * Math.sin(angle) + dy * Math.cos(angle)) * remaining + Math.sin(orbit) * cluster
+          const speed = constrain((x - body.x) / elapsed, -2600, 2600)
+          body.x = constrain(x, 12, window.innerWidth - 12)
+          body.y = constrain(y, 12, window.innerHeight - 12)
+          return { ...child, x: body.x, held: false, flight: { x: body.x, y: body.y,
+            velocity: { x: speed, y: 0 }, squash: easing * .32, edge: 'bottom' } }
+        }))
+        animation.current = requestAnimationFrame(tick)
+        return
+      }
       const active = live.current.filter((child) => child.phase === 'young')
       const heldTargets = new Map<number, { from: Point; to: Point }>()
       for (const child of active) {
@@ -108,14 +138,6 @@ export function useMascotBrood(area: FlightBounds, onImpact: (mark: Impact) => v
           if (heldTarget) {
             body.x = heldTarget.from.x + (heldTarget.to.x - heldTarget.from.x) * (step + 1) / steps
             body.y = heldTarget.from.y + (heldTarget.to.y - heldTarget.from.y) * (step + 1) / steps
-            continue
-          }
-          if (pull.current) {
-            const strength = Math.min(1, dt * 7)
-            body.vx = body.vy = 0
-            body.x += (pull.current.x - body.x) * strength
-            body.y += (pull.current.y - body.y) * strength
-            changed = true
             continue
           }
           const airborne = body.y < bounds.bottom - .15 || Math.abs(body.vy) > 1
@@ -162,17 +184,6 @@ export function useMascotBrood(area: FlightBounds, onImpact: (mark: Impact) => v
             impact(body, approach, 'bottom')
             changed = true
           }
-        }
-        if (pull.current) {
-          for (const child of live.current) {
-            if (child.phase !== 'egg') continue
-            const body = bodies.current.get(child.id)
-            if (!body) continue
-            body.x += (pull.current.x - body.x) * dt * 7
-            body.y += (pull.current.y - body.y) * dt * 7
-            changed = true
-          }
-          continue
         }
         // Neighbouring buckets bound collision work when many children pile up.
         const buckets = new Map<string, Array<{ id: number; body: Body }>>()
@@ -248,7 +259,7 @@ export function useMascotBrood(area: FlightBounds, onImpact: (mark: Impact) => v
   }, [children.length])
 
   function lay(near: Point, ordinal: number) {
-    if (live.current.length >= capacity.current) return
+    if (pull.current || live.current.length >= capacity.current) return
     const id = ++nextId.current
     const point = birthSpot(near.x, ordinal, bodies.current, scene.current.area)
     bodies.current.set(id, { ...point, vx: 0, vy: 0, squash: 0, edge: 'bottom', lastImpact: -Infinity, held: false })
@@ -261,6 +272,7 @@ export function useMascotBrood(area: FlightBounds, onImpact: (mark: Impact) => v
 
   function position(child: Offspring): Point {
     const body = bodies.current.get(child.id)
+    if (body && (pull.current || child.dissolving)) return { x: body.x, y: body.y }
     return body ? { x: constrain(body.x, area.left, area.right), y: constrain(body.y, area.top, area.bottom) }
       : { x: constrain(child.x, area.left, area.right), y: area.bottom }
   }
@@ -368,16 +380,23 @@ export function useMascotBrood(area: FlightBounds, onImpact: (mark: Impact) => v
     }
   }
 
-  function startPull(point: Point) {
-    pull.current = point
+  function startPull(center: Point, duration: number) {
+    const origins = new Map<number, Point>()
+    for (const [id, body] of bodies.current) {
+      origins.set(id, { x: body.x, y: body.y })
+      body.held = false
+      body.vx = body.vy = 0
+    }
+    pull.current = { center, started: performance.now(), duration, origins }
     drag.current = null
     remote.current.clear()
-    for (const body of bodies.current.values()) body.held = false
   }
 
   function endPull(explode: boolean) {
     pull.current = null
-    if (explode) publish(live.current.map((child) => ({ ...child, held: false, phase: 'popping' })))
+    if (explode) publish(live.current.map((child) => child.phase === 'popping' ? child : {
+      ...child, held: false, phase: 'popping', dissolving: child.phase,
+    }))
   }
 
   function collideWith(actors: BroodActor[]) {

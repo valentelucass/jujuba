@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { MascotMeetingKind } from '../models/flowMascot'
+import { gooBombTiming } from '../models/mascotScene'
 import { makeGelAudio, type GelEffect } from './mascotGelAudio'
 
-type Sound = MascotMeetingKind | GelEffect | 'click' | 'blaster' | 'bow' | 'hit' | 'hatch' | 'ricochet' | 'bombCharge' | 'bombBurst'
+type Sound = MascotMeetingKind | GelEffect | 'click' | 'blaster' | 'bow' | 'hit' | 'hatch' | 'ricochet'
+  | 'bombSiren' | 'bombFall' | 'bombLand' | 'bombCharge' | 'bombBurst'
 type SoundSettings = { muted: boolean; volume: number }
 type Note = [start: number, length: number, pitch: number, endPitch: number, emphasis?: number]
 type BowCreak = { noise: AudioBufferSourceNode; filter: BiquadFilterNode; gain: GainNode; vibrato: OscillatorNode; depth: GainNode }
 
-const notes: Record<Exclude<Sound, GelEffect | 'blaster'>, Note[]> = {
+const notes: Record<Exclude<Sound, GelEffect | 'blaster' | 'bombSiren'>, Note[]> = {
   click: [[0, .075, 660, 440], [.028, .07, 990, 770, .45]],
   kiss: [[0, .085, 520, 260], [.086, .065, 840, 560], [.165, .13, 1047, 1175, .38]],
   hug: [[0, .19, 392, 440], [.07, .22, 523, 587], [.14, .28, 660, 784, .65]],
@@ -22,14 +24,18 @@ const notes: Record<Exclude<Sound, GelEffect | 'blaster'>, Note[]> = {
   hit: [[0, .11, 220, 85], [.052, .13, 635, 345, .58]],
   hatch: [[0, .06, 245, 102], [.095, .12, 698, 790], [.18, .13, 880, 980], [.255, .24, 1175, 1320, .74]],
   ricochet: [[0, .09, 425, 208], [.021, .16, 310, 830, .55]],
-  bombCharge: [[0, .71, 68, 350, .42], [.16, .53, 124, 610, .4], [.49, .29, 330, 880, .58], [.70, .20, 570, 1230, .48]],
-  bombBurst: [[0, .66, 186, 33, .95], [.028, .41, 486, 81, .6], [.1, .24, 205, 73, .5], [.21, .22, 620, 188, .38]],
+  bombFall: [[0, 1.44, 820, 183, .24], [.3, 1.21, 430, 96, .32]],
+  bombLand: [[0, .34, 175, 48, .72], [.023, .22, 470, 150, .35]],
+  bombCharge: [[0, 2.52, 58, 88, .54], [.18, 2.29, 102, 220, .3], [.54, 1.92, 161, 740, .22],
+    [1.22, 1.24, 243, 1040, .24], [1.82, .64, 350, 1310, .33], [2.15, .32, 670, 1660, .28]],
+  bombBurst: [[0, 1.4, 145, 31, 1.06], [0, .28, 740, 114, .56], [.08, .95, 91, 37, .51],
+    [.29, .67, 278, 71, .32], [.47, .48, 730, 211, .26]],
 }
 
 const wetSounds: Partial<Record<Sound, number>> = {
   kiss: .11, squeeze: .16, bounce: .22,
   push: .17, bump: .23, hit: .19, bow: .15, ricochet: .13,
-  bombCharge: .26, bombBurst: .29,
+  bombLand: .17, bombCharge: .24, bombBurst: .29,
 }
 const storageKey = 'jujuba.assistant.sounds'
 function readSoundSettings(): SoundSettings {
@@ -48,6 +54,7 @@ export function useMascotSound() {
   const current = useRef(settings)
   const audio = useRef<{ context: AudioContext; master: GainNode; noise: AudioBuffer; gel: Map<GelEffect, AudioBuffer> } | null>(null)
   const bow = useRef<BowCreak | null>(null)
+  const bombBus = useRef<GainNode | null>(null)
   const played = useRef<Partial<Record<Sound, number>>>({})
   const variation = useRef(0)
   current.current = settings
@@ -76,6 +83,7 @@ export function useMascotSound() {
       window.removeEventListener('keydown', unlock, true)
       if (audio.current && audio.current.context.state !== 'closed') void audio.current.context.close().catch(() => {})
       bow.current = null
+      bombBus.current = null
       audio.current = null
     }
   }, [])
@@ -174,6 +182,43 @@ export function useMascotSound() {
 
     const tuning = variationRate * .8
     const base = context.currentTime
+    let destination = master
+    if (sound.startsWith('bomb')) {
+      if (!bombBus.current) {
+        bombBus.current = context.createGain()
+        bombBus.current.gain.value = .8
+        bombBus.current.connect(master)
+      }
+      destination = bombBus.current
+    }
+    if (sound === 'bombSiren') {
+      const end = gooBombTiming.burst / 1000 - .20
+      const siren = context.createOscillator()
+      const harmonic = context.createOscillator()
+      const filter = context.createBiquadFilter()
+      const volume = context.createGain()
+      siren.type = 'triangle'
+      harmonic.type = 'sine'
+      for (const [voice, ratio] of [[siren, 1], [harmonic, 1.46]] as const) {
+        voice.frequency.setValueAtTime(205 * ratio, base)
+        voice.frequency.exponentialRampToValueAtTime(615 * ratio, base + .97)
+        voice.frequency.exponentialRampToValueAtTime(300 * ratio, base + 2.02)
+        voice.frequency.exponentialRampToValueAtTime(685 * ratio, base + 3.02)
+        voice.frequency.exponentialRampToValueAtTime(342 * ratio, base + 4.05)
+        voice.frequency.exponentialRampToValueAtTime(578 * ratio, base + end)
+        voice.connect(filter)
+        voice.start(base)
+        voice.stop(base + end)
+      }
+      filter.type = 'lowpass'
+      filter.frequency.value = 1210
+      volume.gain.setValueAtTime(.0001, base)
+      volume.gain.exponentialRampToValueAtTime(.075 * intensity, base + .48)
+      volume.gain.setValueAtTime(.075 * intensity, base + end - .24)
+      volume.gain.exponentialRampToValueAtTime(.0001, base + end)
+      filter.connect(volume).connect(destination)
+      return
+    }
     for (const [offset, length, pitch, endPitch, emphasis = 1] of notes[sound]) {
       const start = base + offset
       const oscillator = context.createOscillator()
@@ -185,7 +230,7 @@ export function useMascotSound() {
       gain.gain.exponentialRampToValueAtTime(.0001 + intensity * emphasis * .16, start + .014)
       gain.gain.exponentialRampToValueAtTime(.0001, start + length)
       oscillator.connect(gain)
-      gain.connect(master)
+      gain.connect(destination)
       oscillator.start(start)
       oscillator.stop(start + length)
     }
@@ -204,10 +249,18 @@ export function useMascotSound() {
       gain.gain.setValueAtTime(.0001, base)
       gain.gain.exponentialRampToValueAtTime(.0001 + .54 * intensity, base + .017)
       gain.gain.exponentialRampToValueAtTime(.0001, end)
-      source.connect(filter).connect(gain).connect(master)
+      source.connect(filter).connect(gain).connect(destination)
       source.start(base)
       source.stop(end)
     }
+  }, [])
+
+  const stopBomb = useCallback(() => {
+    const bus = bombBus.current
+    bombBus.current = null
+    if (!bus) return
+    bus.gain.setTargetAtTime(0, bus.context.currentTime, .018)
+    window.setTimeout(() => bus.disconnect(), 90)
   }, [])
 
   function save(next: SoundSettings) {
@@ -220,5 +273,5 @@ export function useMascotSound() {
     try { localStorage.setItem(storageKey, JSON.stringify(next)) } catch { /* A seleção continua ativa na janela. */ }
   }
 
-  return { settings, save, play, tension }
+  return { settings, save, play, tension, stopBomb }
 }

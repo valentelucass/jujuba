@@ -34,7 +34,7 @@ export function useMascotScene(outgoing: RefObject<(() => MascotScene) | null>, 
   room: MascotRoom | null; own: Point; clone: Companion; hat: string; children: Offspring[]
   childPosition: (child: Offspring) => Point; members: FlowParticipant[]; visible: VisibleMascot[]; active: boolean
   receiveHit: (hit: SceneHit) => void; fireSound: (kind: ToyKind | SceneSoundKind, strength?: number) => void
-  receiveBurst: (burst: GooBurst, point: Point, affectsOwn: boolean) => void
+  receiveBurst: (point: Point, affectsOwn: boolean, source: string) => void
 }) {
   const toy = useRef<ToyVisual | null>(null)
   const hits = useRef<SceneHit[]>([])
@@ -71,6 +71,7 @@ export function useMascotScene(outgoing: RefObject<(() => MascotScene) | null>, 
           id: child.id, point: normalizeScene(childPosition(child)), phase: child.phase, held: !!child.held,
           rotation: Math.round((child.flight?.velocity.x ?? 0) / 9.5) / 10,
           squash: Math.round((child.flight?.squash ?? 0) * 100) / 100,
+          dissolving: child.dissolving,
         })),
         hits: hits.current, sounds: sounds.current, burst: burst.current,
       }
@@ -113,7 +114,7 @@ export function useMascotScene(outgoing: RefObject<(() => MascotScene) | null>, 
       if (weapon && latestShot > (last?.weapon === weapon.epoch ? last.shot : 0)) latest.current.fireSound(weapon.kind)
       if (incoming.burst && incoming.burst.id > (last?.burst ?? 0)) {
         const affectsOwn = active && (!incoming.burst.members || !!room?.selfId && incoming.burst.members.includes(room.selfId))
-        latest.current.receiveBurst(incoming.burst, representation.project(incoming.burst.point), affectsOwn)
+        latest.current.receiveBurst(representation.project(incoming.burst.point), affectsOwn, member.id)
       }
     }
   }, [members, scenes, roomId, active])
