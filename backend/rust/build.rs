@@ -25,6 +25,12 @@ fn main() {
             "dashboard_files",
             "dashboard_performance",
             "dashboard_live",
+            "pm2_snapshot",
+            "pm2_action",
+            "pm2_open_shell",
+            "pm2_scale",
+            "pm2_state_action",
+            "pm2_start_file",
             "query_read",
             "update_cell",
             "diagram_agent",
@@ -50,5 +56,5 @@ fn main() {
             "flow_collab_end",
         ]),
     ))
-    .expect("preparar permissões e recursos do JujubaSQL");
+    .expect("preparar permissões e recursos do JUJUBA");
 }

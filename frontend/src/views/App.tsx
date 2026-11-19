@@ -20,7 +20,7 @@ import { readMascotColor, saveMascotColor } from '../models/mascotColor'
 import { Diagram, Graph } from './Diagram'
 import { useRemote } from '../controllers/useRemote'
 import { StudioLayout } from './StudioLayout'
-import { DatabaseTools, Header } from './Header'
+import { DatabaseTools, Header, HeaderAction, StudioNavigation, type StudioArea } from './Header'
 import { Records } from './Records'
 import { Empty, Failure, Loading } from './States'
 import { Structure } from './Structure'
@@ -30,6 +30,7 @@ import type { MascotRoom } from '../models/flowMascot'
 import type { AssistantFlowChange, AssistantFlowResult, SystemDiagram } from '../models/systemDiagram'
 const SqlEditor = lazy(() => import('./SqlEditor').then((module) => ({ default: module.SqlEditor })))
 const DatabaseDashboard = lazy(() => import('./DatabaseDashboard'))
+const Pm2Panel = lazy(() => import('./Pm2Panel').then((module) => ({ default: module.Pm2Panel })))
 const SystemDiagramStudio = lazy(() => import('./SystemDiagramStudio').then((module) => ({ default: module.SystemDiagramStudio })))
 
 function Details({ children }: { children: ReactNode }) {
@@ -185,8 +186,8 @@ function DatabaseWorkspace({ scope, connection, onTable }: { scope: Scope; conne
   </>
 }
 
-function ConnectedStudio({ connection, disconnect, openDiagrams, onScreen }: {
-  connection: Connection; disconnect: () => Promise<void>; openDiagrams: () => void; onScreen: (screen: string) => void
+function ConnectedStudio({ connection, disconnect, onScreen }: {
+  connection: Connection; disconnect: () => Promise<void>; onScreen: (screen: string) => void
 }) {
   const [disconnecting, setDisconnecting] = useState(false)
   async function closeConnection() {
@@ -215,7 +216,7 @@ function ConnectedStudio({ connection, disconnect, openDiagrams, onScreen }: {
     rememberActiveDatabase(connection.engine, db)
   })
   return <>
-    <Header onDiagrams={openDiagrams} connection={connection} database={database} onDatabase={explorer.chooseDatabase} onDisconnect={closeConnection} disconnecting={disconnecting}
+    <Header connection={connection} database={database} onDatabase={explorer.chooseDatabase} onDisconnect={closeConnection} disconnecting={disconnecting}
       tools={<>
         <DatabaseTools active={workspaceView === 'objects' ? (database && !table ? 'diagram' : undefined) : workspaceView}
           actions={database ? {
@@ -223,10 +224,10 @@ function ConnectedStudio({ connection, disconnect, openDiagrams, onScreen }: {
             dashboard: () => setWorkspaceView('dashboard'),
             sql: () => setWorkspaceView('sql'),
           } : undefined} />
-        {table && <button className="button bank-data" aria-label="Dados" aria-pressed={workspaceView === 'objects'}
-          onClick={() => setWorkspaceView('objects')}><Table2 size={15} /><span>Dados</span></button>}
-        {table && workspaceView === 'objects' && <button className="icon-button" title="Atualizar tabela" aria-label="Atualizar tabela"
-          onClick={() => setRefreshKey((value) => value + 1)}><RefreshCw size={16} /></button>}
+        {table && <HeaderAction label="Dados" hint="Explore os registros da tabela." active={workspaceView === 'objects'}
+          onClick={() => setWorkspaceView('objects')}><Table2 /></HeaderAction>}
+        {table && workspaceView === 'objects' && <HeaderAction label="Atualizar tabela" hint="Busque novamente os registros."
+          onClick={() => setRefreshKey((value) => value + 1)}><RefreshCw /></HeaderAction>}
       </>} />
     <StudioLayout items={explorer.items} connected>
       {database && workspaceView === 'dashboard' ? <><main className="workspace">
@@ -258,7 +259,8 @@ export function App() {
   const started = useRef(!restoring)
 
   const [flowUpgrade] = useState(readFlowUpgrade)
-  const [diagrams, setDiagrams] = useState(!!flowUpgrade)
+  const [area, setArea] = useState<StudioArea>(flowUpgrade ? 'diagrams' : 'database')
+  const diagrams = area === 'diagrams'
   const [openedDiagrams, setOpenedDiagrams] = useState(!!flowUpgrade)
   const [assistantOpen, setAssistantOpen] = useState(false)
   const [provider, setProvider] = useState(readProvider)
@@ -268,7 +270,7 @@ export function App() {
   const [mascotRoom, setMascotRoom] = useState<MascotRoom | null>(null)
   const [currentDiagram, setCurrentDiagram] = useState<SystemDiagram | null>(null)
   const [assistantDiagram, setAssistantDiagram] = useState<AssistantFlowChange | null>(null)
-  const screen = diagrams ? 'Fluxogramas de sistema' : connection ? databaseScreen :
+  const screen = area === 'pm2' ? 'Monitor local do PM2' : diagrams ? 'Fluxogramas de sistema' : connection ? databaseScreen :
     step === 'intro' ? 'Tela inicial' : step === 'picker' ? 'Seleção de banco' : 'Conexão · ' + engines[step].name
   const assistantContext = useRef({ screen, diagrams, diagram: currentDiagram })
   assistantContext.current = { screen, diagrams, diagram: currentDiagram }
@@ -282,7 +284,12 @@ export function App() {
 
   function openDiagrams() {
     setOpenedDiagrams(true)
-    setDiagrams(true)
+    setArea('diagrams')
+  }
+
+  function navigate(next: StudioArea) {
+    if (next === 'diagrams') openDiagrams()
+    else setArea(next)
   }
 
   function applyAssistantDiagram(diagram: SystemDiagram, revisionOf: SystemDiagram | null, origin: string): Promise<AssistantFlowResult> {
@@ -364,12 +371,12 @@ export function App() {
     }
   }
 
-  return <>
-    <div className="app-screen" hidden={diagrams}>
+  return <StudioNavigation.Provider value={{ area, go: navigate }}>
+    <div className="app-screen" hidden={area !== 'database'}>
       {connection ? (isNoSql(connection.engine) ?
-        <NoSqlStudio key={connection.session} connection={connection} disconnect={disconnect} openDiagrams={openDiagrams} onScreen={setDatabaseScreen} /> :
-        <ConnectedStudio key={connection.session} connection={connection} disconnect={disconnect} openDiagrams={openDiagrams} onScreen={setDatabaseScreen} />) : <>
-    <Header onConnect={openPicker} connecting={loading || restoring} onDiagrams={openDiagrams} />
+        <NoSqlStudio key={connection.session} connection={connection} disconnect={disconnect} onScreen={setDatabaseScreen} /> :
+        <ConnectedStudio key={connection.session} connection={connection} disconnect={disconnect} onScreen={setDatabaseScreen} />) : <>
+    <Header onConnect={openPicker} connecting={loading || restoring} />
     <StudioLayout items={[]} connected={false}>
       <main className="workspace welcome">
         {restoring ? <div className="welcome-content welcome-intro" role="status">
@@ -409,13 +416,17 @@ export function App() {
     </>}
     </div>
     {openedDiagrams && <div className="app-screen" hidden={!diagrams}>
-      <Suspense fallback={<Loading />}><SystemDiagramStudio exit={() => setDiagrams(false)} provider={provider}
+      <Suspense fallback={<Loading />}><SystemDiagramStudio provider={provider}
         assistantOptions={assistantSettings.options} unavailableOption={assistantSettings.unavailable}
         upgrade={flowUpgrade} assistantDiagram={assistantDiagram} onDiagram={setCurrentDiagram} onMascotRoom={setMascotRoom} connection={connection} /></Suspense>
+    </div>}
+    {area === 'pm2' && <div className="app-screen"><Header />
+      <Suspense fallback={<Loading />}><Pm2Panel /></Suspense>
+      <StatusBar engine={connection?.engine} endpoint={connection?.endpoint} />
     </div>}
     <AssistantDock open={assistantOpen} setOpen={setAssistantOpen} provider={provider} setProvider={setProvider} settings={assistantSettings}
       color={mascotColor} changeColor={(next) => { setMascotColor(next); saveMascotColor(next) }}
       screen={screen} diagram={diagrams ? currentDiagram : null} onDiagram={applyAssistantDiagram}
       mascotRoom={diagrams ? mascotRoom : null} />
-  </>
+  </StudioNavigation.Provider>
 }

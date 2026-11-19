@@ -70,7 +70,7 @@ pub async fn diagram_open(app: AppHandle) -> Result<Option<Opened>> {
         .dialog()
         .file()
         .set_title("Importar projeto editável (.jujuba.json)")
-        .add_filter("Fluxograma do JujubaSQL", &["json"]);
+        .add_filter("Fluxograma do JUJUBA", &["json"]);
     let path = choose(dialog, FileDialogBuilder::pick_file).await?;
     path.as_deref().map(files::open).transpose()
 }
@@ -89,7 +89,7 @@ pub async fn diagram_save(
     let dialog = app
         .dialog()
         .file()
-        .add_filter("Fluxograma do JujubaSQL", &["json"])
+        .add_filter("Fluxograma do JUJUBA", &["json"])
         .set_file_name("fluxograma.jujuba.json");
     let Some(path) = choose(dialog, FileDialogBuilder::save_file).await? else {
         return Ok(None);

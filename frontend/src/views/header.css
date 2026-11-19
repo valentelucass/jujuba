@@ -1,0 +1,59 @@
+#root { grid-template-columns: minmax(0, 1fr); }
+.topbar .wordmark {
+  display: inline-flex; align-items: center; flex: none; gap: 8px; padding-right: 12px;
+}
+header.topbar .wordmark > strong {
+  display: inline-flex; align-items: baseline; font: 780 20px/1 "Geist Variable", "Segoe UI", sans-serif;
+  letter-spacing: -.075em; color: var(--text);
+}
+.topbar .wordmark > strong > span {
+  font: italic 400 24px/.9 "DM Serif Text", Georgia, serif; letter-spacing: -.075em;
+  color: var(--berry); margin-left: 1px; position: relative; top: .4px;
+}
+.topbar :is(.studio-areas, .connection-tools, .bank-tools) {
+  display: flex; align-items: center; gap: 3px; min-width: 0; padding-inline-start: 10px;
+  border-inline-start: 1px solid var(--line);
+}
+.topbar .toolbar-item { position: relative; display: inline-flex; flex: none; }
+.toolbar-icon {
+  position: relative; display: grid; place-items: center; width: 36px; height: 34px;
+  border-radius: 7px; border: 1px solid transparent; background: transparent; color: var(--quiet); padding: 0;
+}
+.toolbar-icon > svg { width: 18px; height: 18px; stroke-width: 1.75; }
+.studio-areas .toolbar-icon > svg { width: 19px; height: 19px; }
+.toolbar-icon:is(:hover,:focus-visible) { background: var(--hover); color: var(--text); }
+.toolbar-icon[aria-pressed="true"] { border-color: var(--berry-line); background: var(--berry-selected); color: var(--berry); }
+.toolbar-icon[aria-disabled="true"] { color: var(--muted); opacity: .42; cursor: default; }
+.toolbar-tip {
+  position: absolute; z-index: 60; top: calc(100% + 7px); left: var(--tip-center,50%); transform: translateX(-50%);
+  width: 190px; padding: 9px 11px; border: 1px solid var(--line-strong); border-radius: 8px;
+  background: var(--raised); color: var(--quiet); box-shadow: 0 5px 18px var(--shadow);
+  font: 400 12px/1.4 "Geist Variable","Segoe UI",sans-serif; white-space: normal;
+  display: none; pointer-events: none;
+}
+.toolbar-tip::before { content: ''; position: absolute; inset: -8px 0 100%; }
+.toolbar-tip strong { display: block; font-weight: 650; color: var(--text); margin-bottom: 2px; }
+.toolbar-item:not([data-dismissed]):is(:hover,:focus-within) > .toolbar-tip {
+  display: block; pointer-events: auto;
+}
+.topbar:has(.toolbar-item:is(:hover,:focus-within)) { z-index: 9; }
+.topbar .database-button { max-width: min(22vw, 240px); }
+.topbar .database-button > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+@media (max-width: 720px) {
+  header.topbar { gap: 4px; padding: 0 8px; }
+  .topbar .wordmark { padding-right: 3px; gap: 4px; }
+  .topbar .wordmark img { width: 26px; height: 26px; }
+  .topbar :is(.studio-areas, .connection-tools, .bank-tools) { padding-inline-start: 4px; gap: 1px; }
+  .topbar .toolbar-icon { width: 31px; }
+}
+@media (max-width: 575px) {
+  .statusbar .status-links a { width: 22px; height: 22px; justify-content: center; font-size: 0; gap: 0; }
+  .statusbar .status-links { gap: 3px; }
+  #root:has(.app-screen:not([hidden]) > .topbar .bank-tools) { --app-header-height: 84px; }
+  header.topbar:has(.bank-tools) { display: grid; grid-template-columns: auto auto 1fr auto; grid-template-rows: 43px 1fr; align-items: center; }
+  .topbar:has(.bank-tools) .connection-tools { grid-column: 1 / 3; grid-row: 2; border-left: none; padding-left: 0; }
+  .topbar:has(.bank-tools) .bank-tools { grid-column: 3 / 5; grid-row: 2; justify-self: end; }
+  .topbar .database-button { max-width: 32vw; }
+  .topbar:has(.bank-tools) > .header-spacer { display: none; }
+  .topbar:has(.bank-tools) > .toolbar-item { grid-column: 4; grid-row: 1; }
+}

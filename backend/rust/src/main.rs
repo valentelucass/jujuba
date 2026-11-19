@@ -11,6 +11,9 @@ mod error;
 mod models;
 mod no_sql;
 mod other_db;
+mod pm2_host;
+mod pm2;
+mod pm2_ports;
 mod records;
 mod relationships;
 mod sql_server;
@@ -68,6 +71,12 @@ fn main() {
             commands::dashboard_files,
             commands::dashboard_performance,
             commands::dashboard_live,
+            pm2::pm2_snapshot,
+            pm2::pm2_action,
+            pm2::pm2_open_shell,
+            pm2::pm2_scale,
+            pm2::pm2_state_action,
+            pm2::pm2_start_file,
             commands::query_read,
             commands::update_cell,
             system_diagram::diagram_agent,
@@ -93,7 +102,7 @@ fn main() {
             system_diagram::collaboration::flow_collab_end,
         ])
         .build(tauri::generate_context!())
-        .expect("iniciar o JujubaSQL")
+        .expect("iniciar o JUJUBA")
         .run(|app, event| {
             if let tauri::RunEvent::ExitRequested {
                 code: None, api, ..

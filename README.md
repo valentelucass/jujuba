@@ -1,10 +1,10 @@
-# JujubaSQL
+# JUJUBA
 
-## ⬇️ [Baixar o instalador para Windows (64 bits)](https://github.com/valentelucass/jujubasql/releases/latest)
+## ⬇️ [Baixar o instalador para Windows (64 bits)](https://github.com/valentelucass/jujuba/releases/latest)
 
-<img src="frontend/src/assets/jujuba.png" alt="Mascote do JujubaSQL" width="112" />
+<img src="frontend/src/assets/jujuba.png" alt="Mascote do JUJUBA" width="112" />
 
-Aplicativo desktop Windows para explorar SQL Server, MySQL, PostgreSQL, SQLite, MongoDB e Redis. O Tauri abre a interface React e o backend Rust local executa as consultas.
+Aplicativo para Windows que reúne um explorador de bancos de dados, um editor de fluxogramas com IA e um monitor de processos do PM2. O explorador aceita SQL Server, MySQL, PostgreSQL, SQLite, MongoDB e Redis.
 
 ## Instalar e conectar
 
@@ -17,13 +17,25 @@ Na tela inicial, clique em **Nova conexão** e escolha o tipo de banco no centro
 
 ### SQL Server
 
-1. Execute o instalador x64 do JujubaSQL. O aplicativo usa o runtime gratuito Microsoft Edge WebView2. O instalador pode baixar o runtime se ele ainda não estiver no Windows.
-2. Abra o JujubaSQL pelo menu Iniciar e selecione **Conectar**.
+1. Execute o instalador x64 do JUJUBA. O aplicativo usa o runtime gratuito Microsoft Edge WebView2. O instalador pode baixar o runtime se ele ainda não estiver no Windows.
+2. No menu Iniciar do Windows, abra **JujubaSQL** e selecione **Conectar**. A janela usa o nome **JUJUBA**.
 3. Se o SQL Server estiver no mesmo Windows, selecione **Neste computador**. Deixe **Instância local** em branco para a instância padrão. Esse modo usa a memória compartilhada do Windows e requer o Microsoft ODBC Driver 18 ou 17 para SQL Server, x64.
-4. Para outro computador, selecione **Pela rede** e informe o nome DNS e a porta TCP do servidor. Use a rede privada ou a VPN, se aplicável. O certificado precisa corresponder ao DNS e ser confiável no Windows. Nos dois modos, escolha um usuário autorizado do SQL Server ou a conta atual do Windows. O JujubaSQL preenche os dados da última conexão bem-sucedida. A senha de SQL pode ser lembrada neste PC.
+4. Para outro computador, selecione **Pela rede** e informe o nome DNS e a porta TCP do servidor. Use a rede privada ou a VPN, se aplicável. O certificado precisa corresponder ao DNS e ser confiável no Windows. Nos dois modos, escolha um usuário autorizado do SQL Server ou a conta atual do Windows. O JUJUBA preenche os dados da última conexão bem-sucedida. A senha de SQL pode ser lembrada neste PC.
 5. Escolha um banco na lista pesquisável ou no explorador. Abra um esquema, a pasta **Tabelas** e uma tabela.
 
 O login deve conseguir abrir o catálogo `master` para descobrir os bancos. Em cada banco, o SQL Server define quais objetos e registros o login pode consultar. A permissão `VIEW DEFINITION` nos objetos relevantes pode permitir classificar mais relações.
+
+## Monitorar processos do PM2
+
+Abra **PM2** na barra superior para acompanhar os processos gerenciados pelo PM2 da sua conta do Windows. O painel funciona sem conexão com um banco. Ele consulta a instância local em execução e respeita a pasta configurada em `PM2_HOME`. Para preparar a instalação ou iniciar seus serviços, consulte o [guia oficial do PM2](https://pm2.keymetrics.io/docs/usage/quick-start/).
+
+O painel acompanha CPU, memória e tráfego de disco do computador. Selecione um processo para ver o ID do PM2, o PID do Windows, o tempo de execução, os reinícios e o histórico de CPU e memória. As portas são as portas TCP que o Windows encontra em escuta em IPv4 e IPv6. Quando quem escuta é um subprocesso, a porta aparece no processo gerenciado mais próximo da árvore. As leituras são renovadas enquanto o painel está visível.
+
+Nos detalhes, use **Iniciar** para retomar um processo parado, **Parar** para interrompê-lo e **Reiniciar** para iniciar outro ciclo. É possível remover o registro de um processo pelo seu ID. Em modo cluster, **Recarregar** atua sobre a instância selecionada. Alterar a quantidade de instâncias atua sobre o aplicativo inteiro e exige um nome de grupo único. [Gerenciamento de processos](https://pm2.keymetrics.io/docs/usage/process-management/) e [modo cluster](https://pm2.keymetrics.io/docs/usage/cluster-mode/)
+
+Abra o PowerShell na pasta de trabalho do processo para desenvolver. Os atalhos de logs e detalhes usam o ID selecionado. O monitor interativo `pm2 monit` mostra todos os processos da instância.
+
+Para adicionar um serviço, escolha um script ou arquivo `ecosystem` no seletor do Windows e confirme o caminho. Salvar a lista grava o conjunto atual do PM2, inclusive quando está vazio. Restaurar a lista inicia os serviços salvos que estão ausentes. [Lista de processos persistente no PM2](https://pm2.keymetrics.io/docs/usage/startup/)
 
 ## Planejar um sistema com IA
 
@@ -31,7 +43,7 @@ O ícone do assistente no canto inferior direito abre o mesmo chat em todas as t
 
 Para usar a conta de um assistente, instale o cliente oficial no Windows e entre nele primeiro. Em seguida, selecione-o no chat e clique em **Conexão → Verificar assistente**.
 
-Ao escolher um assistente, o JujubaSQL consulta os modelos do cliente instalado. Selecione o **Modelo** e, no Codex ou Claude, o **Raciocínio** disponível para ele. O Gemini CLI gerencia o raciocínio automaticamente. O aplicativo lembra a escolha de cada assistente para o chat, a pasta do projeto e a geração de código do fluxograma.
+Ao escolher um assistente, o JUJUBA consulta os modelos do cliente instalado. Selecione o **Modelo** e, no Codex ou Claude, o **Raciocínio** disponível para ele. O Gemini CLI gerencia o raciocínio automaticamente. O aplicativo lembra a escolha de cada assistente para o chat, a pasta do projeto e a geração de código do fluxograma.
 
 No cabeçalho do painel, clique no **chapéu** para abrir o guarda-roupa. Em **Cor da Jujuba**, escolha uma das seis cores ou use **Escolher outra cor**. A prévia muda na hora e o aplicativo guarda sua escolha.
 
@@ -51,7 +63,7 @@ Use o ícone do sol ou da lua na barra superior para trocar entre fundo branco e
 
 Em **Fluxogramas → Meus projetos**, crie um projeto ou importe um arquivo `.jujuba.json`. As edições ficam salvas no projeto, e **Salvar arquivo** permite manter uma cópia em arquivo.
 
-Abra o projeto, clique em **Compartilhar** e envie o código pelo canal de sua preferência. A outra pessoa abre **Entrar por código** no próprio JujubaSQL. Após a aprovação, vocês veem o fluxograma e o cursor um do outro. Use a mesma versão do JujubaSQL nos dois computadores. Use **Passar edição** para alternar quem pode editar. O acesso termina ao fechar a sessão. As alterações ficam no projeto do dono, e o convidado pode salvar uma cópia própria.
+Abra o projeto, clique em **Compartilhar** e envie o código pelo canal de sua preferência. A outra pessoa abre **Entrar por código** no próprio JUJUBA. Após a aprovação, vocês veem o fluxograma e o cursor um do outro. Use a mesma versão do JUJUBA nos dois computadores. Use **Passar edição** para alternar quem pode editar. O acesso termina ao fechar a sessão. As alterações ficam no projeto do dono, e o convidado pode salvar uma cópia própria.
 
 A conexão criptografada usa [Iroh](https://github.com/n0-computer/iroh), com conexão direta quando possível e retransmissão do tráfego pelo serviço público do Iroh quando necessário. Os dois computadores precisam de conexão com a internet.
 
@@ -94,7 +106,7 @@ Selecione um banco para ver todas as tabelas e relações declaradas que o login
 ## Consultar e editar
 
 - **SQL** executa um único `SELECT` no banco escolhido. O editor aceita consultas com junções e CTEs e mostra até 200 linhas. O login deve ter as permissões de leitura exigidas pela consulta.
-- Em **Dados → Editar células**, selecione uma célula compatível, informe o valor e revise a prévia antes de gravar. A edição exige permissão de `UPDATE`, chave primária compatível e confirmação. Se o valor original mudou, o JujubaSQL pede para atualizar a tabela. A primeira versão edita uma célula de texto ou de número inteiro por vez.
+- Em **Dados → Editar células**, selecione uma célula compatível, informe o valor e revise a prévia antes de gravar. A edição exige permissão de `UPDATE`, chave primária compatível e confirmação. Se o valor original mudou, o JUJUBA pede para atualizar a tabela. A primeira versão edita uma célula de texto ou de número inteiro por vez.
 - Use uma conta com as permissões adequadas ao trabalho. Para testar gravações, use uma tabela autorizada em um banco de testes.
 
 ## Dashboards do banco
@@ -105,19 +117,19 @@ No SQL Server, selecione um banco e abra **Dashboards**. **Visão geral** mostra
 
 **Ao vivo** mostra solicitações em andamento, tipos de espera, sessões bloqueadoras e atividade de leitura e gravação por arquivo. Use **Só bloqueadas** para focar nos bloqueios por outras sessões. A atualização automática é opcional, roda a cada 15 segundos enquanto o painel está aberto e pausa se a leitura falhar. O painel exige permissão de monitoramento da instância e filtra as solicitações pelo banco selecionado.
 
-Os painéis usam a conexão já aberta e as permissões do login. Estatísticas de partições e histórico podem exigir permissões adicionais de monitoramento. O JujubaSQL só consulta os metadados e o histórico disponível. A granularidade depende dos intervalos que o Query Store registrou.
+Os painéis usam a conexão já aberta e as permissões do login. Estatísticas de partições e histórico podem exigir permissões adicionais de monitoramento. O JUJUBA só consulta os metadados e o histórico disponível. A granularidade depende dos intervalos que o Query Store registrou.
 
 ## Reconectar e lembrar credenciais no Windows
 
-Após uma conexão bem-sucedida com SQL Server, MySQL ou PostgreSQL, o JujubaSQL salva a senha no Gerenciador de Credenciais da sua conta do Windows, vinculada ao servidor, à porta ou instância e ao usuário. Na próxima vez, clique em **Conectar** para usar a senha salva. Use **Digitar outra senha** para substituí-la após uma conexão válida ou **Esquecer senha salva** para removê-la.
+Após uma conexão bem-sucedida com SQL Server, MySQL ou PostgreSQL, o JUJUBA salva a senha no Gerenciador de Credenciais da sua conta do Windows, vinculada ao servidor, à porta ou instância e ao usuário. Na próxima vez, clique em **Conectar** para usar a senha salva. Use **Digitar outra senha** para substituí-la após uma conexão válida ou **Esquecer senha salva** para removê-la.
 
 MongoDB e Redis guardam a URI da última conexão bem-sucedida no mesmo gerenciador. Use **Digitar outra URI** para trocar a conexão ou **Esquecer URI salva** para removê-la. O SQLite lembra o caminho do último arquivo aberto.
 
-Se fechar o aplicativo com uma sessão ativa, o JujubaSQL volta a se conectar ao mesmo servidor ou arquivo na próxima abertura. Ele reabre o último banco selecionado quando esse banco ainda está acessível. Depois de clicar em **Desconectar**, use o atalho **Reconectar** para restabelecer a sessão quando quiser.
+Se fechar o aplicativo com uma sessão ativa, o JUJUBA volta a se conectar ao mesmo servidor ou arquivo na próxima abertura. Ele reabre o último banco selecionado quando esse banco ainda está acessível. Depois de clicar em **Desconectar**, use o atalho **Reconectar** para restabelecer a sessão quando quiser.
 
 ## Atualizações no Windows
 
-Instale a versão 0.1.14 ou posterior uma vez. O JujubaSQL procura uma release ao abrir, ao voltar à janela e a cada cinco minutos. Ele destaca **Atualizações** no rodapé, ao lado do estado da conexão, quando encontra uma versão mais recente. Abra **Atualizações**, salve seu trabalho e clique em **Atualizar agora**. O aplicativo valida a assinatura do instalador antes de iniciá-lo e reinicia após a instalação.
+Instale a versão 0.1.14 ou posterior uma vez. O JUJUBA procura uma release ao abrir, ao voltar à janela e a cada cinco minutos. Ele destaca **Atualizações** no rodapé, ao lado do estado da conexão, quando encontra uma versão mais recente. Abra **Atualizações**, salve seu trabalho e clique em **Atualizar agora**. O aplicativo valida a assinatura do instalador antes de iniciá-lo e reinicia após a instalação.
 
 Para distribuir uma versão, atualize as versões do frontend e do backend, incluindo os arquivos de dependências, e envie a tag correspondente, como `v0.1.15`. O workflow **Release Windows** compila o instalador x64, assina o pacote e publica os arquivos em uma Release. A chave pública está na configuração do Tauri. A chave privada fica no secret `TAURI_SIGNING_PRIVATE_KEY` do GitHub Actions e deve ter uma cópia protegida. As instalações existentes confiam nessa chave.
 
@@ -129,7 +141,7 @@ Com a conexão aprovada, selecione `ETL_SISTEMA` e `ETL_SISTEMA_V2` se ambos est
 
 ## Testes desta entrega
 
-- Compilação TypeScript e Vite, binário Tauri x64 e pacote NSIS concluídos. A janela do JujubaSQL abriu no Windows e apresentou a tela de conexão.
+- Compilação TypeScript e Vite, binário Tauri x64 e pacote NSIS concluídos. A janela do JUJUBA abriu no Windows e apresentou a tela de conexão.
 - Três testes Rust locais passaram, cobrindo validação do nome do servidor e cardinalidade. Um teste separado com o conector Rust confirmou a rejeição de um certificado não confiável.
 - O parser T-SQL do SSMS aceitou oito consultas de catálogo e leitura. O teste local da interface, com respostas de teste na ponte, passou para navegação por teclado, troca entre dois bancos, descarte de resposta obsoleta, paginação, ordenação, filtros, estrutura, permissões e FKs compostas e autorreferentes.
 - A descoberta dos bancos e a abertura de tabelas pela conexão local foram verificadas no Windows. Valide o catálogo completo e eventuais gravações em um banco de teste autorizado.

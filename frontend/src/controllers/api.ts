@@ -9,9 +9,9 @@ import type {
   Schema, Scope, Structure, Table, TableScope,
 } from '../models/sql'
 
-async function call<T>(command: string, args?: Record<string, unknown> | Uint8Array): Promise<T> {
+export async function call<T>(command: string, args?: Record<string, unknown> | Uint8Array): Promise<T> {
   if (!isTauri()) {
-    throw { kind: 'desktop', message: 'Abra o JujubaSQL pelo aplicativo instalado no Windows.' }
+    throw { kind: 'desktop', message: 'Abra o JUJUBA pelo aplicativo instalado no Windows.' }
   }
   return invoke<T>(command, args)
 }

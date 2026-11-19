@@ -54,10 +54,10 @@ pub fn open(path: &Path) -> Result<Opened> {
     let path = diagram_path(path)?;
     let bytes = read(&path)?;
     let contents: FileDiagram = serde_json::from_slice(&bytes)
-        .map_err(|_| invalid("O arquivo não é um fluxograma do JujubaSQL válido."))?;
+        .map_err(|_| invalid("O arquivo não é um fluxograma do JUJUBA válido."))?;
     if !matches!(contents.format, FORMAT | FORMAT_WITH_NOTES) {
         return Err(invalid(
-            "O formato deste arquivo precisa de outra versão do JujubaSQL.",
+            "O formato deste arquivo precisa de outra versão do JUJUBA.",
         ));
     }
     contents.diagram.validate_draft()?;

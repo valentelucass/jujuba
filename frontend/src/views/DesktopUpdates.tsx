@@ -119,7 +119,7 @@ export function DesktopUpdates({ children }: { children: ReactNode }) {
     {children}
     <dialog ref={dialog} className="connection-dialog update-dialog" aria-labelledby="update-title"
       onCancel={(event) => { event.preventDefault(); if (!busy) setVisible(false) }}>
-      <h2 id="update-title">Atualizações do JujubaSQL</h2>
+      <h2 id="update-title">Atualizações do JUJUBA</h2>
       <div role="status">
         {status === 'checking' && <p>Verificando se há uma nova versão…</p>}
         {status === 'current' && <p>Você já está na versão mais recente.</p>}
@@ -142,7 +142,7 @@ export function DesktopUpdates({ children }: { children: ReactNode }) {
 
 export function UpdateButton() {
   const updates = useContext(Updates)
-  if (!updates) return <a className="update-button" href="https://github.com/valentelucass/jujubasql/releases/latest"
+  if (!updates) return <a className="update-button" href="https://github.com/valentelucass/jujuba/releases/latest"
     aria-label="Atualizações" title="Atualizações" target="_blank" rel="noopener noreferrer">
     <Download size={14} /><span>Atualizações</span>
   </a>

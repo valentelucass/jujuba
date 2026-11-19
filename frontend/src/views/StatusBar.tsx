@@ -9,7 +9,7 @@ import { version as buildVersion } from '../../package.json'
 import { UpdateButton } from './DesktopUpdates'
 
 const links = [
-  { label: 'Referências', url: 'https://github.com/valentelucass/jujubasql#referências' },
+  { label: 'Referências', url: 'https://github.com/valentelucass/jujuba#referências' },
   { label: 'Feito por Lucas Andrade', url: 'https://github.com/valentelucass' },
 ]
 
@@ -38,9 +38,9 @@ export function StatusBar({ engine, endpoint, database, passwordSaveFailed, reco
     {engine && <span className="status-permissions"><ShieldCheck size={13} /> {engines[engine].name}</span>}
     {database && <span className="status-context"><DatabaseIcon size={12} /> <span>{database}</span></span>}
     <span className="status-end status-context">{endpoint ?? 'Sessão local'}</span>
-    <span className="status-version" title={`JujubaSQL ${version}`}>v{version}</span>
-    <nav className="status-links" aria-label="Créditos do JujubaSQL">
-      {links.map(({ label, url }) => <a key={url} href={url} target="_blank" rel="noopener noreferrer"
+    <span className="status-version" title={`JUJUBA ${version}`}>v{version}</span>
+    <nav className="status-links" aria-label="Créditos do JUJUBA">
+      {links.map(({ label, url }) => <a key={url} href={url} aria-label={label} title={label} target="_blank" rel="noopener noreferrer"
         onClick={(event) => void openLink(event, url)}>
         {label}<ExternalLink size={11} aria-hidden="true" />
       </a>)}

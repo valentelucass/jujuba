@@ -1,7 +1,7 @@
 {
   "name": "jujubasql",
   "private": true,
-  "version": "0.1.51",
+  "version": "0.1.52",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,6 +15,7 @@
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.15",
     "@fontsource-variable/geist": "^5.2.8",
+    "@fontsource/dm-serif-text": "5.3.0",
     "@lezer/highlight": "^1.2.5",
     "@tauri-apps/api": "^2.9.0",
     "@tauri-apps/plugin-opener": "^2.7.3",

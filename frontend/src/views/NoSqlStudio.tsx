@@ -7,15 +7,15 @@ import { useRemote } from '../controllers/useRemote'
 import { engines } from '../models/engines'
 import type { RedisKey } from '../models/noSql'
 import type { Connection, Scope } from '../models/sql'
-import { DatabaseTools, Header } from './Header'
+import { DatabaseTools, Header, HeaderAction } from './Header'
 import { Empty, Failure, Loading } from './States'
 import { StatusBar } from './StatusBar'
 import { StudioLayout } from './StudioLayout'
 
 const DatabaseDashboard = lazy(() => import('./DatabaseDashboard'))
 
-export function NoSqlStudio({ connection, disconnect, openDiagrams, onScreen }: {
-  connection: Connection; disconnect: () => Promise<void>; openDiagrams: () => void; onScreen: (screen: string) => void
+export function NoSqlStudio({ connection, disconnect, onScreen }: {
+  connection: Connection; disconnect: () => Promise<void>; onScreen: (screen: string) => void
 }) {
   const mongo = connection.engine === 'mongodb'
   const engine = engines[connection.engine]
@@ -69,12 +69,12 @@ export function NoSqlStudio({ connection, disconnect, openDiagrams, onScreen }: 
   })
 
   return <>
-    <Header onDiagrams={openDiagrams} connection={connection} database={database} onDisconnect={close}
+    <Header connection={connection} database={database} onDisconnect={close}
       disconnecting={disconnecting} onDatabase={selectDatabase} tools={<>
         <DatabaseTools active={dashboard ? 'dashboard' : undefined}
           actions={scope ? { dashboard: () => setDashboard(true) } : undefined} />
-        <button className="button" disabled={!scope} aria-pressed={!dashboard}
-          onClick={() => setDashboard(false)}>{mongo ? <Braces size={15} /> : <KeyRound size={15} />}{mongo ? 'Coleções' : 'Chaves'}</button>
+        <HeaderAction label={mongo ? 'Coleções' : 'Chaves'} hint={mongo ? 'Explore as coleções do banco.' : 'Explore as chaves do banco.'}
+          unavailable={!scope} active={!dashboard} onClick={() => setDashboard(false)}>{mongo ? <Braces /> : <KeyRound />}</HeaderAction>
       </>} />
     <StudioLayout items={items} connected>
       {scope && dashboard ? <main className="workspace">

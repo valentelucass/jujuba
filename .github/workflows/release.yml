@@ -65,7 +65,7 @@ jobs:
           if ($LASTEXITCODE -eq 0) {
             if (!(($existing | ConvertFrom-Json).isDraft)) { throw 'This release is already published.' }
           } else {
-            gh release create $tag --verify-tag --draft --title "JujubaSQL $tag" --generate-notes
+            gh release create $tag --verify-tag --draft --title "JUJUBA $tag" --generate-notes
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
           }
           gh release upload $tag $installer.FullName $signatureFile $json --clobber

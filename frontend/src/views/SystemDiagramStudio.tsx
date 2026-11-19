@@ -42,8 +42,7 @@ function hasElement(diagram: SystemDiagram, id: string | null) {
 
 type Panel = 'create' | 'share' | 'join' | null
 
-export function SystemDiagramStudio({ exit, provider, assistantOptions, unavailableOption, assistantDiagram, onDiagram, onMascotRoom, connection, upgrade }: {
-  exit: () => void
+export function SystemDiagramStudio({ provider, assistantOptions, unavailableOption, assistantDiagram, onDiagram, onMascotRoom, connection, upgrade }: {
   connection?: Connection | null
   upgrade: FlowUpgrade | null
   provider: AiProvider
@@ -489,17 +488,6 @@ export function SystemDiagramStudio({ exit, provider, assistantOptions, unavaila
     })
   }
 
-  function leaveStudio() {
-    if (!active.current) {
-      exit()
-      return
-    }
-    void perform('Fechando projeto…', async () => {
-      await leaveProject()
-      exit()
-    })
-  }
-
   async function sendCursor(position: StagePosition | null) {
     const current = active.current
     if (current?.phase !== 'connected') return
@@ -580,7 +568,7 @@ export function SystemDiagramStudio({ exit, provider, assistantOptions, unavaila
   const hasProject = workspace !== null || diagram !== null
 
   return <>
-    <Header onDiagrams={leaveStudio} diagramActive />
+    <Header />
     <main className="system-design" aria-label="Fluxogramas de sistema">
       <header className="system-design-toolbar">
         <div className="system-doc">
@@ -677,7 +665,7 @@ export function SystemDiagramStudio({ exit, provider, assistantOptions, unavaila
           <span role="status"><strong>{approval.peer}</strong> quer entrar neste projeto.</span>
           <label>
             <input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} />
-            Permitir que volte enquanto o JujubaSQL estiver aberto
+            Permitir que volte enquanto o JUJUBA estiver aberto
           </label>
           <button className="button design-accent" disabled={!!busy}
             onClick={() => sessionCommand({ type: 'accept', remember, request: approval.id }, 'Aceitando pedido…')}>Aceitar</button>
