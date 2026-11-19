@@ -1,4 +1,5 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
+use std::ffi::c_void;
 use std::mem::{offset_of, size_of};
 use windows_sys::Win32::{
     Foundation::{
@@ -6,8 +7,10 @@ use windows_sys::Win32::{
         INVALID_HANDLE_VALUE,
     },
     NetworkManagement::IpHelper::{
-        GetExtendedTcpTable, MIB_TCP6ROW_OWNER_PID, MIB_TCP6TABLE_OWNER_PID, MIB_TCPROW_OWNER_PID,
-        MIB_TCPTABLE_OWNER_PID, TCP_TABLE_OWNER_PID_LISTENER,
+        GetExtendedTcpTable, GetExtendedUdpTable, MIB_TCP6ROW_OWNER_PID, MIB_TCP6TABLE_OWNER_PID,
+        MIB_TCPROW_OWNER_PID, MIB_TCPTABLE_OWNER_PID, MIB_UDP6ROW_OWNER_PID,
+        MIB_UDP6TABLE_OWNER_PID, MIB_UDPROW_OWNER_PID, MIB_UDPTABLE_OWNER_PID, TCP_TABLE_CLASS,
+        TCP_TABLE_OWNER_PID_ALL, TCP_TABLE_OWNER_PID_LISTENER, UDP_TABLE_OWNER_PID,
     },
     Networking::WinSock::{AF_INET, AF_INET6},
     System::Diagnostics::ToolHelp::{
@@ -16,7 +19,7 @@ use windows_sys::Win32::{
     },
 };
 
-fn walk_processes(mut visit: impl FnMut(&PROCESSENTRY32W)) -> Option<()> {
+pub(crate) fn walk_processes(mut visit: impl FnMut(&PROCESSENTRY32W)) -> Option<()> {
     let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
     if snapshot == INVALID_HANDLE_VALUE {
         return None;
@@ -45,7 +48,7 @@ pub(crate) fn parents() -> Option<HashMap<u32, u32>> {
     Some(tree)
 }
 
-fn descendants(tree: &HashMap<u32, u32>, mut protected: HashSet<u32>) -> HashSet<u32> {
+pub(crate) fn descendants(tree: &HashMap<u32, u32>, mut protected: HashSet<u32>) -> HashSet<u32> {
     protected.remove(&0);
     let mut children = HashMap::<u32, Vec<u32>>::new();
     for (&pid, &parent) in tree {
@@ -96,11 +99,11 @@ pub(crate) fn cli_children(powershell: u32) -> Vec<u32> {
 
 // Windows returns a DWORD row count, table padding and a variable-length C array.
 // DWORD storage supplies the alignment required by both the IPv4 and IPv6 tables.
-fn listeners<Row: Copy>(
-    family: u16,
+fn network_table<Row: Copy, T>(
+    read: impl Fn(*mut c_void, &mut u32) -> u32,
     offset: usize,
-    fields: impl Fn(Row) -> (u32, u32),
-) -> Option<Vec<(u32, u16)>> {
+    fields: impl Fn(Row) -> T,
+) -> Option<Vec<T>> {
     let mut data = Vec::<u32>::new();
     let mut bytes = 0u32;
     for _ in 0..4 {
@@ -109,16 +112,7 @@ fn listeners<Row: Copy>(
         } else {
             data.as_mut_ptr().cast()
         };
-        let status = unsafe {
-            GetExtendedTcpTable(
-                buffer,
-                &mut bytes,
-                0,
-                u32::from(family),
-                TCP_TABLE_OWNER_PID_LISTENER,
-                0,
-            )
-        };
+        let status = read(buffer, &mut bytes);
         if status == ERROR_INSUFFICIENT_BUFFER && bytes <= 32 * 1024 * 1024 {
             data.resize((bytes as usize).div_ceil(size_of::<u32>()), 0);
             continue;
@@ -134,10 +128,7 @@ fn listeners<Row: Copy>(
         let first = unsafe { data.as_ptr().cast::<u8>().add(offset).cast::<Row>() };
         return Some(
             (0..count)
-                .map(|i| {
-                    let (pid, port) = fields(unsafe { first.add(i).read_unaligned() });
-                    (pid, u16::from_be(port as u16))
-                })
+                .map(|i| fields(unsafe { first.add(i).read_unaligned() }))
                 .collect(),
         );
     }
@@ -169,22 +160,60 @@ fn group(
     result
 }
 
+fn tcp(class: TCP_TABLE_CLASS) -> Option<impl Iterator<Item = (u32, u16)>> {
+    let table = |family: u16| {
+        move |buf, len: &mut u32| unsafe {
+            GetExtendedTcpTable(buf, len, 0, u32::from(family), class, 0)
+        }
+    };
+    let ipv4 = network_table(
+        table(AF_INET),
+        offset_of!(MIB_TCPTABLE_OWNER_PID, table),
+        |r: MIB_TCPROW_OWNER_PID| (r.dwOwningPid, u16::from_be(r.dwLocalPort as u16)),
+    )?;
+    let ipv6 = network_table(
+        table(AF_INET6),
+        offset_of!(MIB_TCP6TABLE_OWNER_PID, table),
+        |r: MIB_TCP6ROW_OWNER_PID| (r.dwOwningPid, u16::from_be(r.dwLocalPort as u16)),
+    )?;
+    Some(ipv4.into_iter().chain(ipv6))
+}
+
+pub(crate) fn network_owners() -> Option<HashSet<u32>> {
+    let table = |family: u16| {
+        move |buf, len: &mut u32| unsafe {
+            GetExtendedUdpTable(buf, len, 0, u32::from(family), UDP_TABLE_OWNER_PID, 0)
+        }
+    };
+    let ipv4 = network_table(
+        table(AF_INET),
+        offset_of!(MIB_UDPTABLE_OWNER_PID, table),
+        |r: MIB_UDPROW_OWNER_PID| r.dwOwningPid,
+    )?;
+    let ipv6 = network_table(
+        table(AF_INET6),
+        offset_of!(MIB_UDP6TABLE_OWNER_PID, table),
+        |r: MIB_UDP6ROW_OWNER_PID| r.dwOwningPid,
+    )?;
+    Some(
+        tcp(TCP_TABLE_OWNER_PID_ALL)?
+            .map(|(pid, _)| pid)
+            .chain(ipv4)
+            .chain(ipv6)
+            .filter(|pid| *pid != 0)
+            .collect(),
+    )
+}
+
 pub(crate) fn sample(managed: &HashSet<u32>) -> Option<HashMap<u32, BTreeSet<u16>>> {
     if managed.is_empty() {
         return Some(HashMap::new());
     }
-    let parents = parents()?;
-    let ipv4 = listeners(
-        AF_INET,
-        offset_of!(MIB_TCPTABLE_OWNER_PID, table),
-        |r: MIB_TCPROW_OWNER_PID| (r.dwOwningPid, r.dwLocalPort),
-    )?;
-    let ipv6 = listeners(
-        AF_INET6,
-        offset_of!(MIB_TCP6TABLE_OWNER_PID, table),
-        |r: MIB_TCP6ROW_OWNER_PID| (r.dwOwningPid, r.dwLocalPort),
-    )?;
-    Some(group(ipv4.into_iter().chain(ipv6), &parents, managed))
+    Some(group(
+        tcp(TCP_TABLE_OWNER_PID_LISTENER)?,
+        &parents()?,
+        managed,
+    ))
 }
 
 #[cfg(test)]

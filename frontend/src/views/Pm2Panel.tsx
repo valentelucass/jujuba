@@ -122,16 +122,18 @@ function Trend({ history, traces, format, label, stepped = false, ceiling }: {
   </div>
 }
 
-function HostCards({ history, processes = [], onDiskInspect, inspectMemoryRef }: {
-  history: Pm2HostSample[]; processes?: Pm2Process[]; onDiskInspect?: (open: boolean) => void; inspectMemoryRef: Ref<() => void>
+function HostCards({ history, processes = [], pm2SampledAt, onDiskInspect, inspectMemoryRef }: {
+  history: Pm2HostSample[]; processes?: Pm2Process[]; pm2SampledAt?: number; onDiskInspect?: (open: boolean) => void; inspectMemoryRef: Ref<() => void>
 }) {
-  const host = history.at(-1)?.host
-  if (!host) return null
-  const trace = (key: Exclude<keyof typeof host, 'consumers'>, label: string, color: string): Trace =>
+  const sample = history.at(-1)
+  if (!sample) return null
+  const { host } = sample
+  const trace = (key: Exclude<keyof typeof host, 'consumers' | 'windowsMemory'>, label: string, color: string): Trace =>
     ({ label, color, values: history.map(s => s.host[key] ?? null) })
   const used = host.memoryUsedBytes, total = host.memoryTotalBytes
   const free = used !== null && total !== null && used >= 0 && total >= used ? total - used : null
-  return <Pm2HostResources consumers={host.consumers} processes={processes} onDiskInspect={onDiskInspect} inspectMemoryRef={inspectMemoryRef} cards={[
+  return <Pm2HostResources host={host} processes={processes} hostSampledAt={sample.sampledAt} pm2SampledAt={pm2SampledAt}
+    onDiskInspect={onDiskInspect} inspectMemoryRef={inspectMemoryRef} cards={[
     { key: 'cpu', title: 'CPU do computador', icon: <Cpu size={17} />, format: percent, body: <>
       <div className="pm2-value">{valueText(host.cpuPercent, percent)}</div>
       <Trend label="Histórico da CPU do computador" history={history} format={percent} ceiling={100}
@@ -390,7 +392,7 @@ export function Pm2Panel({ active = true }: { active?: boolean }) {
         <button className="button" aria-label="Atualizar monitor" title="Atualizar monitor" disabled={refreshing} onClick={refresh}><RefreshCw size={15} className={refreshing ? 'pm2-spin' : ''} /><span>Atualizar</span></button></div>
     </header>
     {computer.error && <Notice tone="error"><strong>Leitura do computador indisponível.</strong> {computer.error.message}</Notice>}
-    <HostCards history={computer.history} processes={stale ? [] : processes} onDiskInspect={setInspectDisk} inspectMemoryRef={inspectMemory} />
+    <HostCards history={computer.history} processes={stale ? [] : processes} pm2SampledAt={latest?.sampledAt} onDiskInspect={setInspectDisk} inspectMemoryRef={inspectMemory} />
     {error && <Notice tone="error"><strong>{latest ? 'A atualização falhou.' : 'PM2 indisponível.'}</strong> {error.message}</Notice>}
     {!latest && error?.kind === 'pm2_daemon' && <section className="pm2-processes"><div className="pm2-section-head"><h2><Layers3 size={17}/>Processos</h2>{listActions}</div></section>}
     {!latest && !error && <div className="pm2-loading" role="status"><LoaderCircle size={20} className="pm2-spin" />Consultando o PM2…</div>}

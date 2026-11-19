@@ -11,10 +11,14 @@ use windows_sys::Win32::System::{
     Threading::{GetActiveProcessorCount, ALL_PROCESSOR_GROUPS},
 };
 
+#[path = "pm2_host/memory.rs"]
+mod memory;
 #[path = "pm2_host/pdh.rs"]
 mod pdh;
 #[path = "pm2_host/ranking.rs"]
 mod ranking;
+#[path = "pm2_windows_memory.rs"]
+mod windows_memory;
 use ranking::{gpu_rank, process_ranks, Engines, Processes};
 pub(crate) use ranking::{traffic_rank, Rank, RankBasis};
 
@@ -22,7 +26,7 @@ pub(crate) use ranking::{traffic_rank, Rank, RankBasis};
 #[serde(rename_all = "camelCase")]
 struct Consumers {
     cpu: Rank,
-    memory: Rank,
+    memory: Rank<memory::MemoryRow>,
     gpu: Rank,
     disk: Rank,
 }
@@ -44,6 +48,7 @@ pub(crate) struct HostMetrics {
     cpu_percent: Option<f64>,
     memory_used_bytes: Option<u64>,
     memory_total_bytes: Option<u64>,
+    windows_memory: windows_memory::WindowsMemory,
     gpu_percent: Option<f64>,
     disk_read_bytes_per_sec: Option<f64>,
     disk_write_bytes_per_sec: Option<f64>,
@@ -58,6 +63,7 @@ struct Counters {
     write: PDH_HCOUNTER,
     gpu: PDH_HCOUNTER,
     process: pdh::ProcessCounters,
+    windows_memory: windows_memory::MemoryCounters,
     previous_processes: Processes,
     previous_gpu: Engines,
     sampled: Option<Instant>,
@@ -78,6 +84,7 @@ impl Counters {
             write: pdh::add(query, r"\PhysicalDisk(_Total)\Disk Write Bytes/sec"),
             gpu: pdh::add(query, r"\GPU Engine(*)\Utilization Percentage"),
             process: pdh::ProcessCounters::attach(query, false),
+            windows_memory: windows_memory::MemoryCounters::attach(query),
             previous_processes: Processes::new(),
             previous_gpu: Engines::new(),
             sampled: None,
@@ -85,10 +92,13 @@ impl Counters {
     }
 
     fn update(&mut self, host: &mut HostMetrics) -> bool {
+        let sampled = memory::now();
         if unsafe { PdhCollectQueryData(self.query) } != 0 {
             return false;
         }
         let processes = self.process.collect(self.query);
+        host.consumers.memory = memory::inventory(&processes, sampled, host.memory_total_bytes);
+        host.windows_memory = self.windows_memory.read();
         let engines = pdh::engines(self.gpu);
         let now = Instant::now();
         let interval = self
@@ -105,17 +115,8 @@ impl Counters {
         }
         let previous = interval.map(|_| &self.previous_processes);
         let cpus = unsafe { GetActiveProcessorCount(ALL_PROCESSOR_GROUPS) };
-        (
-            host.consumers.cpu,
-            host.consumers.memory,
-            host.consumers.disk,
-        ) = process_ranks(
-            &processes,
-            previous,
-            self.process.io_frequency(),
-            cpus,
-            host.memory_total_bytes,
-        );
+        (host.consumers.cpu, host.consumers.disk) =
+            process_ranks(&processes, previous, self.process.io_frequency(), cpus);
         (host.gpu_percent, host.consumers.gpu) = gpu_rank(
             &engines,
             interval.map(|_| &self.previous_gpu),
@@ -171,6 +172,9 @@ pub(crate) fn sample(inspect_disk: bool) -> HostMetrics {
                 *slot = None;
             }
         }
+    }
+    if host.consumers.memory.rows.is_empty() {
+        host.consumers.memory = memory::inventory(&Processes::new(), 0, host.memory_total_bytes);
     }
     if inspect_disk {
         if let Some(disk) = crate::pm2_disk_usage::sample() {

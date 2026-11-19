@@ -28,13 +28,13 @@ pub(crate) struct ConsumerRow {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub(crate) struct Rank {
+pub(crate) struct Rank<Row = ConsumerRow> {
     pub(crate) status: RankStatus,
     pub(crate) basis: RankBasis,
-    pub(crate) rows: Vec<ConsumerRow>,
+    pub(crate) rows: Vec<Row>,
 }
 
-impl Rank {
+impl<Row> Rank<Row> {
     pub(crate) fn warming(basis: RankBasis) -> Self {
         Self {
             status: RankStatus::Warming,
@@ -110,15 +110,10 @@ pub(super) fn process_ranks(
     before: Option<&Processes>,
     io_frequency: Option<f64>,
     logical_cpus: u32,
-    memory: Option<u64>,
-) -> (Rank, Rank, Rank) {
+) -> (Rank, Rank) {
     let mut cpu = Vec::new();
-    let mut ram = Vec::new();
     let mut io = Vec::new();
     for (&pid, p) in now {
-        if let Some(reading) = p.memory {
-            ram.push((pid, p.name.clone(), reading.first as f64));
-        }
         // Windows can recycle PIDs and duplicate executable names. The process creation
         // counter is stable for its lifetime, including when its PDH instance index changes.
         let previous = before
@@ -167,13 +162,7 @@ pub(super) fn process_ranks(
             io_frequency.is_some() && now.values().any(|p| p.io.is_some() && p.started.is_some()),
         )
     };
-    let memory = match memory {
-        Some(total) if total > 0 && !ram.is_empty() => {
-            ranked(RankBasis::PhysicalMemory, ram, Some(total as f64))
-        }
-        _ => Rank::unavailable(RankBasis::PhysicalMemory),
-    };
-    (cpu, memory, io)
+    (cpu, io)
 }
 
 #[derive(Debug, Hash, Clone, Copy, PartialEq, Eq)]
@@ -294,14 +283,12 @@ mod tests {
     }
 
     #[test]
-    fn normalizes_cpu_over_cores_memory_over_capacity_and_io_over_provider_clock() {
+    fn normalizes_cpu_over_cores_and_io_over_provider_clock() {
         let before = Processes::from([(1, process(5, 0, 0, 20))]);
         let now = Processes::from([(1, process(5, 80, 160, 60))]);
-        let (cpu, ram, io) = process_ranks(&now, Some(&before), Some(10.0), 4, Some(1024));
+        let (cpu, io) = process_ranks(&now, Some(&before), Some(10.0), 4);
         assert_eq!(cpu.rows[0].value, 50.0);
         assert_eq!(cpu.rows[0].percent, 50.0);
-        assert_eq!(ram.rows[0].value, 256.0);
-        assert_eq!(ram.rows[0].percent, 25.0);
         assert_eq!(io.rows[0].value, 40.0);
         assert_eq!(io.rows[0].percent, 100.0);
     }
@@ -317,14 +304,14 @@ mod tests {
             (&idle, Some(&before), RankStatus::Ready),
             (&changed, Some(&before), RankStatus::Warming),
         ] {
-            let (cpu, _, io) = process_ranks(now, previous, Some(10.0), 4, None);
+            let (cpu, io) = process_ranks(now, previous, Some(10.0), 4);
             assert_eq!(cpu.status, status);
             assert!(cpu.rows.is_empty());
             assert_eq!(io.status, status);
             assert!(io.rows.is_empty());
         }
-        let (cpu, ram, io) = process_ranks(&before, None, None, 0, None);
-        for rank in [cpu, ram, io] {
+        let (cpu, io) = process_ranks(&before, None, None, 0);
+        for rank in [cpu, io] {
             assert_eq!(rank.status, RankStatus::Unavailable);
         }
     }

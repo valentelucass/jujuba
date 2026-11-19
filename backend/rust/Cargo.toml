@@ -1,6 +1,6 @@
 [package]
 name = "jujubasql"
-version = "0.1.56"
+version = "0.1.57"
 description = "Explorador local de SQL Server"
 edition = "2021"
 build = "build.rs"
@@ -34,7 +34,7 @@ tauri-plugin-opener = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-single-instance = "2"
 windows = { version = "0.62.2", features = ["System_Diagnostics", "Win32_System_WinRT"] }
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Credentials", "Win32_System_Performance", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_System_Pipes", "Win32_NetworkManagement_IpHelper", "Win32_Networking_WinSock", "Win32_System_Diagnostics_ToolHelp", "Win32_UI_WindowsAndMessaging", "Win32_System_ProcessStatus", "Win32_Storage_Packaging_Appx"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Credentials", "Win32_System_Performance", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_System_Services", "Win32_System_Pipes", "Win32_NetworkManagement_IpHelper", "Win32_Networking_WinSock", "Win32_System_Diagnostics_ToolHelp", "Win32_UI_WindowsAndMessaging", "Win32_System_ProcessStatus", "Win32_Storage_Packaging_Appx", "Win32_System_Memory", "Win32_System_JobObjects", "Win32_Storage_FileSystem"] }
 
 [profile.release]
 strip = true

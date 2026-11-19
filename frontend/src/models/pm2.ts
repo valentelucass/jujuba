@@ -20,10 +20,14 @@ export interface Pm2Process {
 }
 
 export type HostResource = 'cpu' | 'memory' | 'gpu' | 'disk'
+export interface HostProcessUsage {
+  pid: number; name: string; value: number | null; percent: number | null
+  parentPid?: number | null; started?: string | null
+}
 export interface HostRank {
   status: 'ready' | 'warming' | 'unavailable'
   basis: 'cpuCapacity' | 'physicalMemory' | 'gpuEngine' | 'diskActivity' | 'processIo'
-  rows: { pid: number; name: string; value: number; percent: number }[]
+  rows: HostProcessUsage[]
 }
 
 export interface Pm2Host {
@@ -33,6 +37,9 @@ export interface Pm2Host {
   diskReadBytesPerSec: number | null
   diskWriteBytesPerSec: number | null
   gpuPercent?: number | null
+  windowsMemory?: {
+    kernelNonpagedBytes: number | null; pagedPoolResidentBytes: number | null; systemCacheResidentBytes: number | null; standbyBytes: number | null
+  }
   consumers?: Partial<Record<HostResource, HostRank>>
 }
 

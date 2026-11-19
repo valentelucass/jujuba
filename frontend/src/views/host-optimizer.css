@@ -19,7 +19,13 @@
 .optimizer-results { margin: 0; padding: 0; list-style: none; }
 .optimizer-results li { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding-block: 6px; }
 .optimizer-results li > span { overflow-wrap: anywhere; }
-.optimizer-results b { flex-shrink: 0; font-size: 12px; font-weight: 550; }
+.optimizer-results b { flex-shrink: 0; max-width: 52%; font-size: 12px; font-weight: 550; text-align: end; }
+.optimizer-results b small { display: block; }
+.optimizer-preserved { margin-top: 13px; color: var(--quiet); }
+.optimizer-preserved summary { cursor: pointer; font-weight: 550; }
+.optimizer-preserved dl { margin: 6px 0 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; }
+.optimizer-preserved dl > div { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; }
+.optimizer-preserved dd { margin: 0; font-variant-numeric: tabular-nums; }
 .optimizer-ram { display: grid; gap: 3px; padding: 10px; background: var(--sidebar); border-radius: 7px; }
 .optimizer-ram span { color: var(--mint); font-variant-numeric: tabular-nums; }
 @media (max-width: 610px) {

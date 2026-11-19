@@ -12,6 +12,8 @@ mod models;
 mod no_sql;
 mod other_db;
 mod host_optimizer;
+mod host_protection;
+mod read_only_dialog;
 mod pm2_disk_usage;
 mod pm2_host;
 mod pm2;
@@ -75,6 +77,7 @@ fn main() {
             commands::dashboard_live,
             pm2::pm2_snapshot,
             pm2::host_snapshot,
+            host_optimizer::optimizer_analyze,
             host_optimizer::optimizer_close,
             pm2::pm2_action,
             pm2::pm2_open_shell,

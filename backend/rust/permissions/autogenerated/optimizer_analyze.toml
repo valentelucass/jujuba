@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-optimizer-analyze"
+description = "Enables the optimizer_analyze command without any pre-configured scope."
+commands.allow = ["optimizer_analyze"]
+
+[[permission]]
+identifier = "deny-optimizer-analyze"
+description = "Denies the optimizer_analyze command without any pre-configured scope."
+commands.deny = ["optimizer_analyze"]

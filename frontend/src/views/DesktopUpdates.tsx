@@ -114,7 +114,7 @@ export function DesktopUpdates({ children }: { children: ReactNode }) {
   return <Updates.Provider value={{ available: version !== null, version, status, busy, refresh: search, install, open: () => {
     prepareInstall.current = undefined
     setVisible(true)
-    if (!resource.current) void search(true)
+    void search(true)
   } }}>
     {children}
     <dialog ref={dialog} className="connection-dialog update-dialog" aria-labelledby="update-title"
@@ -146,9 +146,9 @@ export function UpdateButton() {
     aria-label="Atualizações" title="Atualizações" target="_blank" rel="noopener noreferrer">
     <Download size={14} /><span>Atualizações</span>
   </a>
-  const label = updates.available ? 'Atualização disponível' : 'Atualizações'
+  const label = updates.version ? `Versão ${updates.version} disponível` : 'Atualizações'
   return <button type="button" className={`update-button${updates.available ? ' available' : ''}`}
     aria-label={label} title={label} onClick={updates.open}>
-    <Download size={14} /><span>Atualizações</span>
+    <Download size={14} /><span>{label}</span>
   </button>
 }
