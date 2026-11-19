@@ -8,7 +8,6 @@ export type JellyEffect = (Effect & { kind: 'candies'; pieces: Candy[] }) |
   (Effect & { kind: 'stamp'; angle: number; size: number; tint: string; squash: number })
 
 const candyColors = ['#ff5da9', '#ffd767', '#a897ff', '#61e8c6', '#80c6ff', '#ff9264']
-const stampColors = ['#ef4b9a', '#fc79bd', '#ee5199']
 const vary = (min: number, max: number) => min + Math.random() * (max - min)
 
 type Shake = { point: Point; time: number; direction: Point; turns: number; since: number }
@@ -113,7 +112,7 @@ export function useJellyPlay(options: Options, playSound: (sound: 'giggle' | 'sp
     rub.current = { ...at, time }
   }
 
-  function bounce(impact: Impact, launcherSize: number) {
+  function bounce(impact: Impact, launcherSize: number, color: string) {
     if (active.current.paused || !active.current.stamps) return
     const radius = launcherSize / 2
     const side = impact.edge === 'left' || impact.edge === 'right'
@@ -124,7 +123,7 @@ export function useJellyPlay(options: Options, playSound: (sound: 'giggle' | 'sp
       x: impact.x + radius + (side ? impact.edge === 'right' ? inset : -inset : 0),
       y: impact.y + radius + (side ? 0 : impact.edge === 'bottom' ? inset : -inset),
       angle: { top: 180, right: -90, bottom: 0, left: 90 }[impact.edge] + impact.slide * 15 + vary(-8, 8),
-      size, tint: stampColors[serial.current % stampColors.length], squash: 1 - impact.strength * .26,
+      size, tint: color, squash: 1 - impact.strength * .26,
     }
     setEffects((items) => [...items.slice(-47), effect])
   }

@@ -63,7 +63,7 @@ export function useSharedMascot(network: MascotRoom | null, {
   position: Point; bounds: FlightBounds; hat: string; color: string; pose: MascotPose; flight: FlightFrame | null
   kick: (impulse: MascotImpulse, source: 'local' | 'remote', from?: Point) => void
   relocate: (point: Point) => void
-  receiveSplat?: (impact: Impact, peer: string) => void
+  receiveSplat?: (impact: Impact, peer: string, peerColor?: string) => void
   gathering?: boolean
   practice?: Practice | null
   scene?: RefObject<(() => MascotScene) | null>
@@ -183,7 +183,7 @@ export function useSharedMascot(network: MascotRoom | null, {
         if (mark.id <= (receivedSplat.current.get(member.id) ?? 0)) continue
         receivedSplat.current.set(member.id, mark.id)
         if (visibilityFor(member.id) !== 'hidden' && member.mascot) {
-          ensureSplat.current?.({ ...project(mark.position, scene.current.bounds), edge: mark.edge, slide: mark.slide, strength: mark.strength }, member.id)
+          ensureSplat.current?.({ ...project(mark.position, scene.current.bounds), edge: mark.edge, slide: mark.slide, strength: mark.strength }, member.id, member.mascot.color)
         }
       }
     }

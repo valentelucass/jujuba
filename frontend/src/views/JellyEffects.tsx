@@ -15,7 +15,7 @@ export function JellyEffects({ effects }: { effects: JellyEffect[] }) {
       style={{ left: effect.x, top: effect.y, width: effect.size, height: effect.size, color: effect.tint,
         transform: `translate(-50%, -50%) rotate(${effect.angle}deg) scaleY(${effect.squash})` }}>
       <path fill="currentColor" d="M6 20c0-4 2-10 5-13 2-1 4 0 7 0s6-1 8 2c2 3 4 9 4 13 0 4-3 5-6 5l-5 2-6-2c-5 1-8-2-7-7Z" />
-      <g fill="#ffdaeb">
+      <g fill="color-mix(in srgb, currentColor 18%, white)">
         <ellipse cx="13" cy="16" rx="1.6" ry="2" /><ellipse cx="22" cy="16" rx="1.5" ry="1.8" />
         <path d="M14 20q3 2 7-1-2 6-7 1Z" /><path opacity=".7" d="M9 14q1-5 4-5l3 .4q-4 1-7 4.6Z" />
       </g>

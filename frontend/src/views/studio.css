@@ -815,7 +815,7 @@ dialog.connection-dialog {
 .jujuba-splat-drop { animation: jujuba-splat-drop 340ms cubic-bezier(.16,.62,.31,1) both; }
 .jujuba-trail {
   position: fixed; z-index: 10; pointer-events: none; border-radius: 85% 45% 55% 80%;
-  background: linear-gradient(90deg, #e4388d05, #e4388db3 70%, #ff8bc59c);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, currentColor 70%, transparent) 70%, color-mix(in srgb, currentColor 60%, white 15%));
   animation: jujuba-trail ease-out both;
 }
 .jujuba-gaze { visibility: hidden; }

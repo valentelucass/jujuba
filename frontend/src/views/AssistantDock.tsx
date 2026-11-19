@@ -50,7 +50,7 @@ const sideGesture = 24
 type Side = 'left' | 'right'
 type LauncherPosition = { side: Side; y: number } | { side: 'bottom'; ratio: number }
 type Reaction = 'protesting' | 'relieved'
-type Trail = Point & { id: number; angle: number; strength: number; width: number }
+type Trail = Point & { id: number; color: string; angle: number; strength: number; width: number }
 
 function pointerDistance(pointer: Point, position: Point) {
   return Math.hypot(pointer.x - position.x - launcherSize / 2, pointer.y - position.y - launcherSize / 2)
@@ -161,6 +161,8 @@ export function AssistantDock({ open, setOpen, provider, setProvider, settings, 
   const drag = useRef<{ id: number; origin: Point; offset: Point; moved: boolean; samples: PointerSample[] } | null>(null)
   const cancelFlight = useRef<(() => void) | null>(null)
   const nextSplat = useRef(0)
+  const impactColor = useRef(color)
+  impactColor.current = color
   const lastPointer = useRef<Point | null>(null)
   const moved = useRef(false)
   const lock = useRef(false)
@@ -243,7 +245,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, settings, 
   const clone = useMascotClone(bounds, (impact) => {
     playSound('bounceOffWall', .64 + impact.strength * .7)
     scene.shareSound('bounceOffWall', .64 + impact.strength * .7)
-    const mark = makeSplat(impact, launcherSize, ++nextSplat.current)
+    const mark = makeSplat(impact, launcherSize, ++nextSplat.current, impactColor.current)
     setSplats((previous) => [...previous.slice(-31), mark])
   }, (sound, speed) => {
     const strength = .64 + Math.min(1, speed / 2200) * .61
@@ -556,9 +558,9 @@ export function AssistantDock({ open, setOpen, provider, setProvider, settings, 
     setPointerNear(!!lastPointer.current && pointerDistance(lastPointer.current, rest) < 87)
   }
 
-  function addRemoteSplat(impact: Impact, peer: string) {
+  function addRemoteSplat(impact: Impact, peer: string, peerColor?: string) {
     playSound('bounceOffWall', .42 + impact.strength * .5)
-    const mark = { ...makeSplat(impact, launcherSize, ++nextSplat.current), remote: peer }
+    const mark = { ...makeSplat(impact, launcherSize, ++nextSplat.current, peerColor), remote: peer }
     setSplats((previous) => [...previous.slice(-31), mark])
   }
 
@@ -601,7 +603,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, settings, 
       if (speed < 650 || now - lastTrail < 69 - strength * 45) return
       lastTrail = now
       const mark = {
-        id: ++nextSplat.current,
+        id: ++nextSplat.current, color: impactColor.current,
         x: frame.x + launcherSize / 2 - frame.velocity.x / speed * 24,
         y: frame.y + launcherSize / 2 - frame.velocity.y / speed * 24,
         angle: Math.atan2(frame.velocity.y, frame.velocity.x) * 180 / Math.PI,
@@ -611,9 +613,9 @@ export function AssistantDock({ open, setOpen, provider, setProvider, settings, 
       setTrail((previous) => [...previous.slice(-17), mark])
     }, (impact) => {
       if (blastFlight) return
-      jelly.bounce(impact, launcherSize)
+      jelly.bounce(impact, launcherSize, impactColor.current)
       playSound('bounceOffWall', .64 + impact.strength * .7)
-      const mark = makeSplat(impact, launcherSize, ++nextSplat.current)
+      const mark = makeSplat(impact, launcherSize, ++nextSplat.current, impactColor.current)
       setSplats((previous) => [...previous.slice(-31), mark])
       shareImpact(impact)
     }, (rest) => {
@@ -883,7 +885,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, settings, 
     {!quiet && splats.filter((mark) => !mark.remote || visibleIds.has(mark.remote)).map((mark) => <MascotSplat key={mark.id} mark={mark}
       remove={() => setSplats((previous) => previous.filter((entry) => entry.id !== mark.id))} />)}
     {!quiet && trail.map((mark) => <span key={mark.id} className="jujuba-trail" aria-hidden="true" style={{
-      left: mark.x, top: mark.y, width: mark.width, height: 3 + mark.strength * 7,
+      color: mark.color, left: mark.x, top: mark.y, width: mark.width, height: 3 + mark.strength * 7,
       transform: `translate(-50%, -50%) rotate(${mark.angle}deg)`,
       animationDuration: `${250 + mark.strength * 390}ms`,
     }} onAnimationEnd={() => setTrail((previous) => previous.filter((entry) => entry.id !== mark.id))} />)}
