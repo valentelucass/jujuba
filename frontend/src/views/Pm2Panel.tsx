@@ -1,14 +1,17 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Activity, AlertCircle, ArrowDown, ArrowUp, Check, ChevronDown, CircuitBoard, Cpu, FilePlus2, HardDrive, Layers3, ListTree, LoaderCircle, MemoryStick, MoreHorizontal, Play, RefreshCw, RotateCcw, Save, ScrollText, Search, Square, Terminal, Trash2, X } from 'lucide-react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { Activity, AlertCircle, ArrowDown, ArrowUp, Check, ChevronDown, CircuitBoard, Cpu, FilePlus2, HardDrive, Layers3, ListTree, LoaderCircle, MemoryStick, MoreHorizontal, Paintbrush, Play, RefreshCw, RotateCcw, Save, ScrollText, Search, Square, Star, Terminal, Trash2, X } from 'lucide-react'
 import { init, use, type ECharts } from 'echarts/core'
 import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { appError } from '../controllers/api'
 import { pm2, usePm2Monitor } from '../controllers/pm2'
+import { processKey, usePm2Organization } from '../controllers/usePm2Organization'
+import { Pm2RowColors } from './Pm2RowColors'
 import type { Pm2Action, Pm2Process, Pm2ShellView, Pm2Snapshot, Pm2StateAction } from '../models/pm2'
 import { useTheme } from './Theme'
 import './pm2.css'
+import './pm2-organize.css'
 
 use([LineChart, GridComponent, TooltipComponent, CanvasRenderer])
 
@@ -27,7 +30,6 @@ const shellIcons = { shell: Terminal, logs: ScrollText, describe: ListTree, moni
 const isShellView = (cmd: Command): cmd is Pm2ShellView => Object.hasOwn(shellLabels, cmd)
 const stateLabels: Record<Pm2StateAction, string> = { save: 'Salvar lista', resurrect: 'Restaurar lista' }
 const statusName = (status: string) => statusNames[status] ?? (status || 'Indisponível')
-const processKey = (p: Pm2Process) => JSON.stringify([p.id, p.name, p.namespace])
 const isCluster = (p: Pm2Process) => p.mode === 'cluster_mode' || p.mode === 'cluster'
 
 function actions(p: Pm2Process): Pm2Action[] {
@@ -172,30 +174,70 @@ function Confirmation({ selection, valid, clusterSize, cancel, confirm }: { sele
   </dialog>
 }
 
+function MoreProcessActions({ children }: { children: ReactNode }) {
+  const id = useId()
+  const trigger = useRef<HTMLButtonElement>(null)
+  const popover = useRef<HTMLDivElement>(null)
+  const [open, setOpen] = useState(false)
+  useLayoutEffect(() => {
+    const button = trigger.current, menu = popover.current
+    if (!open || !button || !menu) return
+    const position = () => {
+      const bounds = button.getBoundingClientRect()
+      if (bounds.bottom <= 0 || bounds.top >= window.innerHeight) { menu.hidePopover(); return }
+      const gap = 5, edge = 8
+      const above = bounds.top - gap - edge, below = window.innerHeight - bounds.bottom - gap - edge
+      const upward = below < menu.scrollHeight + 2 && above > below
+      menu.style.maxHeight = Math.max(0, upward ? above : below) + 'px'
+      menu.style.top = (upward ? bounds.top - gap - menu.offsetHeight : bounds.bottom + gap) + 'px'
+      menu.style.left = Math.max(edge, Math.min(bounds.right - menu.offsetWidth, window.innerWidth - menu.offsetWidth - edge)) + 'px'
+    }
+    position()
+    menu.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus({ preventScroll: true })
+    const visibility = new IntersectionObserver(([entry]) => { if (!entry.isIntersecting) menu.hidePopover() })
+    visibility.observe(button)
+    window.addEventListener('resize', position)
+    document.addEventListener('scroll', position, true)
+    return () => {
+      visibility.disconnect()
+      window.removeEventListener('resize', position)
+      document.removeEventListener('scroll', position, true)
+    }
+  }, [open])
+  return <><button ref={trigger} className="button" popoverTarget={id} aria-expanded={open}>
+    <MoreHorizontal size={15} />Mais ações</button>
+    <div ref={popover} id={id} className="pm2-more-menu" popover="auto" role="group" aria-label="Mais ações do processo"
+      onToggle={(event) => setOpen(event.newState === 'open')} onClick={(event) => {
+        if (event.target instanceof Element && event.target.closest('button')) event.currentTarget.hidePopover()
+      }}>{children}</div></>
+}
+
 function Detail({ process: p, history, disabled, scalable, run }: { process: Pm2Process; history: Pm2Snapshot[]; disabled: boolean; scalable: boolean; run: (p: Pm2Process, action: Command) => void }) {
   const [metric, setMetric] = useState<'cpu' | 'memoryBytes' | 'restarts'>('cpu')
   const metrics = { cpu: { label: 'CPU', format: percent, color: '--mint' }, memoryBytes: { label: 'Memória', format: bytes, color: '--berry' },
     restarts: { label: 'Reinícios', format: count, color: '--gold' } }
   const current = metrics[metric]
-  const data = history.map((s) => s.processes.find((row) => row.id === p.id && row.name === p.name && row.namespace === p.namespace)?.[metric] ?? null)
+  const identity = processKey(p)
+  const data = history.map((s) => s.processes.find((row) => row.id === p.id && processKey(row) === identity)?.[metric] ?? null)
   const available = actions(p)
   const primary = available.filter((action) => action === 'restart' || action === 'start' || action === 'stop')
   function commandButton(command: Command) {
     const shellView = isShellView(command)
     const Icon = shellView ? shellIcons[command] : actionIcons[command]
-    return <button key={command} className="button" disabled={disabled || (command === 'scale' && !scalable)} onClick={() => run(p, command)}>
-      <Icon size={14} />{shellView ? shellLabels[command] : actionLabels[command]}</button>
+    const label = shellView ? shellLabels[command] : actionLabels[command]
+    return <button key={command} className="button" disabled={disabled || (command === 'scale' && !scalable)} onClick={() => run(p, command)}
+      aria-label={command === 'logs' ? label : undefined} title={command === 'logs' ? label : undefined}>
+      <Icon size={14} />{command === 'logs' ? <span>Logs<span className="pm2-logs-suffix"> em tempo real</span></span> : label}</button>
   }
   return <aside className="pm2-detail" id="pm2-details" aria-label="Detalhes do processo">
     <div className="pm2-section-head"><h2><CircuitBoard size={17} />Detalhes do processo</h2></div>
     <div className="pm2-detail-inner"><div className="pm2-detail-title"><h3>{p.name}</h3><ProcessStatus status={p.status} /></div>
       <p className="pm2-ident">#{p.id} · {p.namespace || 'Sem namespace'}</p>
       <div className="pm2-actions">{primary.map(commandButton)}{commandButton('logs')}
-        <details className="pm2-more" key={processKey(p)}><summary><MoreHorizontal size={15}/>Mais ações<ChevronDown size={13}/></summary>
-          <div>{commandButton('shell')}{commandButton('describe')}{commandButton('monit')}
+        <MoreProcessActions key={identity}>{commandButton('shell')}{commandButton('describe')}{commandButton('monit')}
             {available.includes('reload') && commandButton('reload')}{isCluster(p) && commandButton('scale')}
             {isCluster(p) && !scalable && <p className="pm2-caption">O nome deste cluster também é usado por outro aplicativo.</p>}
-            {commandButton('delete')}</div></details></div>
+            {commandButton('delete')}</MoreProcessActions></div>
       <dl className="pm2-facts"><div><dt>PID</dt><dd>{p.pid ?? '—'}</dd></div>
         <div><dt>Modo</dt><dd>{isCluster(p) ? 'Cluster' : p.mode === 'fork_mode' || p.mode === 'fork' ? 'Fork' : p.mode || '—'}</dd></div>
         <div><dt>Ciclo atual</dt><dd>{uptime(p, history[history.length - 1].sampledAt)}</dd></div>
@@ -239,6 +281,11 @@ export function Pm2Panel({ active = true }: { active?: boolean }) {
   const [search, setSearch] = useState('')
   const [namespace, setNamespace] = useState('')
   const [status, setStatus] = useState('')
+  const { appearance, toggleFavorite, colorRows } = usePm2Organization()
+  const [onlyFavorites, setOnlyFavorites] = useState(false)
+  const [coloring, setColoring] = useState(false)
+  const [checked, setChecked] = useState<string[]>([])
+  const colorButton = useRef<HTMLButtonElement>(null)
   const [chosen, setChosen] = useState<string | null>(null)
   const [selection, setSelection] = useState<Selection | null>(null)
   const [busy, setBusy] = useState(false)
@@ -251,8 +298,17 @@ export function Pm2Panel({ active = true }: { active?: boolean }) {
   }, [notice])
   const processes = latest?.processes ?? []
   const query = search.trim().toLocaleLowerCase('pt-BR')
-  const filtered = processes.filter((p) => (!namespace || p.namespace === namespace) && (!status || p.status === status)
+  const favorite = (p: Pm2Process) => appearance.get(processKey(p))?.favorite === true
+  const filtered = processes.filter((p) => (!onlyFavorites || favorite(p)) && (!namespace || p.namespace === namespace) && (!status || p.status === status)
     && (!query || p.name.toLocaleLowerCase('pt-BR').includes(query) || String(p.id) === query.replace(/^#/, '')))
+    .sort((a, b) => Number(favorite(b)) - Number(favorite(a)))
+  const visibleKeys = new Set(filtered.map(processKey))
+  const checkedRows = checked.filter((key) => visibleKeys.has(key))
+  useEffect(() => {
+    if (checkedRows.length !== checked.length) setChecked(checkedRows)
+  }, [checked, checkedRows])
+  function closeColors() { setColoring(false); setChecked([]); colorButton.current?.focus() }
+  function applyColor(color?: string) { colorRows(checkedRows, color); closeColors() }
   const selected = chosen === null ? filtered[0] : filtered.find((p) => processKey(p) === chosen)
   const pick = (p: Pm2Process) => {
     setChosen(processKey(p))
@@ -309,7 +365,7 @@ export function Pm2Panel({ active = true }: { active?: boolean }) {
       return selection.action === 'save' ? 'Lista de processos salva.' : 'Restauração da lista solicitada.'
     })
   }
-  function clearFilters() { setSearch(''); setNamespace(''); setStatus(''); setChosen(null) }
+  function clearFilters() { setSearch(''); setNamespace(''); setStatus(''); setOnlyFavorites(false); setChosen(null) }
   if (!active) return null
   return <main className="pm2-panel" aria-label="Monitor do PM2"><div className="pm2-wrap">
     <header className="pm2-title"><div className="pm2-monogram"><Activity size={23} /></div><h1>Monitor do PM2</h1>
@@ -327,16 +383,29 @@ export function Pm2Panel({ active = true }: { active?: boolean }) {
           <select aria-label="Filtrar por namespace" value={namespace} onChange={(event) => { setNamespace(event.target.value); setChosen(null) }}><option value="">Todos os namespaces</option>
             {Array.from(new Set([...processes.map((p) => p.namespace), namespace])).filter(Boolean).sort().map((n) => <option key={n}>{n}</option>)}</select>
           <select aria-label="Filtrar por estado" value={status} onChange={(event) => { setStatus(event.target.value); setChosen(null) }}><option value="">Todos os estados</option>
-            {Array.from(new Set([...processes.map((p) => p.status), status])).filter(Boolean).sort().map((s) => <option key={s} value={s}>{statusName(s)}</option>)}</select></div>}
+            {Array.from(new Set([...processes.map((p) => p.status), status])).filter(Boolean).sort().map((s) => <option key={s} value={s}>{statusName(s)}</option>)}</select>
+          <button className="button pm2-filter-toggle" aria-pressed={onlyFavorites} onClick={() => { setOnlyFavorites(!onlyFavorites); setChosen(null) }}><Star size={14}/>Favoritos</button>
+          <button ref={colorButton} className="button pm2-filter-toggle" aria-expanded={coloring} onClick={() => coloring ? closeColors() : setColoring(true)}><Paintbrush size={14}/>Colorir</button></div>}
+        {coloring && processes.length > 0 && <Pm2RowColors count={checkedRows.length} apply={applyColor} close={closeColors} />}
         {!processes.length ? <div className="pm2-empty"><Layers3 size={23} /><strong>Nenhum processo gerenciado pelo PM2.</strong></div>
           : !filtered.length ? <div className="pm2-empty"><Search size={22} /><strong>Nenhum processo corresponde aos filtros.</strong>
             <button className="button" onClick={clearFilters}>Limpar filtros</button></div>
           : <div className="pm2-table-scroll"><table><thead><tr><th>Processo</th><th>Estado</th><th>Portas TCP</th><th>CPU</th><th>Memória</th><th>Reinícios</th></tr></thead>
-            <tbody>{filtered.map((p) => <tr key={processKey(p)} className={selected && processKey(selected) === processKey(p) ? 'selected' : ''} onClick={() => pick(p)}>
-              <th scope="row"><button aria-label={'Ver detalhes de ' + p.name + ' (#' + p.id + ')'} aria-controls="pm2-details" onClick={(event) => { event.stopPropagation(); pick(p) }}>
-                <strong>{p.name}</strong><small>#{p.id} · {p.namespace || 'Sem namespace'}</small></button></th><td><ProcessStatus status={p.status} /></td>
+            <tbody>{filtered.map((p) => {
+              const key = processKey(p), mark = appearance.get(key), label = p.name + ' (#' + p.id + ')'
+              return <tr key={key} className={selected && processKey(selected) === key ? 'selected' : ''} onClick={() => pick(p)}
+                data-color={mark?.color} style={mark?.color ? { '--process-color': mark.color } as CSSProperties : undefined}>
+              <th scope="row"><div className="pm2-process-name">
+                {coloring && <input type="checkbox" checked={checkedRows.includes(key)} aria-label={'Selecionar ' + label + ' para colorir'}
+                  onClick={(event) => event.stopPropagation()} onChange={(e) => { const add = e.target.checked; setChecked((old) => add ? [...old, key] : old.filter((id) => id !== key)) }} />}
+                <button type="button" className="pm2-star" aria-label={mark?.favorite ? 'Remover ' + label + ' dos favoritos' : 'Favoritar ' + label}
+                  title={mark?.favorite ? 'Remover dos favoritos' : 'Favoritar'} aria-pressed={!!mark?.favorite}
+                  onClick={(e) => { e.stopPropagation(); if (selected) setChosen(onlyFavorites && processKey(selected) === key ? null : processKey(selected)); toggleFavorite(key) }}>
+                  <Star size={15} fill={mark?.favorite ? 'currentColor' : 'none'} /></button>
+                <button aria-label={'Ver detalhes de ' + label} aria-controls="pm2-details" onClick={(event) => { event.stopPropagation(); pick(p) }}>
+                <strong>{p.name}</strong><small>#{p.id} · {p.namespace || 'Sem namespace'}</small></button></div></th><td><ProcessStatus status={p.status} /></td>
               <td className="pm2-ports">{portsText(p.ports)}</td><td>{valueText(p.cpu, percent)}</td><td>{valueText(p.memoryBytes, bytes)}</td><td>{valueText(p.restarts, count)}</td>
-            </tr>)}</tbody></table></div>}
+            </tr>})}</tbody></table></div>}
       </section>
       {selected && <Detail process={selected} history={history} disabled={busy || stale} scalable={scalable(selected)} run={request} />}
     </div></>}

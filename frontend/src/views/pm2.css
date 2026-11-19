@@ -1,5 +1,5 @@
-.pm2-panel { min-width: 0; min-height: 0; overflow: auto; background: var(--workspace); scrollbar-gutter: stable; }
-.pm2-wrap { width: min(100%, 1510px); margin-inline: auto; padding: clamp(18px, 2.6vw, 38px); display: grid; gap: 20px; }
+.pm2-panel { min-width: 0; min-height: 0; overflow: auto; background: var(--workspace); }
+.pm2-wrap { width: 100%; min-height: 100%; display: flex; flex-direction: column; gap: 12px; padding: 12px var(--app-gutter) 8px; }
 .pm2-title, .pm2-sync, .pm2-fresh, .pm2-card h2, .pm2-section-head, .pm2-section-head h2, .pm2-state, .pm2-detail-title, .pm2-loading { display: flex; align-items: center; }
 .pm2-title { gap: 12px; min-width: 0; flex-wrap: wrap; }
 .pm2-title h1 { font-size: clamp(22px, 2.15vw, 30px); font-weight: 640; letter-spacing: -.05em; line-height: 1.15; }
@@ -30,7 +30,7 @@
 .pm2-chart { width: 100%; height: 57px; }
 .pm2-axis { display: flex; justify-content: space-between; margin-top: 5px; color: var(--muted); font: 10px var(--mono); }
 .pm2-no-trend { height: 74px; display: grid; place-items: center; border-block-start: 1px dashed var(--line); color: var(--muted); font-size: 12px; }
-.pm2-process-layout { display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(286px, .85fr); gap: 14px; }
+.pm2-process-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: clamp(8px, .75vw, 14px); }
 .pm2-processes:only-child { grid-column: 1 / -1; }
 .pm2-section-head { justify-content: space-between; gap: 10px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
 .pm2-section-head h2 { font-size: 15px; letter-spacing: -.025em; }
@@ -40,7 +40,7 @@
 .pm2-filters .search-field { min-height: 32px; flex: 1 1 148px; min-width: 0; }
 .pm2-filters input { height: 28px; font-size: 12px; }
 .pm2-filters select { height: 32px; padding-inline: 7px; border-radius: 6px; border: 1px solid var(--line-strong); color: var(--quiet); background: var(--surface); font-size: 12px; max-width: 100%; }
-.pm2-table-scroll { width: 100%; overflow: auto; max-height: min(65vh, 720px); border-radius: 0 0 12px 12px; }
+.pm2-table-scroll { width: 100%; overflow-x: auto; border-radius: 0 0 12px 12px; }
 .pm2-table-scroll table { width: 100%; min-width: 590px; border-collapse: collapse; text-align: left; }
 .pm2-table-scroll :is(th,td) { padding: 9px 10px; vertical-align: middle; }
 .pm2-table-scroll :is(th,td):first-child { padding-left: 17px; }
@@ -63,7 +63,7 @@
 .pm2-empty, .pm2-loading { padding: 35px 15px; flex-direction: column; gap: 10px; color: var(--muted); }
 .pm2-empty { display: grid; justify-items: center; text-align: center; }
 .pm2-empty strong { font-weight: 500; color: var(--quiet); }
-.pm2-detail-inner { padding: 15px 17px; }
+.pm2-detail-inner { container-type: inline-size; padding: 15px 17px; }
 .pm2-detail-title { align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 5px 10px; }
 .pm2-detail-title h3 { font-size: 21px; letter-spacing: -.045em; line-height: 1.25; overflow-wrap: anywhere; }
 .pm2-ident { margin-top: 4px; overflow-wrap: anywhere; }
@@ -79,23 +79,34 @@
 .pm2-detail .pm2-chart { height: 68px; }
 .pm2-detail .pm2-plot, .pm2-detail .pm2-no-trend { margin-top: 8px; }
 .pm2-caption { margin-top: 6px; }
-.pm2-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
-.pm2-actions .button { padding-inline: 8px; font-size: 12px; }
+.pm2-actions { display: flex; align-items: center; gap: 5px; margin-top: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.pm2-actions .button { gap: 4px; padding-inline: 6px; font-size: 12px; }
+@container (max-width: 403px) {
+  .pm2-logs-suffix { display: none; }
+}
+@container (max-width: 320px) {
+  .pm2-actions { gap: 4px; }
+  .pm2-actions > .button { gap: 3px; padding-inline: 4px; }
+}
+@container (max-width: 295px) {
+  .pm2-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .pm2-table-scroll tbody td.pm2-ports { max-width: 110px; font-size: 11px; white-space: normal; overflow-wrap: anywhere; }
 .pm2-paths { display: grid; gap: 6px; margin: 0 0 14px; }
 .pm2-paths > div { display: grid; grid-template-columns: 66px minmax(0,1fr); gap: 6px; align-items: baseline; }
 .pm2-paths dt { color: var(--muted); font-size: 11px; }
 .pm2-paths dd { margin: 0; font: 11px/1.4 var(--mono); overflow-wrap: anywhere; }
 .pm2-section-head > span { margin-right: auto; }
-.pm2-more { width: 100%; }
-.pm2-more summary, .pm2-session summary { display: inline-flex; gap: 7px; align-items: center; min-height: 29px; cursor: pointer; color: var(--quiet); font-weight: 520; font-size: 12px; border: 1px solid var(--line); background: var(--sidebar); border-radius: 6px; padding: 3px 8px; }
-.pm2-more summary:hover, .pm2-session summary:hover { background: var(--hover); }
-.pm2-more summary:focus-visible, .pm2-session summary:focus-visible { outline: 2px solid var(--berry); outline-offset: 2px; }
-.pm2-more summary::marker, .pm2-session summary::marker { content: ''; }
-.pm2-more[open] summary svg:last-child, .pm2-session[open] summary svg:last-child { transform: rotate(180deg); }
-.pm2-more > div { display: grid; gap: 3px; padding-top: 6px; }
-.pm2-more > div .button, .pm2-session > div .button { justify-content: start; min-height: 30px; height: auto; border-color: transparent; background: transparent; }
-.pm2-more > div .button:last-child { color: var(--berry); }
+.pm2-more-menu { position: fixed; inset: auto; margin: 0; width: max-content; max-width: calc(100vw - 16px); overflow: auto; padding: 5px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); color: var(--text); box-shadow: 0 6px 18px var(--shadow); }
+.pm2-more-menu:popover-open { display: grid; gap: 2px; }
+.pm2-more-menu .button { white-space: normal; text-align: start; }
+.pm2-session summary { display: inline-flex; gap: 7px; align-items: center; min-height: 29px; cursor: pointer; color: var(--quiet); font-weight: 520; font-size: 12px; border: 1px solid var(--line); background: var(--sidebar); border-radius: 6px; padding: 3px 8px; }
+.pm2-session summary:hover { background: var(--hover); }
+.pm2-session summary:focus-visible { outline: 2px solid var(--berry); outline-offset: 2px; }
+.pm2-session summary::marker { content: ''; }
+.pm2-session[open] summary svg:last-child { transform: rotate(180deg); }
+.pm2-more-menu .button, .pm2-session > div .button { justify-content: start; min-height: 30px; height: auto; border-color: transparent; background: transparent; }
+.pm2-more-menu .button:last-child { color: var(--berry); }
 .pm2-session { position: relative; }
 .pm2-session > div { display: grid; position: absolute; top: calc(100% + 5px); right: 0; z-index: 2; min-width: 165px; padding: 5px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); box-shadow: 0 6px 18px var(--shadow); }
 .pm2-scale { display: grid; gap: 5px; margin-top: 12px; color: var(--quiet); }
@@ -111,12 +122,24 @@
 .pm2-dialog h2 { font-size: 19px; overflow-wrap: anywhere; }
 .pm2-dialog p { margin-top: 9px; color: var(--quiet); overflow-wrap: anywhere; }
 .pm2-dialog > div { display: flex; justify-content: flex-end; gap: 7px; margin-top: 20px; }
+@media (min-width: 1041px) and (min-height: 620px) {
+  .pm2-wrap { height: 100%; }
+  .pm2-wrap > :not(.pm2-process-layout) { flex-shrink: 0; }
+  .pm2-process-layout { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); }
+  .pm2-process-layout > :is(.pm2-processes,.pm2-detail) { align-self: stretch; min-height: 0; display: flex; flex-direction: column; }
+  .pm2-section-head, .pm2-filters { flex-shrink: 0; }
+  .pm2-table-scroll, .pm2-detail-inner { flex: 1; min-height: 0; overflow: auto; }
+  .pm2-detail-inner, .pm2-detail .pm2-plot { display: flex; flex-direction: column; }
+  .pm2-detail-inner > * { flex-shrink: 0; }
+  .pm2-detail .pm2-plot { flex-grow: 1; }
+  .pm2-detail .pm2-chart { flex: 1 0 68px; }
+  .pm2-card .pm2-chart { height: clamp(57px, 7vh, 100px); }
+}
 @media (max-width: 1040px) {
   .pm2-process-layout { grid-template-columns: minmax(0, 1fr); }
   .pm2-detail-inner { display: flow-root; }
 }
 @media (max-width: 740px) {
-  .pm2-wrap { padding: 14px; gap: 14px; }
   .pm2-sync { gap: 8px; }
   .pm2-host { gap: 8px; grid-template-columns: repeat(2, minmax(0,1fr)); }
   .pm2-card { padding: 13px 11px 9px; }
@@ -124,7 +147,6 @@
   .pm2-card:last-child .pm2-io { min-height: 42px; }
 }
 @media (max-width: 510px) {
-  .pm2-wrap { padding: 12px; }
   .pm2-title { gap: 8px; }
   .pm2-sync { width: 100%; justify-content: space-between; margin-left: 0; }
   .pm2-sync .button { margin-left: auto; }

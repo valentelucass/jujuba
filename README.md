@@ -37,6 +37,8 @@ Em **Mais ações → PowerShell de desenvolvimento**, o terminal abre na pasta 
 
 Para adicionar um serviço, escolha um script ou arquivo `ecosystem` no seletor do Windows e confirme o caminho. Salvar a lista grava o conjunto atual do PM2, inclusive quando está vazio. Restaurar a lista inicia os serviços salvos que estão ausentes. [Lista de processos persistente no PM2](https://pm2.keymetrics.io/docs/usage/startup/)
 
+Use a estrela para favoritar um processo e o filtro **Favoritos** para ver os marcados. Para agrupar visualmente serviços relacionados, clique em **Colorir**, selecione suas linhas e aplique a mesma cor. Os favoritos e as cores ficam salvos neste computador.
+
 ## Planejar um sistema com IA
 
 O ícone do assistente no canto inferior direito abre o mesmo chat em todas as telas. Descreva o fluxo ou anexe até quatro documentos de texto, como Markdown, TXT, JSON ou CSV. O assistente reconhece a tela atual e pode propor um fluxograma de sistema. Use **Abrir fluxograma no editor** para revisar. Em **Fluxogramas**, use as formas e as ferramentas do painel direito para desenhar manualmente. Arraste as etapas, edite as conexões e use **Desfazer**, **Refazer** ou **Organizar** quando precisar. O arquivo `.jujuba.json` guarda o fluxo e as posições. Você também pode exportar Markdown com Mermaid.

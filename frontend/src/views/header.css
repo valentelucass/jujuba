@@ -1,14 +1,22 @@
+@font-face {
+  font-family: "Rubik Variable"; font-style: normal; font-weight: 300 900; font-display: swap;
+  src: url("@fontsource-variable/rubik/files/rubik-latin-wght-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Nunito Variable"; font-style: normal; font-weight: 200 1000; font-display: swap;
+  src: url("@fontsource-variable/nunito/files/nunito-latin-wght-normal.woff2") format("woff2");
+}
 #root { grid-template-columns: minmax(0, 1fr); }
 .topbar .wordmark {
   display: inline-flex; align-items: center; flex: none; gap: 8px; padding-right: 12px;
 }
 header.topbar .wordmark > strong {
-  display: inline-flex; align-items: baseline; font: 780 20px/1 "Geist Variable", "Segoe UI", sans-serif;
-  letter-spacing: -.075em; color: var(--text);
+  display: inline-flex; align-items: baseline; font: 640 20px/1 "Rubik Variable", "Segoe UI", sans-serif;
+  letter-spacing: -.025em; color: var(--text); font-synthesis: none; transform: skewX(-7deg);
 }
 .topbar .wordmark > strong > span {
-  font: 800 1.04em/1 "Barlow Semi Condensed", "Segoe UI", sans-serif; letter-spacing: -.045em;
-  color: var(--berry); margin-left: .045em; position: relative; top: .025em;
+  font: 1000 .99em/1 "Nunito Variable", "Segoe UI", sans-serif; letter-spacing: -.012em;
+  color: var(--berry); margin-left: .04em;
 }
 .topbar :is(.studio-areas, .connection-tools, .bank-tools) {
   display: flex; align-items: center; gap: 3px; min-width: 0; padding-inline-start: 10px;
@@ -40,7 +48,7 @@ header.topbar .wordmark > strong {
 .topbar .database-button { max-width: min(22vw, 240px); }
 .topbar .database-button > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 @media (max-width: 720px) {
-  header.topbar { gap: 4px; padding: 0 8px; }
+  header.topbar { gap: 4px; }
   .topbar .wordmark { padding-right: 3px; gap: 4px; }
   .topbar .wordmark img { width: 26px; height: 26px; }
   .topbar :is(.studio-areas, .connection-tools, .bank-tools) { padding-inline-start: 4px; gap: 1px; }

@@ -1,0 +1,22 @@
+.pm2-filters .pm2-filter-toggle { min-height: 32px; padding-inline: 9px; font-size: 12px; }
+.pm2-filter-toggle:is([aria-pressed="true"], [aria-expanded="true"]) { background: var(--berry-selected); color: var(--berry); border-color: var(--berry-line); }
+.pm2-row-colors { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 7px 10px; padding: 8px 12px; background: var(--sidebar); border-top: 1px solid var(--line); }
+.pm2-row-colors > span { font-size: 12px; color: var(--quiet); }
+.pm2-row-colors > .button { min-height: 28px; font-size: 12px; padding-inline: 8px; }
+.pm2-swatches { display: inline-flex; align-items: center; gap: 6px; padding: 4px 2px; }
+.pm2-swatches button, .pm2-custom-color { width: 20px; height: 20px; border: 1px solid var(--line-strong); border-radius: 50%; display: grid; place-items: center; color: #151515; cursor: pointer; padding: 0; }
+.pm2-swatches button[aria-pressed="true"] { outline: 2px solid var(--text); outline-offset: 2px; }
+.pm2-custom-color { overflow: hidden; border-radius: 4px; }
+.pm2-custom-color input { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.pm2-custom-color input::-webkit-color-swatch-wrapper { padding: 1px; }
+.pm2-custom-color input::-webkit-color-swatch { border: 0; border-radius: 2px; }
+.pm2-custom-color:focus-within, .pm2-swatches button:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+.pm2-process-name { display: flex; align-items: center; gap: 6px; }
+.pm2-process-name input[type="checkbox"] { flex: none; width: 16px; height: 16px; accent-color: var(--berry); cursor: pointer; }
+.pm2-table-scroll tbody th .pm2-star { flex: none; display: grid; place-items: center; width: 26px; height: 28px; border-radius: 5px; padding: 0; color: var(--muted); }
+.pm2-table-scroll tbody th .pm2-star:hover { color: var(--text); background: var(--hover); }
+.pm2-table-scroll tbody th .pm2-star[aria-pressed="true"] { color: var(--gold); }
+.pm2-table-scroll tbody tr[data-color] { background: color-mix(in srgb, var(--process-color) 13%, var(--surface)); }
+.pm2-table-scroll tbody tr[data-color]:hover { background: color-mix(in srgb, var(--process-color) 20%, var(--surface)); }
+.pm2-table-scroll tbody tr[data-color] th { box-shadow: inset 4px 0 var(--process-color); }
+.pm2-table-scroll tbody tr[data-color].selected { background: color-mix(in srgb, var(--process-color) 16%, var(--surface)); outline: 1px solid var(--berry); outline-offset: -1px; }
