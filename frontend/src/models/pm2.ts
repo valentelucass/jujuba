@@ -19,14 +19,30 @@ export interface Pm2Process {
   version: string | null
 }
 
+export type HostResource = 'cpu' | 'memory' | 'gpu' | 'disk'
+export interface HostRank {
+  status: 'ready' | 'warming' | 'unavailable'
+  basis: 'cpuCapacity' | 'physicalMemory' | 'gpuEngine' | 'diskActivity' | 'processIo'
+  rows: { pid: number; name: string; value: number; percent: number }[]
+}
+
+export interface Pm2Host {
+  cpuPercent: number | null
+  memoryUsedBytes: number | null
+  memoryTotalBytes: number | null
+  diskReadBytesPerSec: number | null
+  diskWriteBytesPerSec: number | null
+  gpuPercent?: number | null
+  consumers?: Partial<Record<HostResource, HostRank>>
+}
+
+export interface Pm2HostSample {
+  sampledAt: number
+  host: Pm2Host
+}
+
 export interface Pm2Snapshot {
   sampledAt: number
+  host?: Pm2Host
   processes: Pm2Process[]
-  host: {
-    cpuPercent: number | null
-    memoryUsedBytes: number | null
-    memoryTotalBytes: number | null
-    diskReadBytesPerSec: number | null
-    diskWriteBytesPerSec: number | null
-  }
 }

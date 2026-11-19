@@ -29,7 +29,15 @@ O login deve conseguir abrir o catálogo `master` para descobrir os bancos. Em c
 
 Abra **PM2** na barra superior para acompanhar os processos gerenciados pelo PM2 da sua conta do Windows. O painel funciona sem conexão com um banco. Ele consulta a instância local em execução e respeita a pasta configurada em `PM2_HOME`. Para preparar a instalação ou iniciar seus serviços, consulte o [guia oficial do PM2](https://pm2.keymetrics.io/docs/usage/quick-start/).
 
-O painel acompanha CPU, memória e tráfego de disco do computador. Selecione um processo para ver o ID do PM2, o PID do Windows, o tempo de execução, os reinícios e o histórico de CPU e memória. As portas são as portas TCP que o Windows encontra em escuta em IPv4 e IPv6. Quando quem escuta é um subprocesso, a porta aparece no processo gerenciado mais próximo da árvore. As leituras são renovadas enquanto o painel está visível.
+Os cartões mostram CPU, memória disponível e usada, GPU e tráfego de disco do Windows, inclusive quando o PM2 está desconectado. Passe o mouse ou use Tab para ver até seis processos em ordem de consumo. Clique para fixar a lista. Quando o PID coincide com uma aplicação do PM2, o painel também mostra o nome cadastrado nela.
+
+A CPU usa como referência toda a capacidade do computador. A memória mostra os bytes de RAM privada residente e a porcentagem da RAM física. A GPU usa o motor mais ocupado que o driver expõe ao Windows. No disco, a porcentagem representa a parcela das leituras e gravações atribuídas aos processos medidos. A coleta detalhada de disco roda enquanto esse cartão está aberto. Quando o Windows fornece apenas E/S geral, o painel informa que a medida inclui rede e dispositivos.
+
+**Otimizar agora** faz uma leitura nova do PM2 e protege os processos gerenciados e seus subprocessos. Com um clique, o JUJUBA pede o fechamento normal dos utilitários minimizados da sua sessão que ele conseguir identificar como Calculadora, Mapa de Caracteres, Sobre o Windows ou Monitor de Recursos. Serviços, bancos de dados, navegadores e editores ficam fora da lista de candidatos. O resultado mostra quais utilitários saíram e a RAM disponível no computador antes e depois. Essa quantidade também varia com a atividade dos outros aplicativos.
+
+Para investigar diferenças entre a RAM usada e a soma dos processos, o RAMMap mostra como o Windows distribui a memória entre aplicativos, cache e sistema. [RAMMap da Microsoft](https://learn.microsoft.com/en-us/sysinternals/downloads/rammap)
+
+Selecione um processo para ver o ID do PM2, o PID do Windows, o tempo de execução, os reinícios e o histórico de CPU e memória. As portas são as portas TCP que o Windows encontra em escuta em IPv4 e IPv6. Quando quem escuta é um subprocesso, a porta aparece no processo gerenciado mais próximo da árvore. As leituras são renovadas enquanto o painel está visível.
 
 Nos detalhes, use **Iniciar** para retomar um processo parado, **Parar** para interrompê-lo e **Reiniciar** para iniciar outro ciclo. É possível remover o registro de um processo pelo seu ID. Em modo cluster, **Recarregar** atua sobre a instância selecionada. Alterar a quantidade de instâncias atua sobre o aplicativo inteiro e exige um nome de grupo único. [Gerenciamento de processos](https://pm2.keymetrics.io/docs/usage/process-management/) e [modo cluster](https://pm2.keymetrics.io/docs/usage/cluster-mode/)
 
@@ -150,6 +158,7 @@ Com a conexão aprovada, selecione `ETL_SISTEMA` e `ETL_SISTEMA_V2` se ambos est
 
 ## Referências
 
+- Visualização do consumo de recursos por processo no Windows. [System Informer](https://github.com/winsiderss/systeminformer)
 - Ícones dos bancos de dados de [Devicon](https://github.com/devicons/devicon/tree/v2.17.0), com licença em `frontend/src/assets/devicon-LICENSE.txt`.
 
 - [ByteTable, commit a56ee2d](https://github.com/Rezwanul-Haque/byteTable/tree/a56ee2db01389ae24fbb8b64a3ffddb13375ec45) para arquitetura, catálogo e grade.

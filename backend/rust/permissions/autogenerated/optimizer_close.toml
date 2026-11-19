@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-optimizer-close"
+description = "Enables the optimizer_close command without any pre-configured scope."
+commands.allow = ["optimizer_close"]
+
+[[permission]]
+identifier = "deny-optimizer-close"
+description = "Denies the optimizer_close command without any pre-configured scope."
+commands.deny = ["optimizer_close"]

@@ -1,0 +1,30 @@
+.optimizer-launch svg { color: var(--mint); }
+.optimizer-dialog { width: min(500px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); overflow: auto; margin: auto; padding: 18px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); color: var(--text); box-shadow: 0 12px 40px var(--shadow); }
+.optimizer-dialog::backdrop { background: #0009; }
+.optimizer-dialog header, .optimizer-dialog footer { display: flex; align-items: center; gap: 8px; }
+.optimizer-dialog header { justify-content: space-between; }
+.optimizer-dialog h2 { font-size: 20px; font-weight: 620; letter-spacing: -.035em; }
+.optimizer-dialog header .icon-button { flex: none; }
+.optimizer-dialog p { margin-top: 12px; color: var(--quiet); font-size: 13px; line-height: 1.45; }
+.optimizer-dialog p[role=alert] { color: var(--gold); }
+.optimizer-ram small { font-size: 12px; color: var(--muted); }
+.optimizer-results li + li { border-top: 1px solid var(--line); }
+.optimizer-results small { font: 11px/1.5 var(--mono); color: var(--muted); }
+.optimizer-dialog .optimizer-empty { padding: 15px 12px; background: var(--sidebar); border: 1px solid var(--line); border-radius: 7px; }
+.optimizer-dialog footer { justify-content: flex-end; flex-wrap: wrap; margin-top: 19px; }
+.optimizer-totals { display: flex; margin: 15px 0; border-block: 1px solid var(--line); }
+.optimizer-totals > div { flex: 1; padding: 10px 4px; }
+.optimizer-totals dt { color: var(--muted); font-size: 11px; }
+.optimizer-totals dd { margin: 3px 0 0; font-size: 20px; font-weight: 600; }
+.optimizer-results { margin: 0; padding: 0; list-style: none; }
+.optimizer-results li { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding-block: 6px; }
+.optimizer-results li > span { overflow-wrap: anywhere; }
+.optimizer-results b { flex-shrink: 0; font-size: 12px; font-weight: 550; }
+.optimizer-ram { display: grid; gap: 3px; padding: 10px; background: var(--sidebar); border-radius: 7px; }
+.optimizer-ram span { color: var(--mint); font-variant-numeric: tabular-nums; }
+@media (max-width: 610px) {
+  .pm2-sync { flex-wrap: wrap; justify-content: flex-end; }
+  .pm2-sync .pm2-fresh { margin-right: auto; }
+  .pm2-sync .optimizer-launch, .pm2-sync .button[aria-label="Atualizar monitor"] { margin-left: 0; }
+  .pm2-sync .button[aria-label="Atualizar monitor"] span { display: none; }
+}

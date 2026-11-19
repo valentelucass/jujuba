@@ -1,5 +1,5 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { Activity, AlertCircle, ArrowDown, ArrowUp, Check, ChevronDown, CircuitBoard, Cpu, FilePlus2, HardDrive, Layers3, ListTree, LoaderCircle, MemoryStick, MoreHorizontal, Paintbrush, Play, RefreshCw, RotateCcw, Save, ScrollText, Search, Square, Star, Terminal, Trash2, X } from 'lucide-react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type Ref } from 'react'
+import { Activity, AlertCircle, ArrowDown, ArrowUp, Check, ChevronDown, CircuitBoard, Cpu, FilePlus2, HardDrive, Layers3, ListTree, LoaderCircle, MemoryStick, MonitorCog, MoreHorizontal, Paintbrush, Play, RefreshCw, RotateCcw, Save, ScrollText, Search, Square, Star, Terminal, Trash2, X } from 'lucide-react'
 import { init, use, type ECharts } from 'echarts/core'
 import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent } from 'echarts/components'
@@ -8,7 +8,9 @@ import { appError } from '../controllers/api'
 import { pm2, usePm2Monitor } from '../controllers/pm2'
 import { processKey, usePm2Organization } from '../controllers/usePm2Organization'
 import { Pm2RowColors } from './Pm2RowColors'
-import type { Pm2Action, Pm2Process, Pm2ShellView, Pm2Snapshot, Pm2StateAction } from '../models/pm2'
+import { Pm2HostResources } from './Pm2HostResources'
+import { HostOptimizer } from './HostOptimizer'
+import type { Pm2Action, Pm2HostSample, Pm2Process, Pm2ShellView, Pm2Snapshot, Pm2StateAction } from '../models/pm2'
 import { useTheme } from './Theme'
 import './pm2.css'
 import './pm2-organize.css'
@@ -71,7 +73,7 @@ interface Trace {
   values: (number | null)[]
 }
 function Trend({ history, traces, format, label, stepped = false, ceiling }: {
-  history: Pm2Snapshot[]; traces: Trace[]; format: (value: number) => string; label: string; stepped?: boolean; ceiling?: number
+  history: { sampledAt: number }[]; traces: Trace[]; format: (value: number) => string; label: string; stepped?: boolean; ceiling?: number
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const chart = useRef<ECharts | null>(null)
@@ -120,25 +122,35 @@ function Trend({ history, traces, format, label, stepped = false, ceiling }: {
   </div>
 }
 
-function HostCards({ history }: { history: Pm2Snapshot[] }) {
-  const host = history[history.length - 1].host
-  const trace = (key: keyof Pm2Snapshot['host'], label: string, color: string): Trace => ({ label, color, values: history.map((s) => s.host[key]) })
-  return <section className="pm2-host" aria-label="Recursos do computador">
-    <article className="pm2-card"><h2><Cpu size={17} />CPU do computador</h2>
+function HostCards({ history, processes = [], onDiskInspect, inspectMemoryRef }: {
+  history: Pm2HostSample[]; processes?: Pm2Process[]; onDiskInspect?: (open: boolean) => void; inspectMemoryRef: Ref<() => void>
+}) {
+  const host = history.at(-1)?.host
+  if (!host) return null
+  const trace = (key: Exclude<keyof typeof host, 'consumers'>, label: string, color: string): Trace =>
+    ({ label, color, values: history.map(s => s.host[key] ?? null) })
+  const used = host.memoryUsedBytes, total = host.memoryTotalBytes
+  const free = used !== null && total !== null && used >= 0 && total >= used ? total - used : null
+  return <Pm2HostResources consumers={host.consumers} processes={processes} onDiskInspect={onDiskInspect} inspectMemoryRef={inspectMemoryRef} cards={[
+    { key: 'cpu', title: 'CPU do computador', icon: <Cpu size={17} />, format: percent, body: <>
       <div className="pm2-value">{valueText(host.cpuPercent, percent)}</div>
       <Trend label="Histórico da CPU do computador" history={history} format={percent} ceiling={100}
-        traces={[trace('cpuPercent', 'CPU', '--mint')]} /></article>
-    <article className="pm2-card"><h2><MemoryStick size={17} />Memória do computador</h2>
-      <div className="pm2-value">{valueText(host.memoryUsedBytes, bytes)}<small> de {valueText(host.memoryTotalBytes, bytes)}</small></div>
-      <Trend label="Histórico da memória usada no computador" history={history} format={bytes} ceiling={host.memoryTotalBytes ?? undefined}
-        traces={[trace('memoryUsedBytes', 'Memória usada', '--berry')]} /></article>
-    <article className="pm2-card"><h2><HardDrive size={17} />Tráfego de disco</h2>
+        traces={[trace('cpuPercent', 'CPU', '--mint')]} /></> },
+    { key: 'memory', title: 'Memória do computador', icon: <MemoryStick size={17} />, format: bytes, body: <>
+      <div className="pm2-value">{valueText(used, bytes)}<small> de {valueText(total, bytes)}</small></div>
+      <p className="pm2-free-memory">Disponível <strong>{valueText(free, bytes)}</strong></p>
+      <Trend label="Histórico da memória usada no computador" history={history} format={bytes} ceiling={total ?? undefined}
+        traces={[trace('memoryUsedBytes', 'Memória usada', '--berry')]} /></> },
+    { key: 'gpu', title: 'GPU do computador', icon: <MonitorCog size={17} />, format: percent, body: <>
+      <div className="pm2-value">{valueText(host.gpuPercent ?? null, percent)}</div>
+      <Trend label="Histórico da GPU do computador" history={history} format={percent} ceiling={100}
+        traces={[trace('gpuPercent', 'GPU', '--pm2-gpu')]} /></> },
+    { key: 'disk', title: 'Tráfego de disco', icon: <HardDrive size={17} />, format: rate, body: <>
       <div className="pm2-io"><div><span><ArrowDown size={12} />Leitura</span><strong>{valueText(host.diskReadBytesPerSec, rate)}</strong></div>
         <div><span><ArrowUp size={12} />Gravação</span><strong>{valueText(host.diskWriteBytesPerSec, rate)}</strong></div></div>
       <Trend label="Histórico de leitura e gravação em disco" history={history} format={rate}
-        traces={[trace('diskReadBytesPerSec', 'Leitura', '--mint'), trace('diskWriteBytesPerSec', 'Gravação', '--gold')]} />
-    </article>
-  </section>
+        traces={[trace('diskReadBytesPerSec', 'Leitura', '--mint'), trace('diskWriteBytesPerSec', 'Gravação', '--gold')]} /></> },
+  ]} />
 }
 
 function ProcessStatus({ status }: { status: string }) {
@@ -277,7 +289,11 @@ function ListActions({ canStart, canSave, startFile, select }: { canStart: boole
 }
 
 export function Pm2Panel({ active = true }: { active?: boolean }) {
-  const { history, latest, refreshing, refresh, error, stale } = usePm2Monitor(active)
+  const inspectMemory = useRef<() => void>(null)
+  const [inspectDisk, setInspectDisk] = useState(false)
+  const { history, latest, refreshing, refresh, error, stale, computer } = usePm2Monitor(active, inspectDisk)
+  const syncSample = computer.latest ?? latest
+  const syncStale = computer.latest ? computer.stale : stale
   const [search, setSearch] = useState('')
   const [namespace, setNamespace] = useState('')
   const [status, setStatus] = useState('')
@@ -369,13 +385,16 @@ export function Pm2Panel({ active = true }: { active?: boolean }) {
   if (!active) return null
   return <main className="pm2-panel" aria-label="Monitor do PM2"><div className="pm2-wrap">
     <header className="pm2-title"><div className="pm2-monogram"><Activity size={23} /></div><h1>Monitor do PM2</h1>
-      <div className="pm2-sync">{latest && <span className={'pm2-fresh ' + (stale ? 'stale' : '')}><i />{stale ? 'Dados desatualizados' : 'Ao vivo'}<time dateTime={new Date(latest.sampledAt).toISOString()}>{clock.format(latest.sampledAt)}</time></span>}
+      <div className="pm2-sync">{syncSample && <span className={'pm2-fresh ' + (syncStale ? 'stale' : '')}><i />{syncStale ? 'Dados desatualizados' : 'Ao vivo'}<time dateTime={new Date(syncSample.sampledAt).toISOString()}>{clock.format(syncSample.sampledAt)}</time></span>}
+        <HostOptimizer formatBytes={bytes} onFinished={refresh} onInspectMemory={computer.latest ? () => inspectMemory.current?.() : undefined} />
         <button className="button" aria-label="Atualizar monitor" title="Atualizar monitor" disabled={refreshing} onClick={refresh}><RefreshCw size={15} className={refreshing ? 'pm2-spin' : ''} /><span>Atualizar</span></button></div>
     </header>
+    {computer.error && <Notice tone="error"><strong>Leitura do computador indisponível.</strong> {computer.error.message}</Notice>}
+    <HostCards history={computer.history} processes={stale ? [] : processes} onDiskInspect={setInspectDisk} inspectMemoryRef={inspectMemory} />
     {error && <Notice tone="error"><strong>{latest ? 'A atualização falhou.' : 'PM2 indisponível.'}</strong> {error.message}</Notice>}
     {!latest && error?.kind === 'pm2_daemon' && <section className="pm2-processes"><div className="pm2-section-head"><h2><Layers3 size={17}/>Processos</h2>{listActions}</div></section>}
     {!latest && !error && <div className="pm2-loading" role="status"><LoaderCircle size={20} className="pm2-spin" />Consultando o PM2…</div>}
-    {latest && <><HostCards history={history} /><div className="pm2-process-layout">
+    {latest && <div className="pm2-process-layout">
       <section className="pm2-processes" aria-label="Processos do PM2"><div className="pm2-section-head"><h2><Layers3 size={17} />Processos</h2>
         <span>{filtered.length === processes.length ? String(processes.length) : filtered.length + ' de ' + processes.length}</span>
         {listActions}</div>
@@ -408,7 +427,7 @@ export function Pm2Panel({ active = true }: { active?: boolean }) {
             </tr>})}</tbody></table></div>}
       </section>
       {selected && <Detail process={selected} history={history} disabled={busy || stale} scalable={scalable(selected)} run={request} />}
-    </div></>}
+    </div>}
     {notice && <div className="pm2-feedback"><Notice tone={notice.ok ? 'ok' : 'error'}>{notice.text}
       <button className="icon-button" aria-label="Fechar mensagem" onClick={() => setNotice(null)}><X size={14}/></button></Notice></div>}
     {selection && <Confirmation selection={selection} valid={selectionValid}

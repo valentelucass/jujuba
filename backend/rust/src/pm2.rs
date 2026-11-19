@@ -13,6 +13,10 @@ use tokio::io::AsyncReadExt;
 use tokio::process::{Child, Command};
 use zeroize::Zeroizing;
 
+#[path = "pm2_protection.rs"]
+mod protection;
+pub(crate) use protection::optimizer_protection;
+
 const MAX_LIST: u64 = 16 * 1024 * 1024;
 static ACTIONS: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
@@ -21,6 +25,14 @@ static ACTIONS: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 pub(crate) struct Snapshot {
     sampled_at: u64,
     processes: Vec<Process>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    host: Option<HostMetrics>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct HostSnapshot {
+    sampled_at: u64,
     host: HostMetrics,
 }
 
@@ -364,7 +376,7 @@ fn selected(processes: Vec<Process>, id: u32, name: &str) -> Result<Process> {
 }
 
 #[tauri::command]
-pub(crate) async fn pm2_snapshot() -> Result<Snapshot> {
+pub(crate) async fn pm2_snapshot(include_host: Option<bool>) -> Result<Snapshot> {
     let mut processes = list().await?;
     let (processes, host) = tauri::async_runtime::spawn_blocking(move || {
         let pids = processes.iter().filter_map(|p| p.pid).collect();
@@ -379,7 +391,12 @@ pub(crate) async fn pm2_snapshot() -> Result<Snapshot> {
                     .collect()
             });
         }
-        (processes, pm2_host::sample())
+        (
+            processes,
+            include_host
+                .unwrap_or(true)
+                .then(|| pm2_host::sample(false)),
+        )
     })
     .await
     .map_err(|_| {
@@ -388,13 +405,34 @@ pub(crate) async fn pm2_snapshot() -> Result<Snapshot> {
             "Não foi possível ler as métricas do computador.",
         )
     })?;
-    let sampled_at = SystemTime::now()
+    Ok(Snapshot {
+        sampled_at: sample_time(),
+        processes,
+        host,
+    })
+}
+
+fn sample_time() -> u64 {
+    SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
-        .as_millis() as u64;
-    Ok(Snapshot {
-        sampled_at,
-        processes,
+        .as_millis() as u64
+}
+
+#[tauri::command]
+pub(crate) async fn host_snapshot(inspect_disk: Option<bool>) -> Result<HostSnapshot> {
+    let host = tauri::async_runtime::spawn_blocking(move || {
+        pm2_host::sample(inspect_disk.unwrap_or(false))
+    })
+    .await
+    .map_err(|_| {
+        AppError::new(
+            "host_metrics",
+            "Não foi possível ler os recursos do Windows.",
+        )
+    })?;
+    Ok(HostSnapshot {
+        sampled_at: sample_time(),
         host,
     })
 }

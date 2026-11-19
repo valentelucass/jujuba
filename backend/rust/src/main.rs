@@ -11,6 +11,8 @@ mod error;
 mod models;
 mod no_sql;
 mod other_db;
+mod host_optimizer;
+mod pm2_disk_usage;
 mod pm2_host;
 mod pm2;
 mod pm2_ports;
@@ -72,6 +74,8 @@ fn main() {
             commands::dashboard_performance,
             commands::dashboard_live,
             pm2::pm2_snapshot,
+            pm2::host_snapshot,
+            host_optimizer::optimizer_close,
             pm2::pm2_action,
             pm2::pm2_open_shell,
             pm2::pm2_scale,

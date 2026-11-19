@@ -26,6 +26,8 @@ fn main() {
             "dashboard_performance",
             "dashboard_live",
             "pm2_snapshot",
+            "host_snapshot",
+            "optimizer_close",
             "pm2_action",
             "pm2_open_shell",
             "pm2_scale",

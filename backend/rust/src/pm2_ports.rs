@@ -37,6 +37,37 @@ fn walk_processes(mut visit: impl FnMut(&PROCESSENTRY32W)) -> Option<()> {
     complete.then_some(())
 }
 
+pub(crate) fn parents() -> Option<HashMap<u32, u32>> {
+    let mut tree = HashMap::new();
+    walk_processes(|entry| {
+        tree.insert(entry.th32ProcessID, entry.th32ParentProcessID);
+    })?;
+    Some(tree)
+}
+
+fn descendants(tree: &HashMap<u32, u32>, mut protected: HashSet<u32>) -> HashSet<u32> {
+    protected.remove(&0);
+    let mut children = HashMap::<u32, Vec<u32>>::new();
+    for (&pid, &parent) in tree {
+        if pid != 0 {
+            children.entry(parent).or_default().push(pid);
+        }
+    }
+    let mut pending: Vec<_> = protected.iter().copied().collect();
+    while let Some(parent) = pending.pop() {
+        for child in children.remove(&parent).unwrap_or_default() {
+            if protected.insert(child) {
+                pending.push(child);
+            }
+        }
+    }
+    protected
+}
+
+pub(super) fn protected_descendants(roots: HashSet<u32>) -> Option<HashSet<u32>> {
+    Some(descendants(&parents()?, roots))
+}
+
 pub(crate) fn cli_children(powershell: u32) -> Vec<u32> {
     let mut children = Vec::new();
     let mut wrappers = Vec::new();
@@ -142,10 +173,7 @@ pub(crate) fn sample(managed: &HashSet<u32>) -> Option<HashMap<u32, BTreeSet<u16
     if managed.is_empty() {
         return Some(HashMap::new());
     }
-    let mut parents = HashMap::new();
-    walk_processes(|entry| {
-        parents.insert(entry.th32ProcessID, entry.th32ParentProcessID);
-    })?;
+    let parents = parents()?;
     let ipv4 = listeners(
         AF_INET,
         offset_of!(MIB_TCPTABLE_OWNER_PID, table),
@@ -162,6 +190,28 @@ pub(crate) fn sample(managed: &HashSet<u32>) -> Option<HashMap<u32, BTreeSet<u16
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn protects_daemon_managed_workers_wrappers_and_every_descendant() {
+        let tree = HashMap::from([
+            (10, 1),
+            (20, 10),
+            (30, 20),
+            (40, 30),
+            (50, 80),
+            (60, 50),
+            (65, 60),
+            (70, 1),
+            (80, 1),
+            (91, 92),
+            (92, 91),
+        ]);
+        assert_eq!(
+            descendants(&tree, HashSet::from([0, 10, 50, 91])),
+            HashSet::from([10, 20, 30, 40, 50, 60, 65, 91, 92])
+        );
+        assert!(descendants(&tree, HashSet::new()).is_empty());
+    }
+
     #[test]
     fn assigns_each_listener_to_its_nearest_managed_ancestor() {
         let tree = HashMap::from([(2, 1), (3, 2), (4, 3), (5, 1), (7, 8), (8, 7)]);

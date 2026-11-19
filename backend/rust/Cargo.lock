@@ -3109,7 +3109,7 @@ dependencies = [
 
 [[package]]
 name = "jujubasql"
-version = "0.1.55"
+version = "0.1.56"
 dependencies = [
  "base64 0.22.1",
  "bigdecimal",
@@ -3135,6 +3135,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "uuid",
+ "windows",
  "windows-sys 0.61.2",
  "zeroize",
 ]
