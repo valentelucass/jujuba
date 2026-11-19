@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Activity, Braces, ChartNoAxesCombined, Check, ChevronDown, Database, GitBranch, GitFork, Moon, Plug, Power, Search, Sun } from 'lucide-react'
 import jujuba from '../assets/jujuba.png'
-import '@fontsource/dm-serif-text/latin-400-italic.css'
+import '@fontsource/barlow-semi-condensed/latin-800.css'
 import './header.css'
 import type { Connection, Database as DatabaseName } from '../models/sql'
 import { useTheme } from './Theme'

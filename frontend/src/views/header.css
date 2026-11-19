@@ -7,8 +7,8 @@ header.topbar .wordmark > strong {
   letter-spacing: -.075em; color: var(--text);
 }
 .topbar .wordmark > strong > span {
-  font: italic 400 24px/.9 "DM Serif Text", Georgia, serif; letter-spacing: -.075em;
-  color: var(--berry); margin-left: 1px; position: relative; top: .4px;
+  font: 800 1.04em/1 "Barlow Semi Condensed", "Segoe UI", sans-serif; letter-spacing: -.045em;
+  color: var(--berry); margin-left: .045em; position: relative; top: .025em;
 }
 .topbar :is(.studio-areas, .connection-tools, .bank-tools) {
   display: flex; align-items: center; gap: 3px; min-width: 0; padding-inline-start: 10px;
