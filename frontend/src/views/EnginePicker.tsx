@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { ArrowLeft, Check, ChevronRight, PanelRight } from 'lucide-react'
-import jujuba from '../assets/jujuba.png'
+import { JujubaMascot } from './JujubaMascot'
 import { engineOrder, engines, type Engine } from '../models/engines'
 
 type EngineOptionsProps = {
@@ -37,13 +37,13 @@ export function SelectedEngine({ engine }: { engine: Engine | null }) {
   </aside>
 }
 
-export function CenterEnginePicker({ selected, choose, back }: EngineOptionsProps & { back: () => void }) {
+export function CenterEnginePicker({ selected, choose, back, color }: EngineOptionsProps & { back: () => void; color: string }) {
   const heading = useRef<HTMLHeadingElement>(null)
   useEffect(() => { heading.current?.focus() }, [])
 
   return <section className="welcome-content welcome-engines" aria-labelledby="center-engine-title"
     onKeyDown={(event) => { if (event.key === 'Escape') back() }}>
-    <div className="welcome-mark" aria-hidden="true"><img src={jujuba} alt="" /></div>
+    <div className="welcome-mark" aria-hidden="true"><JujubaMascot hero color={color} /></div>
     <div className="welcome-picker-heading">
       <h1 id="center-engine-title" ref={heading} tabIndex={-1}>Escolha o tipo de banco</h1>
       <button type="button" className="button" onClick={back}><ArrowLeft size={15} /> Voltar</button>

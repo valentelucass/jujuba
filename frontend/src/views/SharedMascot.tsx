@@ -37,7 +37,7 @@ export function SharedMascot({ peer, appearance, visibility, greeting, direction
   if (flight) classes.push('is-flying')
   return <div className={classes.join(' ')} role="img" aria-label={'Jujuba de ' + peer}
     data-pose={flight ? 'flight' : pose} style={{ left: point.x, top: point.y }}>
-    <JujubaMascot hat={Object.hasOwn(hats, hat) ? hat as Hat : 'none'} grabbed={pose === 'held'}
+    <JujubaMascot color={appearance.color} hat={Object.hasOwn(hats, hat) ? hat as Hat : 'none'} grabbed={pose === 'held'}
       reaction={pose === 'wary' || pose === 'scared' ? pose : null} greeting={shownGreeting} direction={shownDirection}
       equipped={appearance.scene?.toy?.kind === 'blaster'}
       flight={flight ? { ...point, edge: flight.edge, squash: flight.squash, velocity: { x: flight.velocityX, y: 0 } } : null} />

@@ -58,12 +58,13 @@ export type VisibleMascot = {
 }
 
 export function useSharedMascot(network: MascotRoom | null, {
-  position, bounds, hat, pose, flight, kick, relocate, receiveSplat, practice, scene: sharedScene,
+  position, bounds, hat, color, pose, flight, kick, relocate, receiveSplat, practice, scene: sharedScene, gathering = false,
 }: {
-  position: Point; bounds: FlightBounds; hat: string; pose: MascotPose; flight: FlightFrame | null
+  position: Point; bounds: FlightBounds; hat: string; color: string; pose: MascotPose; flight: FlightFrame | null
   kick: (impulse: MascotImpulse, source: 'local' | 'remote', from?: Point) => void
   relocate: (point: Point) => void
   receiveSplat?: (impact: Impact, peer: string) => void
+  gathering?: boolean
   practice?: Practice | null
   scene?: RefObject<(() => MascotScene) | null>
 }) {
@@ -109,7 +110,7 @@ export function useSharedMascot(network: MascotRoom | null, {
   const rich = localOnly || !!room?.rich
   const other = practice?.point ?? peer?.point ?? null
   const gap = other ? Math.hypot(position.x - other.x, position.y - other.y) : Infinity
-  const shouldReact = (localOnly || preferences.shareOwn) && !quiet && !!other
+  const shouldReact = !gathering && (localOnly || preferences.shareOwn) && !quiet && !!other
   const event = shown && shown.room === roomId && shown.peer === selectedPeer && shouldReact ? shown.event : null
   const midpoint = other ? { x: (position.x + other.x) / 2, y: (position.y + other.y) / 2 } : null
   const moving = pose === 'held' || !!flight
@@ -121,7 +122,7 @@ export function useSharedMascot(network: MascotRoom | null, {
 
   latest.current = preferences.shareOwn && !quiet ? {
     position: normalize(position, bounds),
-    hat, pose,
+    hat, color, pose,
     flight: flight ? { edge: flight.edge, velocityX: flight.velocity.x, squash: flight.squash } : null,
   } : null
 

@@ -3,6 +3,19 @@ use super::{
     model::{Diagram, Edge, Kind, Node, Note, Position},
 };
 
+#[test]
+fn accepts_legacy_mascots_and_validates_custom_color() {
+    let mut mascot: super::flow_mascot::Mascot = serde_json::from_value(serde_json::json!({
+        "position": { "x": 0.3, "y": 0.6 }, "hat": "none", "pose": "idle"
+    })).unwrap();
+    assert!(mascot.valid());
+    assert!(serde_json::to_value(&mascot).unwrap().get("color").is_none());
+    mascot.color = Some("#AA31eF".into());
+    assert!(mascot.valid());
+    mascot.color = Some("#abé12".into());
+    assert!(!mascot.valid());
+}
+
 fn example() -> Diagram {
     let node = |id: &str, kind, label: &str| Node {
         id: id.into(),
@@ -134,7 +147,7 @@ fn generates_a_real_flow_and_reads_it_back_to_generate_files() {
     runtime.block_on(async {
         super::ai::check(provider).await.unwrap();
         let flow = super::ai::converse(provider, super::ai::AssistantRequest {
-            screen: "Diagramas de sistema".into(), history: Vec::new(), diagram: None,
+            screen: "Diagramas de sistema".into(), history: Vec::new(), diagram: None, options: None,
             documents: vec![serde_json::from_value(serde_json::json!({
                 "name": "cadastro.md",
                 "text": "Começa exibindo formulário de nome. A pessoa preenche. Decisão se o nome foi informado. Se não, retorna ao formulário. Se sim, mostra a saudação e finaliza."
@@ -147,13 +160,13 @@ fn generates_a_real_flow_and_reads_it_back_to_generate_files() {
         let project = files::save(&path, None, flow).unwrap();
         let flow = files::open_current(&project).unwrap().diagram;
         let code = super::ai::scaffold(provider, flow,
-            "Implementação pequena. Use HTML, CSS e JavaScript simples em index.html e instruções em README.md. Limite-se a esses dois arquivos.".into()).await.unwrap();
+            "Implementação pequena. Use HTML, CSS e JavaScript simples em index.html e instruções em README.md. Limite-se a esses dois arquivos.".into(), None).await.unwrap();
         assert!(code.files.iter().any(|file| file.path == "index.html" && !file.content.is_empty()));
         code.save(destination.path()).unwrap();
         assert!(destination.path().join("sistema-gerado/index.html").is_file());
         let workspace = destination.path().join("sistema-gerado");
         let chat = super::ai::converse(provider, super::ai::AssistantRequest {
-            screen: "Diagramas de sistema".into(), history: Vec::new(), documents: Vec::new(), diagram: None,
+            screen: "Diagramas de sistema".into(), history: Vec::new(), documents: Vec::new(), diagram: None, options: None,
             prompt: "Crie neste projeto um arquivo validacao.txt contendo exatamente JUJUBA_OK em uma linha. Use as ferramentas e faça a alteração agora.".into(),
         }, Some(&workspace)).await.unwrap();
         assert!(chat.project_task, "{}", chat.reply);

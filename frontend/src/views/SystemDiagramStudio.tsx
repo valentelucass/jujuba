@@ -9,7 +9,7 @@ import { version as buildVersion } from '../../package.json'
 import { appError, flowCollaboration, flowProjects, systemDiagram } from '../controllers/api'
 import type { FlowCommand, FlowProject, FlowProjectEntry, FlowSession } from '../models/flowWorkspace'
 import {
-  emptyDiagram, type AiProvider, type AssistantFlowChange, type DiagramProject, type GeneratedProject, type StagePosition,
+  emptyDiagram, type AiProvider, type AssistantFlowChange, type AssistantOptions, type DiagramProject, type GeneratedProject, type StagePosition,
   type SystemDiagram, type SystemEdge,
 } from '../models/systemDiagram'
 import { Header } from './Header'
@@ -42,11 +42,13 @@ function hasElement(diagram: SystemDiagram, id: string | null) {
 
 type Panel = 'create' | 'share' | 'join' | null
 
-export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagram, onMascotRoom, connection, upgrade }: {
+export function SystemDiagramStudio({ exit, provider, assistantOptions, unavailableOption, assistantDiagram, onDiagram, onMascotRoom, connection, upgrade }: {
   exit: () => void
   connection?: Connection | null
   upgrade: FlowUpgrade | null
   provider: AiProvider
+  assistantOptions?: AssistantOptions
+  unavailableOption: string
   assistantDiagram: AssistantFlowChange | null
   onDiagram: (diagram: SystemDiagram | null) => void
   onMascotRoom: (room: MascotRoom | null) => void
@@ -558,8 +560,9 @@ export function SystemDiagramStudio({ exit, provider, assistantDiagram, onDiagra
 
   function scaffold() {
     if (!file || dirty) return
+    if (unavailableOption) { setError(unavailableOption); return }
     void perform('Gerando implementação…', async () => {
-      const next = await systemDiagram.scaffold(provider, file, technology)
+      const next = await systemDiagram.scaffold(provider, file, technology, assistantOptions)
       setCode(next)
       setFileIndex(0)
       setNotice('Confira os arquivos gerados antes de salvar.')

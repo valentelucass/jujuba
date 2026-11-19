@@ -23,6 +23,16 @@ export interface GeneratedFile { path: string; content: string }
 export interface GeneratedProject { files: GeneratedFile[] }
 
 export type AiProvider = 'codex' | 'claude' | 'gemini'
+export interface AssistantModel {
+  id: string
+  label: string
+  reasoningEfforts: string[]
+  defaultReasoningEffort?: string | null
+}
+export interface AssistantOptions {
+  model?: string
+  reasoningEffort?: string
+}
 export type ChatMessage = { role: 'user' | 'assistant'; content: string }
 export type ReferenceDocument = { name: string; text: string }
 export type AssistantReply = { reply: string; diagram: SystemDiagram | null }
@@ -35,6 +45,7 @@ export type AssistantFlowChange = {
 }
 
 export interface AssistantRequest {
+  options?: AssistantOptions
   prompt: string
   screen: string
   history: ChatMessage[]

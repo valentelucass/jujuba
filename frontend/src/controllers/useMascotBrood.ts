@@ -61,6 +61,7 @@ export function useMascotBrood(area: FlightBounds, onImpact: (mark: Impact) => v
   const drag = useRef<{ id: number; pointer: number; offset: Point; moved: boolean; origin: Point; samples: PointerSample[] } | null>(null)
   const remote = useRef(new Map<number, string>())
   const pull = useRef<Pull | null>(null)
+  const magnet = useRef<Point | null>(null)
   const animation = useRef(0)
   const capacity = useRef(limit)
 
@@ -143,7 +144,14 @@ export function useMascotBrood(area: FlightBounds, onImpact: (mark: Impact) => v
           const airborne = body.y < bounds.bottom - .15 || Math.abs(body.vy) > 1
           if (airborne || Math.abs(body.vx) > 1 || body.squash > .001) changed = true
           body.squash = Math.max(0, body.squash - dt * 5)
-          if (airborne) body.vy += 1200 * dt
+          const pole = magnet.current
+          if (pole) {
+            const damping = Math.exp(-10 * dt)
+            body.vx = (body.vx + (constrain(pole.x, bounds.left, bounds.right) - body.x) * 48 * dt) * damping
+            const targetY = pole.y + (child.id % 3 - 1) * radius / 2
+            body.vy = (body.vy + (constrain(targetY, bounds.top, bounds.bottom) - body.y) * 48 * dt) * damping
+            changed = true
+          } else if (airborne) body.vy += 1200 * dt
           body.x += body.vx * dt
           body.y += body.vy * dt
           if (body.x < bounds.left || body.x > bounds.right) {
@@ -266,6 +274,32 @@ export function useMascotBrood(area: FlightBounds, onImpact: (mark: Impact) => v
     publish([...live.current, { id, x: point.x, phase: 'egg', flight: null }])
   }
 
+  function aimMagnet(point: Point) {
+    if (pull.current || !live.current.some(canAttract)) return
+    magnet.current = point
+  }
+
+  function releaseMagnet(scatter: boolean) {
+    const center = magnet.current
+    magnet.current = null
+    if (!center) return
+    for (const child of live.current) {
+      const body = bodies.current.get(child.id)
+      if (!body || body.held || !canAttract(child)) continue
+      if (!scatter) {
+        body.vx = body.vy = 0
+        continue
+      }
+      const dx = body.x - center.x
+      const dy = body.y - center.y
+      const angle = Math.hypot(dx, dy) > 2 ? Math.atan2(dy, dx) : child.id * 2.39996
+      const speed = 480 + (child.id % 5) * 55
+      body.vx = Math.cos(angle) * speed
+      body.vy = Math.sin(angle) * speed - 160
+      if (body.y > scene.current.area.bottom - radius) body.vy = -Math.max(180, Math.abs(body.vy))
+    }
+  }
+
   function hatch(id: number) {
     publish(live.current.map((child) => child.id === id && child.phase === 'egg' ? { ...child, phase: 'young' } : child))
   }
@@ -381,6 +415,7 @@ export function useMascotBrood(area: FlightBounds, onImpact: (mark: Impact) => v
   }
 
   function startPull(center: Point, duration: number) {
+    releaseMagnet(false)
     const origins = new Map<number, Point>()
     for (const [id, body] of bodies.current) {
       origins.set(id, { x: body.x, y: body.y })
@@ -407,5 +442,10 @@ export function useMascotBrood(area: FlightBounds, onImpact: (mark: Impact) => v
   }
 
   return { children, lay, hatch, position, bump, pop, remove, grab, move, release, touch, collideWith, setPeerCount,
-    remoteDrag, releaseHidden, startPull, endPull }
+    remoteDrag, releaseHidden, startPull, endPull, aimMagnet, releaseMagnet,
+    magnetAvailable: !pull.current && children.some(canAttract) }
+}
+
+function canAttract(child: Offspring) {
+  return child.phase === 'young' && !child.held && !child.dissolving
 }

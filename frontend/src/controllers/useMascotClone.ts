@@ -8,7 +8,7 @@ export function useMascotClone(bounds: FlightBounds, onImpact: (mark: Impact) =>
   const [held, setHeld] = useState(false)
   const [flight, setFlight] = useState<FlightFrame | null>(null)
   const cancel = useRef<(() => void) | null>(null)
-  const drag = useRef<{ id: number; offset: Point; samples: PointerSample[] } | null>(null)
+  const drag = useRef<{ id: number; button: HTMLButtonElement; offset: Point; samples: PointerSample[] } | null>(null)
   const limits = useRef(bounds)
   limits.current = bounds
   const clamp = (point: Point): Point => ({
@@ -18,15 +18,20 @@ export function useMascotClone(bounds: FlightBounds, onImpact: (mark: Impact) =>
   const point = flight ?? (position && clamp(position))
   useEffect(() => () => cancel.current?.(), [])
 
-  function throwClone(from: Point, velocity: Point, sound: 'throw' | 'slimeKick') {
-    onLaunch(sound, Math.hypot(velocity.x, velocity.y))
+  function throwClone(from: Point, velocity: Point, sound?: 'throw' | 'slimeKick') {
+    if (sound) onLaunch(sound, Math.hypot(velocity.x, velocity.y))
     cancel.current?.()
     setFlight({ ...from, velocity, squash: 0, edge: 'bottom' })
-    cancel.current = animateThrow(from, velocity, () => limits.current, setFlight, onImpact, (rest) => {
+    const cancelThisFlight = animateThrow(from, velocity, () => limits.current, setFlight, (impact) => {
+      if (sound) onImpact(impact)
+    }, (rest) => {
       cancel.current = null
       setFlight(null)
       setPosition(rest)
     })
+    cancel.current = cancelThisFlight
+    const active = () => cancel.current === cancelThisFlight
+    return { active, restore: (at: Point) => { if (active()) relocate(at) } }
   }
 
   function boost(impulse: MascotImpulse, recoil = false, from?: Point) {
@@ -55,7 +60,7 @@ export function useMascotClone(bounds: FlightBounds, onImpact: (mark: Impact) =>
     cancel.current = null
     setFlight(null)
     setPosition(point)
-    drag.current = { id: event.pointerId, offset: { x: event.clientX - point.x, y: event.clientY - point.y },
+    drag.current = { id: event.pointerId, button: event.currentTarget, offset: { x: event.clientX - point.x, y: event.clientY - point.y },
       samples: [{ x: event.clientX, y: event.clientY, time: event.timeStamp }] }
     event.currentTarget.setPointerCapture(event.pointerId)
     setHeld(true)
@@ -89,5 +94,12 @@ export function useMascotClone(bounds: FlightBounds, onImpact: (mark: Impact) =>
     setPosition(clamp(next))
   }
 
-  return { point, flight, held, grab, move, release, keepOrRemove, boost, nudge, relocate }
+  function releaseGrip() {
+    const grip = drag.current
+    drag.current = null
+    setHeld(false)
+    if (grip?.button.hasPointerCapture(grip.id)) grip.button.releasePointerCapture(grip.id)
+  }
+  return { point, flight, held, grab, move, release, keepOrRemove, boost, nudge, relocate, releaseGrip,
+    launch: (from: Point, velocity: Point) => throwClone(from, velocity) }
 }

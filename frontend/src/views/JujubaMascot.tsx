@@ -1,18 +1,25 @@
-import { useEffect, useId, useRef, type CSSProperties } from 'react'
+import { useEffect, useId, useMemo, useRef, type CSSProperties } from 'react'
 import jujuba from '../assets/jujuba.png'
 import type { MascotMeetingKind } from '../models/flowMascot'
 import type { FlightFrame, Point } from '../controllers/mascotMotion'
 import { MascotHat, type Hat } from './MascotHat'
+import { normalizeMascotColor, originalPink, tintRamps } from '../models/mascotColor'
 
-export function JujubaMascot({ hero = false, followPointer = false, grabbed = false, equipped = false, reaction, flight, hat = 'none', greeting, direction }: {
+export function JujubaMascot({ hero = false, followPointer = false, grabbed = false, equipped = false, laughing = false, reaction, flight, hat = 'none', color, greeting, direction }: {
   hero?: boolean; followPointer?: boolean; grabbed?: boolean; equipped?: boolean
+  laughing?: boolean
   reaction?: 'protesting' | 'scared' | 'wary' | 'relieved' | null
   flight?: FlightFrame | null
   hat?: Hat
+  color?: string
   greeting?: MascotMeetingKind
   direction?: Point
 }) {
   const id = useId()
+  const tone = normalizeMascotColor(color)
+  const ramps = useMemo(() => tone === originalPink ? undefined : tintRamps(tone), [tone])
+  const tintId = id + '-tint'
+  const tint = tone === originalPink ? undefined : { filter: `url(#${tintId})` }
   const mascot = useRef<HTMLSpanElement>(null)
   const leftLid = id + '-left'
   const rightLid = id + '-right'
@@ -21,10 +28,11 @@ export function JujubaMascot({ hero = false, followPointer = false, grabbed = fa
   const leftPupil = id + '-left-pupil'
   const rightPupil = id + '-right-pupil'
   const smile = 'M547 709C587 726 638 705 665 673Q690 644 704 666C715 706 684 747 650 762C610 779 560 756 543 729Q534 715 547 709Z'
-  const protesting = reaction === 'protesting'
-  const scared = reaction === 'scared' || reaction === 'wary' || !!flight
-  const relieved = reaction === 'relieved'
-  const kissing = greeting === 'kiss' && !flight
+  const tickled = laughing && !grabbed && !flight
+  const protesting = !tickled && reaction === 'protesting'
+  const scared = !tickled && (reaction === 'scared' || reaction === 'wary' || !!flight)
+  const relieved = !tickled && reaction === 'relieved'
+  const kissing = greeting === 'kiss' && !flight && !tickled
   const watching = !!direction && !flight && !!greeting && ['look', 'hug', 'squeeze', 'kiss', 'dance'].includes(greeting)
   const embracing = !!direction && !equipped && !grabbed && !flight && !!greeting && ['hug', 'squeeze', 'push', 'kiss'].includes(greeting)
   const flailing = !equipped && !embracing && (grabbed || scared)
@@ -78,7 +86,7 @@ export function JujubaMascot({ hero = false, followPointer = false, grabbed = fa
     }
   }, [followPointer])
 
-  return <span ref={mascot} className={'jujuba-mascot' + (hero ? ' jujuba-hero' : '') + (greeting ? ' jujuba-greeting-' + greeting : '')} aria-hidden="true"
+  return <span ref={mascot} className={'jujuba-mascot' + (hero ? ' jujuba-hero' : '') + (greeting ? ' jujuba-greeting-' + greeting : '') + (tickled ? ' is-laughing' : '')} aria-hidden="true"
     style={{
       ...(direction && greeting ? { '--pair-x': direction.x, '--pair-y': direction.y,
         '--pair-gaze-x': `${direction.x * 43}px`, '--pair-gaze-y': `${direction.y * 27}px` } : {}),
@@ -88,19 +96,29 @@ export function JujubaMascot({ hero = false, followPointer = false, grabbed = fa
       transformOrigin: origins[flight.edge],
       } : {}),
     } as CSSProperties}>
-    {flailing && <svg className="jujuba-arms" viewBox="0 0 1254 1254" aria-hidden="true">
+    {ramps && <svg className="jujuba-tint-defs" width="0" height="0" aria-hidden="true">
+      <defs><filter id={tintId} colorInterpolationFilters="sRGB" x="-20%" y="-20%" width="140%" height="140%">
+        <feColorMatrix type="matrix" values="0.76 0.24 0 0 0   0.76 0.24 0 0 0   0.76 0.24 0 0 0   0 0 0 1 0" />
+        <feComponentTransfer>
+          <feFuncR type="table" tableValues={ramps[0]} />
+          <feFuncG type="table" tableValues={ramps[1]} />
+          <feFuncB type="table" tableValues={ramps[2]} />
+        </feComponentTransfer>
+      </filter></defs>
+    </svg>}
+    {flailing && <svg className="jujuba-arms" style={tint} viewBox="0 0 1254 1254" aria-hidden="true">
       <path className="jujuba-arm jujuba-arm-left" d="M235 685Q152 670 101 544L72 465" />
       <path className="jujuba-arm jujuba-arm-right" d="M1018 695Q1116 661 1151 539L1181 468" />
     </svg>}
-    <img src={jujuba} alt="" draggable={false} />
+    <span className="jujuba-skin" style={tint}><img src={jujuba} alt="" draggable={false} /></span>
     <MascotHat hat={hat} />
     {embracing && <svg className="jujuba-pair-arms" viewBox="0 0 1254 1254" aria-hidden="true"
-      style={towardLeft ? { scale: '-1 1' } : undefined}>
+      style={{ ...tint, scale: towardLeft ? '-1 1' : undefined }}>
       <path d={greeting === 'push' ? 'M938 737Q1124 669 1289 735L1414 689' :
         'M931 792Q1100 839 1270 730Q1342 689 1384 719'} />
       <path d="M121 727Q182 791 353 822" />
     </svg>}
-    <svg className="jujuba-expression" viewBox="0 0 1254 1254" aria-hidden="true">
+    <svg className="jujuba-expression" style={tint} viewBox="0 0 1254 1254" aria-hidden="true">
       <defs>
         <linearGradient id={leftLid} x1="375" y1="524" x2="466" y2="704" gradientUnits="userSpaceOnUse">
           <stop stopColor="#bc0b82" />

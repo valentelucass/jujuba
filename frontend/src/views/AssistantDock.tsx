@@ -1,12 +1,13 @@
-import { Copy, Eye, EyeOff, FolderOpen, LoaderCircle, Paperclip, Play, Rocket, Send, Sparkles, Volume2, VolumeX, Wrench, X } from 'lucide-react'
-import { useEffect, useRef, useState, type PointerEvent } from 'react'
+import { ArrowLeft, Bomb, Copy, Eye, EyeOff, FolderOpen, LoaderCircle, Paperclip, Play, Send, Sparkles, Volume2, VolumeX, Wrench, X } from 'lucide-react'
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent } from 'react'
 import { JujubaMascot } from './JujubaMascot'
 import { MascotMeetingEffect, MascotYoung, SharedMascot } from './SharedMascot'
 import { useSharedMascot } from '../controllers/useSharedMascot'
 import { useMascotClone } from '../controllers/useMascotClone'
+import { useBombMascots } from '../controllers/useBombMascots'
 import { useMascotScene } from '../controllers/useMascotScene'
 import { useRemoteMascotCollisions } from '../controllers/useRemoteMascotCollisions'
-import { gooBombTiming, youngTone, type GooBombPhase, type GooSplash, type MascotScene, type SceneHit } from '../models/mascotScene'
+import { gooBombTiming, type GooBombPhase, type GooSplash, type MascotScene, type SceneHit } from '../models/mascotScene'
 import { SharedMascotScene } from './SharedMascotScene'
 import { GooBomb, GooBombAim } from './GooBomb'
 import { useEggSchedule, useMascotBrood, type BroodActor } from '../controllers/useMascotBrood'
@@ -14,9 +15,16 @@ import type { ShotTarget } from '../controllers/mascotProjectile'
 import { useMascotSound } from '../controllers/mascotSound'
 import type { MascotImpulse, MascotPose, MascotRoom, MascotVisibility } from '../models/flowMascot'
 import { MascotAim, MascotToyIcon, toyLabels, type MascotTool } from './MascotAim'
+import { MascotPlayground } from './MascotPlayground'
+import { MascotMagnet } from './MascotMagnet'
+import { GestureControls, PlayTools, readGestures, saveGestures, type PlayTool } from './MascotPlayMenu'
+import { useJellyPlay } from '../controllers/useJellyPlay'
+import { JellyEffects } from './JellyEffects'
 import { makeSplat, MascotSplat, type Splat } from './MascotSplat'
-import { hats, MascotHat, readHat, saveHat, type Hat } from './MascotHat'
+import { readHat, saveHat } from './MascotHat'
+import { MascotAppearance } from './MascotAppearance'
 import { appError, systemDiagram } from '../controllers/api'
+import type { useAssistantSettings } from '../controllers/useAssistantSettings'
 import { animateThrow, throwVelocity, type FlightBounds, type FlightFrame, type Impact, type Point, type PointerSample } from '../controllers/mascotMotion'
 import type { AiProvider, AssistantFlowResult, ChatMessage, ReferenceDocument, SystemDiagram } from '../models/systemDiagram'
 
@@ -25,6 +33,11 @@ const assistants = {
   claude: { label: 'Claude · Claude Code', login: 'Entre com sua conta no Claude Code.' },
   gemini: { label: 'Gemini · Gemini CLI', login: 'No Gemini CLI, escolha entrar com o Google.' },
 } satisfies Record<AiProvider, { label: string; login: string }>
+
+const effortLabels: Record<string, string> = {
+  none: 'Desativado', minimal: 'Mínimo', low: 'Baixo', medium: 'Médio', high: 'Alto',
+  xhigh: 'Extra alto', max: 'Máximo', ultra: 'Ultra', auto: 'Automático',
+}
 
 const preference = 'jujuba.assistant.provider'
 const accepted = ['.txt', '.md', '.json', '.yaml', '.yml', '.csv', '.xml', '.mmd', '.mermaid']
@@ -88,6 +101,10 @@ function edgeAt(x: number, width: number) {
 }
 
 type Turn = ChatMessage & { change?: AssistantFlowResult }
+type DockSection = 'chat' | 'hats' | 'tools' | 'mascots'
+const sectionTitles: Record<DockSection, string> = {
+  chat: 'Assistente de IA', hats: 'Aparência', tools: 'Ferramentas e sons', mascots: 'Jujubas da sessão',
+}
 
 export function readProvider(): AiProvider {
   try {
@@ -97,11 +114,14 @@ export function readProvider(): AiProvider {
   return 'codex'
 }
 
-export function AssistantDock({ open, setOpen, provider, setProvider, screen, diagram, onDiagram, mascotRoom }: {
+export function AssistantDock({ open, setOpen, provider, setProvider, settings, screen, diagram, onDiagram, mascotRoom, color, changeColor }: {
   open: boolean
+  color: string
+  changeColor: (color: string) => void
   setOpen: (open: boolean) => void
   provider: AiProvider
   setProvider: (provider: AiProvider) => void
+  settings: ReturnType<typeof useAssistantSettings>
   screen: string
   diagram: SystemDiagram | null
   mascotRoom: MascotRoom | null
@@ -118,15 +138,16 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const [screenSize, setScreenSize] = useState(viewport)
   const [placement, setPlacement] = useState(readLauncherPosition)
   const [hat, setHat] = useState(readHat)
-  const [hatsOpen, setHatsOpen] = useState(false)
-  const [mascotOptions, setMascotOptions] = useState(false)
-  const [toolsOpen, setToolsOpen] = useState(false)
-  const [tool, setTool] = useState<MascotTool | null>(null)
-  const [bombAim, setBombAim] = useState(false)
-  const [blast, setBlast] = useState<{ point: Point; phase: GooBombPhase; source?: string; splash?: GooSplash } | null>(null)
+  const [section, setSection] = useState<DockSection>('chat')
+  const [settingsHeight, setSettingsHeight] = useState(615)
+  const activeSection = section === 'mascots' && !mascotRoom ? 'chat' : section
+  const inChat = activeSection === 'chat'
+  const [tool, setTool] = useState<MascotTool | PlayTool | 'bomb' | null>(null)
+  const [gestures, setGestures] = useState(readGestures)
+  const [blast, setBlast] = useState<{ point: Point; phase: GooBombPhase; room?: string; source?: string; splash?: GooSplash } | null>(null)
   const blastTimer = useRef<number[]>([])
   const seenDrag = useRef<{ room?: string; sequence: number }>({ sequence: 0 })
-  const { settings: sound, save: saveSound, play: playSound, tension, stopBomb } = useMascotSound()
+  const { settings: sound, save: saveSound, play: playSound, tension, playBomb, stopBomb } = useMascotSound()
   const [grabbed, setGrabbed] = useState(false)
   const [reaction, setReaction] = useState<Reaction | null>(null)
   const [dragPoint, setDragPoint] = useState<Point | null>(null)
@@ -148,8 +169,21 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const launcher = useRef<HTMLButtonElement>(null)
   const end = useRef<HTMLLIElement>(null)
 
-  useEffect(() => { if (open) composer.current?.focus() }, [open])
-  useEffect(() => { if (open) end.current?.scrollIntoView({ block: 'nearest' }) }, [chat, busy, open])
+  useLayoutEffect(() => {
+    const element = dock.current
+    if (!open || inChat || !element) return
+    const measure = () => setSettingsHeight(element.offsetHeight)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [activeSection, inChat, open])
+
+  useEffect(() => {
+    if (!open) setSection('chat')
+    else if (inChat) composer.current?.focus()
+  }, [open, inChat])
+  useEffect(() => { if (open && inChat) end.current?.scrollIntoView({ block: 'nearest' }) }, [chat, busy, open, inChat])
   useEffect(() => {
     if (!open) return
     function dismissOutside(event: MouseEvent) {
@@ -206,7 +240,6 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const point = dragPoint ?? flight ?? collisionRest ?? resting
   const expression = grabbed ? null : frightened && !flight ? (pointerNear ? 'scared' : 'wary') : reaction
   const pose: MascotPose = grabbed ? 'held' : expression === 'scared' || expression === 'wary' ? expression : 'idle'
-  const pairing = { position: point, bounds, hat, flight, pose, kick: collide, relocate: relocateMascot }
   const clone = useMascotClone(bounds, (impact) => {
     playSound('bounceOffWall', .64 + impact.strength * .7)
     scene.shareSound('bounceOffWall', .64 + impact.strength * .7)
@@ -218,9 +251,22 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     scene.shareSound(sound, strength)
   })
 
+  const bombMascots = useBombMascots({
+    bounds,
+    main: { point, place: relocateMascot, launch: (from, velocity) => throwMascot(from, velocity, true), releaseGrip: () => {
+      const pointer = drag.current?.id
+      drag.current = null
+      setGrabbed(false)
+      setDragPoint(null)
+      if (pointer !== undefined && launcher.current?.hasPointerCapture(pointer)) launcher.current.releasePointerCapture(pointer)
+    } },
+    clone: clone.point ? { point: clone.point, place: clone.relocate, launch: clone.launch, releaseGrip: clone.releaseGrip } : null,
+  })
+  const pairing = { position: point, bounds, hat, color, flight, pose, kick: collide, relocate: relocateMascot, gathering: bombMascots.moving }
   const { preferences: mascotPreferences, savePreferences, shareImpact, remote, meeting, hug,
     members, visible, selectedPeer, visibilityFor, quiet } =
     useSharedMascot(mascotRoom, { ...pairing, receiveSplat: addRemoteSplat, scene: outgoingScene })
+  const jelly = useJellyPlay({ ...gestures, paused: quiet }, playSound)
   const practice = useSharedMascot(null, {
     ...pairing, practice: !quiet && clone.point ? { ...clone, point: clone.point } : null,
   })
@@ -233,6 +279,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
       direction: pointBetween(clone.point ?? point, point) },
     hat, children: brood.children, childPosition: brood.position, members, visible, active: interacting,
     receiveHit: (hit) => {
+      if (bombMascots.moving && (hit.target === 'main' || hit.target === 'clone')) return
       if (hit.target === 'main') collide(hit.impulse, 'remote')
       else if (hit.target === 'clone') clone.boost(hit.impulse)
       else {
@@ -258,37 +305,42 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
 
   function startBlast(center: Point, affectsOwn: boolean, source?: string, targets?: string[]) {
     if (blastTimer.current.length || quiet) return false
-    const initial = { point: center, source }
+    const initial = { point: center, room: mascotRoom?.id, source }
     setBlast({ ...initial, phase: 'falling' })
-    playSound('bombSiren', 1.02)
-    playSound('bombFall', .92)
+    playBomb()
     const { landing, pull, burst, end } = gooBombTiming
     blastTimer.current = [
       window.setTimeout(() => {
         setBlast({ ...initial, phase: 'landed' })
-        playSound('bombLand', .94)
       }, landing),
       window.setTimeout(() => {
         setBlast({ ...initial, phase: 'charging' })
-        playSound('bombCharge', .98)
-        if (affectsOwn) brood.startPull(center, burst - pull)
+        if (affectsOwn && (!source || sharedPlay.current)) {
+          pullingOwn.current = true
+          broodRef.current.startPull(center, burst - pull)
+          const self = mascotRoom?.selfId
+          const invited = targets ?? (sharedPlay.current ? [...visibleIds] : [])
+          const peers = self ? [...new Set([self, ...(source ? [source] : []), ...invited])].sort() : []
+          const seat = self ? peers.indexOf(self) : Number(mascotRoom?.host === false)
+          const participants = self ? peers.length : (mascotRoom ? 2 : 1)
+          bombMascots.start(center, burst - pull, { seat, participants })
+        }
       }, pull),
       window.setTimeout(() => {
         const participants = visibleBroods.current.filter(({ member }) => !targets || member.id === source || targets.includes(member.id))
         const young = [
           ...(affectsOwn ? broodRef.current.children : []), ...participants.flatMap(({ scene }) => scene.young),
         ].filter(({ phase, dissolving }) => phase !== 'popping' || !!dissolving)
-        const splash = young.length ? {
-          colors: [...new Set(young.map(({ id }) => youngTone(id)[0]))],
-          bodies: young.length,
-        } : undefined
-        if (affectsOwn) broodRef.current.endPull(true)
+        const splash = young.length ? { bodies: young.length } : undefined
+        if (pullingOwn.current) {
+          broodRef.current.endPull(true)
+          bombMascots.burst()
+          pullingOwn.current = false
+        }
         setBlast({ ...initial, phase: 'burst', splash })
-        playSound('bombBurst', 1.10)
         blastTimer.current.push(window.setTimeout(() => {
           setBlast(null)
           blastTimer.current = []
-          stopBomb()
         }, (splash ? gooBombTiming.stainEnd : end) - burst))
       }, burst),
     ]
@@ -296,24 +348,34 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   }
 
   function launchBomb(center: Point) {
-    setBombAim(false)
+    setTool(null)
     if (startBlast(center, true)) scene.setBurst(center)
   }
 
   const broodRef = useRef(brood)
   broodRef.current = brood
+  const pullingOwn = useRef(false)
+  const sharedPlay = useRef(interacting)
+  sharedPlay.current = interacting
   const visibleBroods = useRef(scene.scenes)
   visibleBroods.current = scene.scenes
-  const blastHidden = !!blast?.source && !visibleIds.has(blast.source)
+  const blastHidden = !!blast && (blast.room !== mascotRoom?.id || (!!blast.source && !visibleIds.has(blast.source)))
+  useEffect(() => {
+    if (!blast?.source || interacting) return
+    if (pullingOwn.current) broodRef.current.endPull(false)
+    pullingOwn.current = false
+    bombMascots.cancel()
+  }, [blast?.source, interacting])
   useEffect(() => {
     if (!quiet && !blastHidden) return
     if (quiet) {
       setTool(null)
-      setBombAim(false)
     }
     for (const timer of blastTimer.current) window.clearTimeout(timer)
     blastTimer.current = []
     setBlast(null)
+    pullingOwn.current = false
+    bombMascots.cancel()
     broodRef.current.endPull(false)
     stopBomb()
   }, [quiet, blastHidden, stopBomb])
@@ -327,14 +389,14 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   const cloneObstacles = companions.map(({ point: at, ...character }) =>
     ({ ...character, point: { x: at.x - 33, y: at.y - 33 } }))
   useRemoteMascotCollisions({
-    point, flight, held: grabbed, bounds, obstacles: interacting
+    point, flight, held: grabbed, bounds, obstacles: interacting && !bombMascots.moving
       ? [...cloneObstacles, ...primaryObstacles.filter(({ peer }) => peer !== selectedPeer)] : [], relocate: relocateMascot,
     kick: (impulse, recoil, from) => collide(impulse, recoil ? 'local' : 'remote', from),
     hitPeer: (target, impulse, peer) => scene.hitPeer(target, impulse, false, peer),
   })
   useRemoteMascotCollisions({
     point: clone.point, flight: clone.flight, held: clone.held, bounds,
-    obstacles: interacting ? [...cloneObstacles, ...primaryObstacles] : [], relocate: clone.relocate, kick: clone.boost,
+    obstacles: interacting && !bombMascots.moving ? [...cloneObstacles, ...primaryObstacles] : [], relocate: clone.relocate, kick: clone.boost,
     hitPeer: (target, impulse, peer) => scene.hitPeer(target, impulse, false, peer),
   })
   const VisibilityIcon = quiet ? EyeOff : Eye
@@ -379,7 +441,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   }
   const dockAnchor = flight ? resting : point
   const dockWidth = Math.min(415, width - 28)
-  const dockHeight = Math.min(615, height - 28)
+  const dockHeight = Math.min(inChat ? 615 : settingsHeight, height - 28)
   const panel = {
     left: clamp(dockAnchor.x + launcherSize - dockWidth, width - dockWidth - 14, 14),
     top: clamp(dockAnchor.y - dockHeight - 8, height - dockHeight - 14, 14),
@@ -401,7 +463,8 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   }
 
   function grab(event: PointerEvent<HTMLButtonElement>) {
-    if (event.button !== 0 || !event.isPrimary) return
+    if (bombMascots.pulling || event.button !== 0 || !event.isPrimary) return
+    jelly.resetGesture()
     if (cancelFlight.current) {
       cancelFlight.current()
       cancelFlight.current = null
@@ -424,6 +487,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
 
   function move(event: PointerEvent<HTMLButtonElement>) {
     const active = drag.current
+    jelly.move(event, active?.id === event.pointerId, !!flight)
     if (!active || active.id !== event.pointerId) return
     const samples = event.nativeEvent.getCoalescedEvents?.() ?? []
     for (const sample of samples.length ? samples : [event.nativeEvent]) {
@@ -445,6 +509,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   function release(event: PointerEvent<HTMLButtonElement>) {
     const active = drag.current
     if (!active || active.id !== event.pointerId) return
+    jelly.resetGesture()
     const intercepted = !active.moved && !!dragPoint
     drag.current = null
     setGrabbed(false)
@@ -464,6 +529,11 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     const nextSide = sideChange ? other : side
     lastPointer.current = { x: event.clientX, y: event.clientY }
     const velocity = throwVelocity(active.samples, { ...lastPointer.current, time: event.timeStamp })
+    if (tool === 'trampoline' && !quiet) {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) relocateMascot(from)
+      else throwMascot(from, velocity ?? { x: 0, y: 0 })
+      return
+    }
     if (velocity && bounds.bottom - bounds.top > 72 && bounds.right - bounds.left > 72
       && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       playSound('throw', .7 + Math.min(1, Math.hypot(velocity.x, velocity.y) / 2350) * .65)
@@ -518,12 +588,13 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     else setCollisionRest(next)
   }
 
-  function throwMascot(from: Point, velocity: Point) {
+  function throwMascot(from: Point, velocity: Point, blastFlight = false) {
     setFrightened(true)
     setFlight({ ...from, velocity, squash: 0, edge: 'bottom' })
     let lastTrail = -Infinity
-    cancelFlight.current = animateThrow(from, velocity, () => boundsRef.current, (frame) => {
+    const cancelThisFlight = animateThrow(from, velocity, () => boundsRef.current, (frame) => {
       setFlight(frame)
+      if (blastFlight) return
       const speed = Math.hypot(frame.velocity.x, frame.velocity.y)
       const now = performance.now()
       const strength = clamp(speed / 2650, 1, 0)
@@ -539,6 +610,8 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
       }
       setTrail((previous) => [...previous.slice(-17), mark])
     }, (impact) => {
+      if (blastFlight) return
+      jelly.bounce(impact, launcherSize)
       playSound('bounceOffWall', .64 + impact.strength * .7)
       const mark = makeSplat(impact, launcherSize, ++nextSplat.current)
       setSplats((previous) => [...previous.slice(-31), mark])
@@ -548,6 +621,9 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
       setFlight(null)
       settle(rest)
     })
+    cancelFlight.current = cancelThisFlight
+    const active = () => cancelFlight.current === cancelThisFlight
+    return { active, restore: (at: Point) => { if (active()) relocateMascot(at) } }
   }
 
   function close() {
@@ -555,10 +631,18 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
     launcher.current?.focus()
   }
 
-  function chooseTool(next: MascotTool) {
+  function chooseTool(next: NonNullable<typeof tool>) {
     setTool(next)
-    setToolsOpen(false)
     close()
+  }
+
+  function toggleSection(next: DockSection) {
+    setSection(activeSection === next ? 'chat' : next)
+  }
+
+  function putAwayToy() {
+    setTool(null)
+    launcher.current?.focus()
   }
 
   function chooseProvider(next: AiProvider) {
@@ -592,6 +676,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
   function check() {
     void perform('Verificando assistente…', async () => {
       await systemDiagram.checkAgent(provider)
+      settings.reload()
       setNotice(provider === 'gemini' ? 'Gemini CLI instalado. Envie uma mensagem para testar a sessão.' : 'Assistente instalado e autenticado.')
     })
   }
@@ -617,30 +702,39 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
 
   function send() {
     const prompt = draft.trim()
-    if (!prompt) return
+    if (!prompt || settings.unavailable) return
     void perform('Assistente trabalhando…', async () => {
       const history = chat.slice(-12).map(({ role, content }) => ({ role, content: content.slice(0, 2500) }))
       setChat((turns) => [...turns, { role: 'user', content: prompt }])
       setDraft('')
-      const result = await systemDiagram.converse(provider, { prompt, screen, history, diagram, documents: attachments })
+      const result = await systemDiagram.converse(provider, { prompt, screen, history, diagram, documents: attachments, options: settings.options })
       const change = result.diagram ? await onDiagram(result.diagram, diagram, screen) : undefined
       setChat((turns) => [...turns, { role: 'assistant', content: result.reply, change }])
     })
   }
 
   return <>
-    {open && <section ref={dock} id="assistant-dock" className="assistant-dock" aria-label="Assistente de IA" style={panel}
-      onKeyDown={(event) => { if (event.key === 'Escape' && !event.defaultPrevented) close() }}>
+    {open && <section ref={dock} id="assistant-dock" className={'assistant-dock' + (inChat ? '' : ' is-settings')} aria-labelledby="assistant-section-title" style={panel}
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape' || event.defaultPrevented) return
+        event.preventDefault()
+        if (inChat) close()
+        else setSection('chat')
+      }}>
       <header className="assistant-heading">
-        <h2><Sparkles size={17} />Assistente de IA</h2>
+        <div className="assistant-section-title">
+          {!inChat && <button className="icon-button" type="button" aria-label="Voltar à conversa" title="Voltar à conversa"
+            onClick={() => setSection('chat')}><ArrowLeft size={16} aria-hidden="true" /></button>}
+          <h2 id="assistant-section-title">{inChat && <Sparkles size={17} />}<span>{sectionTitles[activeSection]}</span></h2>
+        </div>
         <div className="assistant-heading-actions">
           {mascotRoom && <button className={'icon-button assistant-mascots-trigger is-' + mascotPreferences.remote}
-            type="button" aria-label="Visibilidade das Jujubas" title="Visibilidade das Jujubas" aria-expanded={mascotOptions}
-            aria-controls={mascotOptions ? 'assistant-mascots' : undefined}
-            onClick={() => { setMascotOptions(!mascotOptions); setHatsOpen(false); setToolsOpen(false) }}><VisibilityIcon size={18} aria-hidden="true" /></button>}
-          <button className="icon-button assistant-hats-trigger" type="button" aria-label="Chapéus" title="Chapéus"
-            aria-expanded={hatsOpen} aria-controls={hatsOpen ? 'assistant-hats' : undefined}
-            onClick={() => { setHatsOpen(!hatsOpen); setMascotOptions(false); setToolsOpen(false) }}>
+            type="button" aria-label="Visibilidade das Jujubas" title="Visibilidade das Jujubas" aria-expanded={activeSection === 'mascots'}
+            aria-controls={activeSection === 'mascots' ? 'assistant-mascots' : undefined}
+            onClick={() => toggleSection('mascots')}><VisibilityIcon size={18} aria-hidden="true" /></button>}
+          <button className="icon-button assistant-hats-trigger" type="button" aria-label="Chapéus e cor da Jujuba" title="Chapéus e cor da Jujuba"
+            aria-expanded={activeSection === 'hats'} aria-controls={activeSection === 'hats' ? 'assistant-hats' : undefined}
+            onClick={() => toggleSection('hats')}>
             <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"
               strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
               <path d="m6 15-1-9c0-1.2 3-2 7-2s7 .8 7 2l-1 9M6 12c2.7 1 9.3 1 12 0" />
@@ -648,29 +742,26 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
             </svg>
           </button>
           <button className="icon-button" type="button" title="Ferramentas e sons" aria-label="Ferramentas e sons"
-            aria-expanded={toolsOpen} aria-controls={toolsOpen ? 'assistant-tools' : undefined}
-            onClick={() => { setToolsOpen(!toolsOpen); setHatsOpen(false); setMascotOptions(false) }}>
+            aria-expanded={activeSection === 'tools'} aria-controls={activeSection === 'tools' ? 'assistant-tools' : undefined}
+            onClick={() => toggleSection('tools')}>
             <Wrench size={17} aria-hidden="true" />
           </button>
           <button className="icon-button" onClick={close} aria-label="Fechar assistente" title="Fechar assistente"><X size={17} /></button>
         </div>
       </header>
-      {toolsOpen && <div id="assistant-tools" className="assistant-tools" role="group" aria-label="Ferramentas e sons da Jujuba">
+      {activeSection === 'tools' && <div id="assistant-tools" className="assistant-tools" role="group" aria-label="Ferramentas e sons da Jujuba">
         <div className="assistant-toys" role="group" aria-label="Brinquedos">
+          <PlayTools choose={chooseTool} paused={quiet} magnetAvailable={brood.magnetAvailable} />
           {(Object.keys(toyLabels) as MascotTool[]).map((option) => <button className="button" type="button" key={option} disabled={quiet}
             onClick={() => chooseTool(option)}><MascotToyIcon tool={option} />{toyLabels[option]}</button>)}
-          <button className="button assistant-goo-bomb" type="button" disabled={quiet || !!blast} onClick={() => {
-            setTool(null)
-            setBombAim(true)
-            setToolsOpen(false)
-            close()
-          }}><Rocket size={16} aria-hidden="true" />Bomba atômica de geleia</button>
+          <button className="button assistant-goo-bomb" type="button" disabled={quiet || !!blast}
+            onClick={() => chooseTool('bomb')}><Bomb size={16} aria-hidden="true" />Bomba atômica</button>
         </div>
+        <GestureControls settings={gestures} paused={quiet} change={(next) => { setGestures(next); saveGestures(next) }} />
         <div className="assistant-tool-row mascot-clone-row">
           <span><Copy size={16} aria-hidden="true" />Clone de teste</span>
           <button className="button" type="button" aria-label={clone.point ? 'Remover clone de teste' : 'Criar clone de teste'} onClick={() => {
             clone.keepOrRemove(point)
-            setToolsOpen(false)
             close()
           }}>{clone.point ? 'Remover' : 'Criar'}</button>
         </div>
@@ -684,14 +775,9 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
             disabled={sound.muted || !sound.volume} onClick={() => playSound('bounceOffWall')}><Play size={15} aria-hidden="true" /></button>
         </div>
       </div>}
-      {hatsOpen && <div id="assistant-hats" className="assistant-hats" role="group" aria-label="Chapéus da Jujuba">
-        {(Object.keys(hats) as Hat[]).map((option) => <button key={option} className="button" type="button"
-          aria-pressed={hat === option} onClick={() => { setHat(option); saveHat(option) }}>
-          {option === 'none' ? <span className="hat-miniature" aria-hidden="true">—</span> : <MascotHat hat={option} miniature />}
-          <span>{hats[option]}</span>
-        </button>)}
-      </div>}
-      {mascotRoom && mascotOptions && <div id="assistant-mascots" className="assistant-mascots" aria-label="Jujubas da sessão">
+      {activeSection === 'hats' && <MascotAppearance color={color} changeColor={changeColor} hat={hat}
+        changeHat={(next) => { setHat(next); saveHat(next) }} />}
+      {activeSection === 'mascots' && <div id="assistant-mascots" className="assistant-mascots" aria-label="Jujubas da sessão">
         <label>
           <input type="checkbox" checked={mascotPreferences.paused} onChange={(event) => savePreferences({
             ...mascotPreferences, paused: event.target.checked,
@@ -715,7 +801,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
           Mostrar minha Jujuba para a sala
         </label>
       </div>}
-      <div className="assistant-config">
+      {inChat && <><div className="assistant-config">
         <label className="sr-only" htmlFor="assistant-provider">Assistente</label>
         <select id="assistant-provider" value={provider} disabled={!!busy} onChange={(event) => chooseProvider(event.target.value as AiProvider)}>
           {Object.entries(assistants).map(([key, assistant]) => <option key={key} value={key}>{assistant.label}</option>)}
@@ -724,6 +810,30 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
           title="Escolher pasta do projeto" aria-label="Escolher pasta do projeto"><FolderOpen size={17} /></button>
         <button className="button assistant-connection" aria-expanded={verifyOpen} onClick={() => setVerifyOpen(!verifyOpen)}>Conexão</button>
       </div>
+      <div className="assistant-config assistant-models">
+        <label><span id="assistant-model-label">Modelo</span>
+          <select aria-labelledby="assistant-model-label" value={settings.options?.model ?? ''} disabled={!!busy || (!settings.models?.length && !settings.options?.model)}
+            onChange={(event) => settings.chooseModel(event.target.value)}>
+            <option value="">{!settings.models && !settings.error ? 'Carregando modelos…' : 'Padrão do assistente'}</option>
+            {settings.options?.model && !settings.model && <option value={settings.options.model}>{settings.options.model}</option>}
+            {settings.models?.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+          </select>
+        </label>
+        <label><span id="assistant-effort-label">Raciocínio</span>
+          <select aria-labelledby="assistant-effort-label" value={settings.options?.reasoningEffort ?? ''}
+            disabled={!!busy || !settings.model || (!settings.model.reasoningEfforts.length && !settings.options?.reasoningEffort)}
+            onChange={(event) => settings.chooseEffort(event.target.value)}>
+            <option value="">{settings.model && !settings.model.reasoningEfforts.length ? 'Automático' : 'Padrão do assistente'}</option>
+            {settings.options?.reasoningEffort && !settings.model?.reasoningEfforts.includes(settings.options.reasoningEffort) &&
+              <option value={settings.options.reasoningEffort}>{effortLabels[settings.options.reasoningEffort] ?? settings.options.reasoningEffort}</option>}
+            {settings.model?.reasoningEfforts.map((effort) => <option key={effort} value={effort}>{effortLabels[effort] ?? effort}</option>)}
+          </select>
+        </label>
+      </div>
+      {(settings.error || settings.unavailable || settings.models?.length === 0) && <div className="assistant-catalog-status" role="status">
+        <span>{settings.error || settings.unavailable || 'O assistente não listou modelos.'}</span>
+        {settings.error && <button type="button" className="detail-link" onClick={settings.reload}>Tentar novamente</button>}
+      </div>}
       {workspace && <small className="assistant-workspace" title={workspace}>{workspace}</small>}
       {verifyOpen && <div className="assistant-verification">
         <p>{assistants[provider].login} O assistente usa o contexto das mensagens e os documentos anexados.</p>
@@ -765,10 +875,11 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
             <input type="file" accept={accepted.join(',')} aria-label="Anexar documentos" multiple disabled={!!busy}
               onChange={(event) => { attach(Array.from(event.currentTarget.files ?? [])); event.currentTarget.value = '' }} />
           </label>
-          <button className="button primary" disabled={!draft.trim() || !!busy}><Send size={15} />Enviar</button>
+          <button className="button primary" disabled={!draft.trim() || !!busy || !!settings.unavailable}><Send size={15} />Enviar</button>
         </div>
-      </form>
+      </form></>}
     </section>}
+    {!quiet && <JellyEffects effects={jelly.effects} />}
     {!quiet && splats.filter((mark) => !mark.remote || visibleIds.has(mark.remote)).map((mark) => <MascotSplat key={mark.id} mark={mark}
       remove={() => setSplats((previous) => previous.filter((entry) => entry.id !== mark.id))} />)}
     {!quiet && trail.map((mark) => <span key={mark.id} className="jujuba-trail" aria-hidden="true" style={{
@@ -784,7 +895,7 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
         pointBetween(appearance.point, visible.find(({ member: other }) => other.id === member.meeting?.peer)?.appearance.point)} />)}
     {meeting && <MascotMeetingEffect key={meeting.source + '-' + meeting.id} kind={meeting.kind} point={meeting.point} />}
     {scene.scenes.map(({ member, scene, project, unproject, visibility }) => <SharedMascotScene
-      key={member.id} scene={scene} project={project} unproject={unproject} visibility={visibility}
+      key={member.id} color={member.mascot?.color} scene={scene} project={project} unproject={unproject} visibility={visibility}
       peer={member.name} peerId={member.id} room={interacting && member.group ? mascotRoom?.id : undefined} />)}
     {!quiet && brood.children.map((child) => <MascotYoung key={child.id} child={child} at={brood.position(child)}
       onHatch={() => { brood.hatch(child.id); playSound('hatch'); scene.shareSound('hatch', .65) }}
@@ -796,29 +907,33 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
       onGone={() => brood.remove(child.id)} />)}
     {!quiet && clone.point && <>
       <button type="button" aria-label="Clone de teste da Jujuba" title="Clone de teste · arraste para mover"
-        className={`assistant-clone${clone.held ? ' is-grabbed is-dragging' : ''}${clone.flight ? ' is-flying' : ''}`}
+        className={`assistant-clone${bombMascots.pulling ? ' is-bomb-pulled' : ''}${clone.held ? ' is-grabbed is-dragging' : ''}${clone.flight ? ' is-flying' : ''}`}
         style={{ left: clone.point.x, top: clone.point.y }} onClick={() => playSound('click')}
-        onPointerDown={clone.grab} onPointerMove={clone.move} onPointerUp={clone.release}
+        onPointerDown={bombMascots.pulling ? undefined : clone.grab} onPointerMove={clone.move} onPointerUp={clone.release}
         onPointerCancel={clone.release} onLostPointerCapture={clone.release}
         onKeyDown={(event) => {
           const x = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
           const y = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0
-          if (!x && !y) return
+          if (bombMascots.pulling || (!x && !y)) return
           event.preventDefault()
           const step = event.shiftKey ? 36 : 12
           clone.nudge(x * step, y * step)
         }}>
-        <JujubaMascot followPointer grabbed={clone.held} flight={clone.flight} hat={hat} greeting={cloneGreeting}
+        <JujubaMascot color={color} followPointer grabbed={clone.held} flight={clone.flight} hat={hat} greeting={cloneGreeting}
           direction={{ x: -cloneDirection.x, y: -cloneDirection.y }} />
         <span className="mascot-clone-label" aria-hidden>Clone</span>
       </button>
       {practice.meeting && <MascotMeetingEffect key={practice.meeting.id} kind={practice.meeting.kind} point={practice.meeting.point} />}
     </>}
-    {bombAim && !quiet && <GooBombAim launch={launchBomb} cancel={() => setBombAim(false)} />}
+    {tool === 'bomb' && !quiet && <GooBombAim launch={launchBomb} cancel={putAwayToy} />}
+    {tool === 'magnet' && !quiet && <MascotMagnet brood={brood} onExit={putAwayToy} />}
+    {(tool === 'bubbles' || tool === 'trampoline' || tool === 'fan') && !quiet &&
+      <MascotPlayground key={tool} tool={tool} point={point} held={grabbed} flight={flight} bounds={bounds} onPlace={relocateMascot}
+        onLaunch={(from, velocity) => { cancelFlight.current?.(); throwMascot(from, velocity) }} onExit={putAwayToy} />}
     {blast && !quiet && !blastHidden && <GooBomb point={blast.point} phase={blast.phase} splash={blast.splash} />}
-    {tool && !quiet && <MascotAim key={mascotRoom?.id ?? screen} tool={tool}
+    {(tool === 'blaster' || tool === 'bow') && !quiet && <MascotAim key={mascotRoom?.id ?? screen} tool={tool}
       own={center(point)} targets={targets}
-      onExit={() => { setTool(null); launcher.current?.focus() }}
+      onExit={putAwayToy}
       onFire={(power) => playSound(tool, .64 + power * .5)}
       onTension={tension}
       onVisual={scene.setToy}
@@ -837,10 +952,12 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
           playSound('hit', .65)
         }
       }} />}
-    <button ref={launcher} className={`assistant-launch${grabbed ? ' is-grabbed' : ''}${dragPoint ? ' is-dragging' : ''}${flight ? ' is-flying' : ''}${expression ? ' is-' + expression : ''}`}
+    <button ref={launcher} className={`assistant-launch${bombMascots.pulling ? ' is-bomb-pulled' : ''}${tool === 'trampoline' ? ' on-trampoline' : ''}${grabbed ? ' is-grabbed' : ''}${dragPoint ? ' is-dragging' : ''}${flight ? ' is-flying' : ''}${expression ? ' is-' + expression : ''}`}
       style={{ left: point.x, top: point.y }} aria-label={open ? 'Fechar assistente' : 'Abrir assistente de IA'}
       title="Assistente de IA · arraste para mover ou solte rápido para arremessar" aria-expanded={open} aria-controls={open ? 'assistant-dock' : undefined}
       onPointerDown={grab} onPointerMove={move} onPointerUp={release} onPointerCancel={release} onLostPointerCapture={release}
+      onPointerLeave={() => { if (!drag.current) jelly.resetGesture() }}
+      onContextMenu={(event) => { if (tool === 'trampoline') { event.preventDefault(); putAwayToy() } }}
       onKeyDown={(event) => {
         const locations: Record<string, { side: Side; y: number }> = {
           ArrowLeft: { side: 'left', y: point.y }, ArrowRight: { side: 'right', y: point.y },
@@ -849,19 +966,19 @@ export function AssistantDock({ open, setOpen, provider, setProvider, screen, di
         const next = locations[event.key]
         if (next) {
           event.preventDefault()
-          if (cancelFlight.current) return
+          if (cancelFlight.current || bombMascots.pulling) return
           place(next.side, next.y)
         }
       }}
       onClick={(event) => {
-        if (event.detail && moved.current) return
+        if (tool === 'trampoline' || (event.detail && moved.current)) return
         playSound('click')
         setFrightened(false)
         setPointerNear(false)
         if (open) close()
         else setOpen(true)
       }}>
-      <JujubaMascot followPointer={!quiet} grabbed={grabbed} equipped={tool === 'blaster'} reaction={expression} flight={flight} hat={hat} greeting={cloneGreeting ?? greeting}
+      <JujubaMascot color={color} followPointer={!quiet} grabbed={grabbed} laughing={jelly.laughing} equipped={tool === 'blaster'} reaction={expression} flight={flight} hat={hat} greeting={cloneGreeting ?? greeting}
         direction={cloneGreeting ? cloneDirection : pairDirection} />
     </button>
   </>

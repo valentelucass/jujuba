@@ -3,7 +3,7 @@ import type { MascotScene } from './mascotScene'
 
 export type MascotPose = 'idle' | 'held' | 'wary' | 'scared'
 export type MascotFlight = Pick<FlightFrame, 'edge' | 'squash'> & { velocityX: number }
-export type MascotPresence = { position: Point; hat: string; pose: MascotPose; flight: MascotFlight | null; scene?: MascotScene | null }
+export type MascotPresence = { position: Point; hat: string; color?: string; pose: MascotPose; flight: MascotFlight | null; scene?: MascotScene | null }
 export type MascotMeetingKind = 'kiss' | 'play' | 'bounce' | 'hug' | 'squeeze' | 'look' | 'dance' | 'push' | 'bump'
 export type MascotImpulse = { direction: Point; strength: number }
 export type MascotMeeting = { id: number; position: Point; kind: MascotMeetingKind; impulse?: MascotImpulse; peer?: string }

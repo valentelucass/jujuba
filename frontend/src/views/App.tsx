@@ -6,6 +6,7 @@ import { appError, sql } from '../controllers/api'
 import { readFlowUpgrade } from '../controllers/flowUpgrade'
 import { activeDatabase, getSavedConnection, readSessionPreference, rememberActiveDatabase, rememberSession } from '../controllers/connectionPreference'
 import { useExplorer } from '../controllers/useExplorer'
+import { useAssistantSettings } from '../controllers/useAssistantSettings'
 import { useTable } from '../controllers/useTable'
 import type { Connection, Database, Relationship, Scope, Structure as TableStructure, Tab, Table, TableScope } from '../models/sql'
 import { CenterEnginePicker, SelectedEngine } from './EnginePicker'
@@ -15,6 +16,7 @@ import { NoSqlStudio } from './NoSqlStudio'
 import { engineOrder, engines, isNoSql, type Engine } from '../models/engines'
 import { ConnectionForm } from './ConnectionForm'
 import { JujubaMascot } from './JujubaMascot'
+import { readMascotColor, saveMascotColor } from '../models/mascotColor'
 import { Diagram, Graph } from './Diagram'
 import { useRemote } from '../controllers/useRemote'
 import { StudioLayout } from './StudioLayout'
@@ -260,6 +262,8 @@ export function App() {
   const [openedDiagrams, setOpenedDiagrams] = useState(!!flowUpgrade)
   const [assistantOpen, setAssistantOpen] = useState(false)
   const [provider, setProvider] = useState(readProvider)
+  const [mascotColor, setMascotColor] = useState(readMascotColor)
+  const assistantSettings = useAssistantSettings(provider, assistantOpen)
   const [databaseScreen, setDatabaseScreen] = useState('Bancos de dados')
   const [mascotRoom, setMascotRoom] = useState<MascotRoom | null>(null)
   const [currentDiagram, setCurrentDiagram] = useState<SystemDiagram | null>(null)
@@ -372,7 +376,7 @@ export function App() {
           <Loading />
           <h1>{lastSession ? 'Reconectando ao ' + engines[lastSession.engine].name : 'Verificando conexões salvas'}</h1>
         </div> : step === 'intro' && <div className="welcome-content welcome-intro">
-          <div className="welcome-mark"><JujubaMascot hero /></div>
+          <div className="welcome-mark"><JujubaMascot hero color={mascotColor} /></div>
           <div className="welcome-copy">
             <h1>Conecte a um banco de dados</h1>
             <p>Consulte dados, explore tabelas, coleções e chaves.</p>
@@ -393,7 +397,7 @@ export function App() {
             </div>
           </div>
         </div>}
-        {step === 'picker' && <CenterEnginePicker selected={selectedEngine} choose={chooseEngine} back={() => { setStep('intro'); setSelectedEngine(null) }} />}
+        {step === 'picker' && <CenterEnginePicker color={mascotColor} selected={selectedEngine} choose={chooseEngine} back={() => { setStep('intro'); setSelectedEngine(null) }} />}
         {step === 'sqlServer' && <ConnectionForm onClose={openPicker} onConnected={connected} loading={loading} setLoading={setLoading} />}
         {step !== 'intro' && step !== 'picker' && step !== 'sqlServer' && (isNoSql(step) ?
           <NoSqlConnectionForm key={step} engine={step} onClose={openPicker} onConnected={connected} loading={loading} setLoading={setLoading} /> :
@@ -406,9 +410,11 @@ export function App() {
     </div>
     {openedDiagrams && <div className="app-screen" hidden={!diagrams}>
       <Suspense fallback={<Loading />}><SystemDiagramStudio exit={() => setDiagrams(false)} provider={provider}
+        assistantOptions={assistantSettings.options} unavailableOption={assistantSettings.unavailable}
         upgrade={flowUpgrade} assistantDiagram={assistantDiagram} onDiagram={setCurrentDiagram} onMascotRoom={setMascotRoom} connection={connection} /></Suspense>
     </div>}
-    <AssistantDock open={assistantOpen} setOpen={setAssistantOpen} provider={provider} setProvider={setProvider}
+    <AssistantDock open={assistantOpen} setOpen={setAssistantOpen} provider={provider} setProvider={setProvider} settings={assistantSettings}
+      color={mascotColor} changeColor={(next) => { setMascotColor(next); saveMascotColor(next) }}
       screen={screen} diagram={diagrams ? currentDiagram : null} onDiagram={applyAssistantDiagram}
       mascotRoom={diagrams ? mascotRoom : null} />
   </>

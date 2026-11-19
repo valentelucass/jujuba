@@ -31,6 +31,14 @@ O ícone do assistente no canto inferior direito abre o mesmo chat em todas as t
 
 Para usar a conta de um assistente, instale o cliente oficial no Windows e entre nele primeiro. Em seguida, selecione-o no chat e clique em **Conexão → Verificar assistente**.
 
+Ao escolher um assistente, o JujubaSQL consulta os modelos do cliente instalado. Selecione o **Modelo** e, no Codex ou Claude, o **Raciocínio** disponível para ele. O Gemini CLI gerencia o raciocínio automaticamente. O aplicativo lembra a escolha de cada assistente para o chat, a pasta do projeto e a geração de código do fluxograma.
+
+No cabeçalho do painel, clique no **chapéu** para abrir o guarda-roupa. Em **Cor da Jujuba**, escolha uma das seis cores ou use **Escolher outra cor**. A prévia muda na hora e o aplicativo guarda sua escolha.
+
+Em **Ferramentas e sons**, uma bolha lançada com um clique busca a Jujuba e a leva para cima. Clique na bolha ou em **Estourar** para soltá-la. O **Ímã de filhotes** fica disponível quando há um filhote seu já nascido e livre. Guardar o ímã solta os filhotes na cena.
+
+A **Bomba atômica** toca uma sirene, puxa a Jujuba e o clone para o ponto escolhido e os lança pela tela com a onda de choque. Os dois quicam nas bordas e continuam na brincadeira. O painel também reúne o trampolim, o ventilador e os controles de confeitos, cócegas e carimbos.
+
 - **ChatGPT** usa o Codex instalado no computador. Na primeira vez, execute `codex login` e escolha entrar com o ChatGPT. [Autenticação do Codex](https://learn.chatgpt.com/docs/auth)
 - **Claude** usa o Claude Code instalado no computador. Abra `claude` e siga a instrução de login. [Instalação e login do Claude Code](https://code.claude.com/docs/en/quickstart)
 - **Gemini** usa o Gemini CLI instalado no computador. Abra `gemini` e escolha entrar com o Google para autenticar o cliente. Para editar código, marque a pasta do projeto como confiável no Gemini CLI. [Autenticação do Gemini CLI](https://geminicli.com/docs/get-started/authentication/)

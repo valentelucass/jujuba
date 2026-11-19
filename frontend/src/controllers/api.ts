@@ -1,5 +1,5 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
-import type { AiProvider, AssistantReply, AssistantRequest, DiagramProject, GeneratedProject, OpenedDiagram, SystemDiagram } from '../models/systemDiagram'
+import type { AiProvider, AssistantModel, AssistantOptions, AssistantReply, AssistantRequest, DiagramProject, GeneratedProject, OpenedDiagram, SystemDiagram } from '../models/systemDiagram'
 import type { FlowCommand, FlowProject, FlowProjectEntry, FlowSession, FlowViewUpdate } from '../models/flowWorkspace'
 import type { NoSqlEngine } from '../models/engines'
 import type { DocumentsPage, RedisEntry, RedisKeys } from '../models/noSql'
@@ -54,6 +54,7 @@ export const noSql = {
 
 export const systemDiagram = {
   checkAgent: (provider: AiProvider) => call<void>('diagram_agent', { provider }),
+  models: (provider: AiProvider) => call<AssistantModel[]>('assistant_models', { provider }),
   chooseWorkspace: () => call<string | null>('diagram_choose_workspace'),
   converse: (provider: AiProvider, request: AssistantRequest) => call<AssistantReply>('assistant_converse', { provider, request }),
   open: () => call<OpenedDiagram | null>('diagram_open'),
@@ -61,8 +62,8 @@ export const systemDiagram = {
     call<DiagramProject | null>('diagram_save', { diagram, project }),
   png: (bytes: Uint8Array) => call<string | null>('diagram_png', bytes),
   markdown: (diagram: SystemDiagram) => call<string | null>('diagram_markdown', { diagram }),
-  scaffold: (provider: AiProvider, project: DiagramProject, requirements: string) =>
-    call<GeneratedProject>('diagram_scaffold', { provider, project, requirements }),
+  scaffold: (provider: AiProvider, project: DiagramProject, requirements: string, options?: AssistantOptions) =>
+    call<GeneratedProject>('diagram_scaffold', { provider, project, requirements, options }),
   writeCode: (code: GeneratedProject) => call<string | null>('diagram_write_code', { code }),
 }
 

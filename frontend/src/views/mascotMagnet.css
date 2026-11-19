@@ -1,0 +1,24 @@
+.mascot-magnet { cursor: grab; }
+.mascot-magnet:has(.mascot-magnet-pole.is-active) { cursor: grabbing; }
+.mascot-magnet .mascot-aim-status { max-width: calc(100% - 16px); }
+.mascot-magnet-pole {
+  position: fixed; display: grid; place-items: center; width: 42px; height: 42px;
+  transform: translate(-50%, -50%); pointer-events: none; color: var(--berry);
+}
+.mascot-magnet-pole svg {
+  transform: translate(9px, -11px) rotate(-17deg); fill: var(--berry-selected);
+  filter: drop-shadow(0 2px 2px var(--shadow));
+}
+.mascot-magnet-pole.is-active::before, .mascot-magnet-pole.is-active::after {
+  content: ''; position: absolute; inset: -20px; border: 1.5px dashed var(--berry);
+  border-radius: 50%; animation: jujuba-magnet-field .95s ease-out infinite;
+}
+.mascot-magnet-pole.is-active::after { animation-delay: -.47s; border-color: var(--mint); }
+@keyframes jujuba-magnet-field {
+  from { opacity: .32; scale: 1.15; }
+  to { opacity: .8; scale: .45; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mascot-magnet-pole.is-active::before, .mascot-magnet-pole.is-active::after { animation: none; }
+  .mascot-magnet-pole.is-active::after { inset: -7px; }
+}

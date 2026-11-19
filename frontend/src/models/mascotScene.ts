@@ -21,8 +21,8 @@ export type SceneSoundKind = 'throw' | 'slimeKick' | 'bounceOffWall' | 'hatch'
 export type SceneSound = { id: number; kind: SceneSoundKind; strength: number }
 export type GooBurst = { id: number; point: Point; members?: string[] }
 export type GooBombPhase = 'falling' | 'landed' | 'charging' | 'burst'
-export type GooSplash = { colors: string[]; bodies: number }
-export const gooBombTiming = { landing: 1560, pull: 2210, burst: 4960, end: 7390, stainEnd: 10550 }
+export type GooSplash = { bodies: number }
+export const gooBombTiming = { landing: 1560, pull: 2210, burst: 4960, end: 9250, stainEnd: 10550 }
 
 const youngTones = [
   ['#f596c2', '#c65394', 0], ['#f8d381', '#ba7827', 83], ['#a8e3c5', '#4c9e81', 184],

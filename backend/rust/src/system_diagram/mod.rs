@@ -1,4 +1,6 @@
 mod ai;
+mod catalog;
+mod claude_catalog;
 pub mod collaboration;
 mod files;
 mod flow_access;
@@ -50,6 +52,11 @@ pub async fn assistant_converse(
 ) -> Result<ai::AssistantReply> {
     let current = workspace.0.lock().await;
     ai::converse(provider, request, current.as_deref()).await
+}
+
+#[tauri::command]
+pub async fn assistant_models(provider: Provider) -> Result<Vec<catalog::AgentModel>> {
+    catalog::models(provider).await
 }
 
 #[tauri::command]
@@ -142,9 +149,10 @@ pub async fn diagram_scaffold(
     provider: Provider,
     project: ProjectRef,
     requirements: String,
+    options: Option<ai::AgentOptions>,
 ) -> Result<ProjectCode> {
     let opened = files::open_current(&project)?;
-    ai::scaffold(provider, opened.diagram, requirements).await
+    ai::scaffold(provider, opened.diagram, requirements, options).await
 }
 
 #[tauri::command]

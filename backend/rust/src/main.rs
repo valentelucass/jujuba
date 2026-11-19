@@ -73,6 +73,7 @@ fn main() {
             system_diagram::diagram_agent,
             system_diagram::diagram_choose_workspace,
             system_diagram::assistant_converse,
+            system_diagram::assistant_models,
             system_diagram::diagram_open,
             system_diagram::diagram_save,
             system_diagram::diagram_markdown,

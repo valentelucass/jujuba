@@ -12,9 +12,9 @@ import { useRemoteYoungDrag } from '../controllers/useRemoteYoungDrag'
 const angle = (direction: Point) => Math.atan2(direction.y, direction.x) * 180 / Math.PI
 const noop = () => {}
 
-export function SharedMascotScene({ scene, project, unproject, visibility, peer, peerId, room }: {
+export function SharedMascotScene({ scene, project, unproject, visibility, peer, peerId, room, color }: {
   scene: MascotScene; project: (point: Point) => Point; unproject: (point: Point) => Point
-  visibility: MascotVisibility; peer: string; peerId: string; room?: string
+  visibility: MascotVisibility; peer: string; peerId: string; room?: string; color?: string
 }) {
   const drag = useRemoteYoungDrag(room, peerId, unproject)
   useEffect(() => {
@@ -27,7 +27,7 @@ export function SharedMascotScene({ scene, project, unproject, visibility, peer,
     {companion && clonePoint && <div className={'assistant-peer is-companion' +
       (companion.pose === 'held' ? ' is-grabbed' : '') + (companion.flight ? ' is-flying' : '')}
       role="img" aria-label={'Clone de ' + peer} style={{ left: clonePoint.x - 33, top: clonePoint.y - 33 }}>
-      <JujubaMascot hat={Object.hasOwn(hats, companion.hat) ? companion.hat as Hat : 'none'} grabbed={companion.pose === 'held'}
+      <JujubaMascot color={color} hat={Object.hasOwn(hats, companion.hat) ? companion.hat as Hat : 'none'} grabbed={companion.pose === 'held'}
         greeting={companion.greeting ?? undefined} direction={companion.direction ?? undefined}
         flight={companion.flight ? { ...clonePoint, ...companion.flight, velocity: { x: companion.flight.velocityX, y: 0 } } : null} />
       <span className="mascot-clone-label" aria-hidden="true">Clone</span>

@@ -1642,6 +1642,7 @@ mod tests {
         let mascot = Mascot {
             position: Position { x: 0.31, y: 0.72 },
             hat: "leather".into(),
+            color: Some("#378ddf".into()),
             pose: super::super::flow_mascot::Pose::Idle,
             scene: Some(serde_json::from_value(serde_json::json!({
                 "epoch": 1, "origin": {"x":0.4,"y":0.6},
@@ -1675,6 +1676,7 @@ mod tests {
             .mascot
             .unwrap();
         assert_eq!(remote.hat, "leather");
+        assert_eq!(remote.color.as_deref(), Some("#378ddf"));
         assert_eq!(remote.position, mascot.position);
         let scene = remote.scene.as_ref().unwrap();
         assert_eq!(scene.toy.as_ref().unwrap().shots[0].id, 1);

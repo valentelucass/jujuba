@@ -30,6 +30,7 @@ fn main() {
             "diagram_agent",
             "diagram_choose_workspace",
             "assistant_converse",
+            "assistant_models",
             "diagram_open",
             "diagram_save",
             "diagram_markdown",

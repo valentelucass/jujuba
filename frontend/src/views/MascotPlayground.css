@@ -1,0 +1,66 @@
+.mascot-playground {
+  position: fixed; inset: var(--app-header-height, 0) 0 var(--app-footer-height, 0);
+  z-index: 17; outline: none; overflow: hidden; touch-action: none; cursor: crosshair;
+  user-select: none; -webkit-user-select: none;
+}
+.mascot-playground-info {
+  position: fixed; z-index: 19; top: calc(var(--app-header-height, 0px) + 10px); left: 50%;
+  transform: translateX(-50%); display: flex; gap: 10px; align-items: center;
+  max-width: calc(100% - 24px); width: max-content; padding: 7px 9px 7px 12px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 9px;
+  box-shadow: 0 3px 12px #0003; color: var(--text); user-select: none;
+}
+.mascot-playground-info > div { display: grid; gap: 2px; min-width: 0; }
+.mascot-playground-info strong { font-size: 12px; }
+.mascot-playground-info small { color: var(--quiet); font-size: 11px; }
+.mascot-playground-info output { color: var(--mint); font-size: 12px; font-variant-numeric: tabular-nums; }
+.mascot-playground-info button { flex: none; width: 30px; height: 30px; }
+.soap-bubble, .soap-pop {
+  position: fixed; pointer-events: none; transform: translate(-50%, -50%); border-radius: 50%;
+}
+.soap-bubble {
+  pointer-events: auto; cursor: pointer; padding: 0; touch-action: manipulation;
+  width: 50px; height: 50px; border: 1.5px solid #d4fff6da; box-sizing: border-box;
+  background: radial-gradient(ellipse at 29% 19%, #fff 0 3%, #ffffffba 4%, transparent 11%),
+    radial-gradient(ellipse at 70% 77%, #ff9de53e 5%, transparent 46%);
+  box-shadow: inset 2px 2px 5px #b1fff7dc, inset -3px -3px 6px #ffacd9d4, inset 1px -5px 9px #85a0ff71, 0 1px 6px #131d3040;
+}
+.soap-bubble.is-carrying { width: 89px; height: 89px; border-width: 2px; }
+.soap-target {
+  position: fixed; width: 80px; height: 80px; translate: -50% -50%; pointer-events: none;
+  border-radius: 50%; border: 2px dashed #88dcce; box-shadow: 0 0 0 1px #29454070;
+}
+.soap-bubble:focus-visible { outline: 2px solid var(--mint); outline-offset: 4px; }
+.mascot-playground-info .soap-control { width: auto; min-height: 32px; padding: 4px 9px; font-weight: 600; }
+.mascot-playground-info:has(.soap-control) { pointer-events: none; }
+.mascot-playground-info:has(.soap-control) button { pointer-events: auto; }
+.mascot-playground:has(.soap-bubble.is-carrying, .pocket-fan.is-blowing) ~ .assistant-launch { transition: none; }
+.soap-pop { width: 58px; height: 58px; border: 3px dotted #95f5df; animation: soap-pop .25s ease-out both; }
+@keyframes soap-pop { to { scale: 1.55; opacity: 0; } }
+.play-trampoline { position: fixed; pointer-events: none; width: 126px; height: 25px; transform: translate(-50%, -5px); }
+.play-trampoline-legs { position: absolute; inset: 7px 8px 0; border: 3px solid #7e748c; border-top: 0; border-radius: 0 0 6px 6px; }
+.play-trampoline-bed { position: absolute; inset: 0 0 auto; height: 13px; box-sizing: border-box; border: 3px solid #ff8db2;
+  background: repeating-linear-gradient(67deg, #3e3548, #3e3548 3px, #625567 4px); border-radius: 50%;
+  box-shadow: 0 2px #9b496b, inset 0 0 0 1px #322c39; }
+.play-trampoline-bed.is-bouncing { animation: trampoline-rebound .32s ease-out; }
+@keyframes trampoline-rebound { 22% { transform: translateY(7px) scaleX(.95); } 58% { transform: translateY(-3px); } }
+.pocket-fan { width: 1px; height: 1px; position: fixed; pointer-events: none; }
+.pocket-fan > span {
+  display: grid; place-items: center; position: absolute; left: -20px; top: -20px; width: 40px; height: 40px;
+  border: 2px solid #328b83; border-radius: 50%; color: #245e66; background: radial-gradient(circle at 30% 22%, #edfffa, #83dbcc);
+  box-shadow: inset 0 0 0 2px #ffffff80, 0 1px 5px #001e2238;
+}
+.pocket-fan-handle { position: absolute; left: -10px; top: 9px; width: 14px; height: 24px; border: 2px solid #328b83;
+  transform: rotate(14deg); background: #80d9ce; border-radius: 5px; }
+.pocket-fan.is-blowing svg { animation: pocket-fan-turn .48s linear infinite; }
+.pocket-fan-stream { position: absolute; left: 25px; width: 130px; top: -16px; height: 32px; }
+.pocket-fan-stream b { display: block; position: absolute; left: 0; top: 0; width: 75%; height: 2px;
+  background: linear-gradient(to right, #60d9cdbb, #8ce4d000); transform: rotate(-7deg);
+  transform-origin: left; animation: pocket-fan-air .62s ease-out infinite; }
+.pocket-fan-stream b:nth-child(2) { top: 50%; width: 100%; transform: none; animation-delay: -.19s; }
+.pocket-fan-stream b:nth-child(3) { top: 95%; transform: rotate(7deg); animation-delay: -.37s; }
+@keyframes pocket-fan-air { from { translate: 0 0; opacity: .95; } to { translate: 34px 0; opacity: .28; } }
+@keyframes pocket-fan-turn { to { rotate: 360deg; } }
+@media (prefers-reduced-motion: reduce) {
+  .soap-pop, .play-trampoline-bed.is-bouncing, .pocket-fan.is-blowing svg, .pocket-fan-stream b { animation: none; }
+}

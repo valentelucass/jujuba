@@ -1,0 +1,30 @@
+.jelly-candies, .jelly-stamp { position: fixed; pointer-events: none; }
+.jelly-candies { z-index: 14; }
+.jelly-candies i {
+  position: absolute; left: 0; top: 0; border-radius: 60%;
+  background-image: linear-gradient(110deg, #fff9, transparent 45%, #480c502b 80%);
+  box-shadow: 0 1px 2px #31052a45; animation: jujuba-sprinkle 830ms both;
+}
+@keyframes jujuba-sprinkle {
+  0% { opacity: 0; transform: scale(.65); animation-timing-function: ease-out; }
+  10% { opacity: 1; }
+  44% { transform: translate(var(--apex-x), var(--rise)) rotate(85deg); animation-timing-function: ease-in; }
+  78% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--drift), var(--fall)) rotate(var(--spin)) scale(.72); }
+}
+.jelly-stamp { z-index: 11; animation: jujuba-stamp 7700ms ease-out both; }
+@keyframes jujuba-stamp {
+  0% { opacity: .95; }
+  32% { opacity: .76; }
+  100% { opacity: 0; }
+}
+.assistant-launch .jujuba-mascot.is-laughing { animation: jujuba-tickle 155ms ease-in-out alternate infinite; }
+.assistant-launch .jujuba-mascot.is-laughing :is(.jujuba-eyelid, .jujuba-smile) { animation: none; opacity: 1; }
+@keyframes jujuba-tickle {
+  from { transform: translateY(2px) scale(1.06, .84) rotate(-5deg); }
+  to { transform: translateY(3px) scale(.92, .9) rotate(4deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jelly-candies i { animation: jujuba-stamp 420ms ease-out both; transform: translate(var(--apex-x), var(--rise)) rotate(var(--spin)); }
+  .assistant-launch .jujuba-mascot.is-laughing { animation: none; transform: scale(1.03, .87); }
+}

@@ -7,6 +7,8 @@ use uuid::Uuid;
 pub struct Mascot {
     pub position: Position,
     pub hat: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
     pub pose: Pose,
     pub flight: Option<Flight>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -333,6 +335,11 @@ impl Mascot {
     pub fn valid(&self) -> bool {
         valid_point(self.position)
             && valid_hat(&self.hat)
+            && self.color.as_deref().is_none_or(|color| {
+                color.len() == 7
+                    && color.starts_with('#')
+                    && color.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit)
+            })
             && self.flight.as_ref().is_none_or(valid_flight)
             && self.scene.as_ref().is_none_or(Scene::valid)
     }
