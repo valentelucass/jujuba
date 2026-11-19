@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import { Activity, Braces, ChartNoAxesCombined, Check, ChevronDown, Database, GitBranch, GitFork, Moon, Plug, Power, Search, Sun } from 'lucide-react'
+import { Activity, Braces, ChartNoAxesCombined, Check, ChevronDown, Database, Gauge, GitBranch, GitFork, Moon, Plug, Power, Search, Sun } from 'lucide-react'
 import jujuba from '../assets/jujuba.png'
 import './header.css'
 import type { Connection, Database as DatabaseName } from '../models/sql'
@@ -8,6 +8,7 @@ import { useTheme } from './Theme'
 const bankTools = [
   { id: 'diagram', label: 'Diagrama do banco', hint: 'Veja as tabelas e suas relações.', icon: GitFork },
   { id: 'dashboard', label: 'Dashboards', hint: 'Acompanhe os indicadores do banco.', icon: ChartNoAxesCombined },
+  { id: 'monitor', label: 'Monitor do banco', hint: 'Veja o uso de memória, as aplicações e a atividade do banco selecionado.', icon: Gauge },
   { id: 'sql', label: 'SQL', hint: 'Abra o editor de consultas.', icon: Braces },
 ] as const
 

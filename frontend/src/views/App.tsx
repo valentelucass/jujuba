@@ -30,6 +30,7 @@ import type { MascotRoom } from '../models/flowMascot'
 import type { AssistantFlowChange, AssistantFlowResult, SystemDiagram } from '../models/systemDiagram'
 const SqlEditor = lazy(() => import('./SqlEditor').then((module) => ({ default: module.SqlEditor })))
 const DatabaseDashboard = lazy(() => import('./DatabaseDashboard'))
+const DatabaseMonitor = lazy(() => import('./DatabaseMonitor'))
 const Pm2Panel = lazy(() => import('./Pm2Panel').then((module) => ({ default: module.Pm2Panel })))
 const SystemDiagramStudio = lazy(() => import('./SystemDiagramStudio').then((module) => ({ default: module.SystemDiagramStudio })))
 
@@ -199,9 +200,9 @@ function ConnectedStudio({ connection, disconnect, onScreen }: {
     activeDatabase(connection.engine, connection.databases) ??
     (connection.databases.length === 1 ? connection.databases[0] : null))
   const [table, setTable] = useState<Table | null>(null)
-  const [workspaceView, setWorkspaceView] = useState<'objects' | 'diagram' | 'sql' | 'dashboard'>('objects')
+  const [workspaceView, setWorkspaceView] = useState<'objects' | 'diagram' | 'sql' | 'dashboard' | 'monitor'>('objects')
   useEffect(() => {
-    const page = workspaceView === 'sql' ? 'Editor SQL' : workspaceView === 'dashboard' ? 'Dashboards' :
+    const page = workspaceView === 'sql' ? 'Editor SQL' : workspaceView === 'dashboard' ? 'Dashboards' : workspaceView === 'monitor' ? 'Monitor do banco' :
       workspaceView === 'objects' && table ? 'Explorador de tabela' : database ? 'Diagrama do banco' : 'Lista de bancos'
     onScreen(page + ' · ' + engines[connection.engine].name)
   }, [connection.engine, database, table, workspaceView, onScreen])
@@ -209,7 +210,7 @@ function ConnectedStudio({ connection, disconnect, onScreen }: {
   const explorer = useExplorer(connection, database, table, (db) => {
     setDatabase(db)
     setTable(null)
-    setWorkspaceView('objects')
+    setWorkspaceView(view => view === 'monitor' ? view : 'objects')
     rememberActiveDatabase(connection.engine, db)
   }, (db, entry) => {
     setDatabase(db); setTable(entry); setWorkspaceView('objects')
@@ -222,6 +223,7 @@ function ConnectedStudio({ connection, disconnect, onScreen }: {
           actions={database ? {
             diagram: () => setWorkspaceView('diagram'),
             dashboard: () => setWorkspaceView('dashboard'),
+            monitor: () => setWorkspaceView('monitor'),
             sql: () => setWorkspaceView('sql'),
           } : undefined} />
         {table && <HeaderAction label="Dados" hint="Explore os registros da tabela." active={workspaceView === 'objects'}
@@ -229,6 +231,8 @@ function ConnectedStudio({ connection, disconnect, onScreen }: {
         {table && workspaceView === 'objects' && <HeaderAction label="Atualizar tabela" hint="Busque novamente os registros."
           onClick={() => setRefreshKey((value) => value + 1)}><RefreshCw /></HeaderAction>}
       </>} />
+    {workspaceView === 'monitor' && database ?
+      <Suspense fallback={<Loading />}><DatabaseMonitor key={JSON.stringify([connection.session, database])} connection={connection} database={database} /></Suspense> :
     <StudioLayout items={explorer.items} connected>
       {database && workspaceView === 'dashboard' ? <><main className="workspace">
         <Suspense fallback={<Loading />}><DatabaseDashboard key={database} database={database} session={connection.session} engine={connection.engine} /></Suspense>
@@ -242,7 +246,7 @@ function ConnectedStudio({ connection, disconnect, onScreen }: {
         ? <DatabaseWorkspace key={database} scope={{ session: connection.session, database }} connection={connection}
             onTable={(entry) => explorer.chooseRelatedTable(database, entry)} />
         : <><DatabaseList connection={connection} choose={explorer.chooseDatabase} /><ConnectionDetails connection={connection} /></>}
-    </StudioLayout>
+    </StudioLayout>}
     <StatusBar engine={connection.engine} endpoint={connection.endpoint} database={database} passwordSaveFailed={connection.passwordSaveFailed} />
   </>
 }

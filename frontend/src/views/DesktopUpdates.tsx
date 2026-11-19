@@ -1,10 +1,33 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { isTauri } from '@tauri-apps/api/core'
 import { check, type Update } from '@tauri-apps/plugin-updater'
+import { openUrl } from '@tauri-apps/plugin-opener'
+import { version as installedVersion } from '../../package.json'
 import { Download, RefreshCw } from 'lucide-react'
 
 const AUTO_CHECK_INTERVAL = 5 * 60_000
 const FOCUS_CHECK_INTERVAL = 60_000
+const releasePage = 'https://github.com/valentelucass/jujuba/releases/latest'
+const attemptKey = 'jujuba.pending-installer'
+
+function previousAttempt(): string {
+  try {
+    const attempt = JSON.parse(localStorage.getItem(attemptKey) ?? 'null')
+    if (attempt?.from === installedVersion && typeof attempt.to === 'string' && /^\d+\.\d+\.\d+$/.test(attempt.to)) {
+      return `A instalação da versão ${attempt.to} foi solicitada. Este aplicativo ainda está na versão ${installedVersion}.`
+    }
+  } catch { /* Optional local receipt. */ }
+  return ''
+}
+
+function installError(cause: unknown, stage: 'download' | 'prepare' | 'install') {
+  const detail = String(cause instanceof Error ? cause.message : cause)
+  if (stage === 'prepare') return 'Falha ao preparar a sessão para a atualização. Salve seu trabalho e tente novamente.'
+  if (/minisign|signature|assinatura|invalid pub/i.test(detail)) return 'A assinatura do pacote de atualização não passou na verificação. Consulte a release oficial antes de tentar novamente.'
+  if (stage === 'download') return 'Falha no download do pacote pelo GitHub. Verifique a conexão e o acesso aos arquivos de releases.'
+  if (/denied|negado|permission|permissão|os error (?:5|1260)\b|policy/i.test(detail)) return 'O Windows recusou a abertura do instalador. Em um computador corporativo, encaminhe o aviso do Windows à TI para verificar a política de instalação.'
+  return 'O pacote foi baixado e verificado, mas o instalador não iniciou. Confira o aviso do Windows ou encaminhe-o à TI.'
+}
 
 export type PrepareUpdate = () => Promise<void | (() => void)>
 const Updates = createContext<{
@@ -28,6 +51,8 @@ export function DesktopUpdates({ children }: { children: ReactNode }) {
   const [version, setVersion] = useState<string | null>(null)
   const [progress, setProgress] = useState<number | null>(null)
   const [error, setError] = useState('')
+  const [lastAttempt, setLastAttempt] = useState(previousAttempt)
+  const [linkError, setLinkError] = useState(false)
   const resource = useRef<Update | null>(null)
   const checkInProgress = useRef(false)
   const manualCheck = useRef(false)
@@ -83,7 +108,8 @@ export function DesktopUpdates({ children }: { children: ReactNode }) {
 
   async function install(prepare = prepareInstall.current) {
     const update = resource.current
-    if (!update || installInProgress.current || checkInProgress.current) return
+    if (!update || installInProgress.current) return
+    if (checkInProgress.current) { setVisible(true); return }
     installInProgress.current = true
     prepareInstall.current = prepare
     setVisible(true)
@@ -92,20 +118,26 @@ export function DesktopUpdates({ children }: { children: ReactNode }) {
     let total = 0
     let downloaded = 0
     let rollback: void | (() => void) = undefined
+    let stage: 'download' | 'prepare' | 'install' = 'download'
     try {
-      rollback = await prepare?.()
-      await update.downloadAndInstall((event) => {
+      await update.download((event) => {
         if (event.event === 'Started') total = event.data.contentLength ?? 0
         if (event.event === 'Progress') {
           downloaded += event.data.chunkLength
           if (total > 0) setProgress(Math.min(100, Math.round(downloaded / total * 100)))
         }
-        if (event.event === 'Finished') setStatus('installing')
       }, { timeout: 180000 })
-    } catch {
-      rollback?.()
+      stage = 'prepare'
+      rollback = await prepare?.()
+      stage = 'install'
+      try { localStorage.setItem(attemptKey, JSON.stringify({ from: installedVersion, to: update.version })) } catch { /* Optional local receipt. */ }
+      setStatus('installing')
+      await update.install()
+    } catch (cause) {
       installInProgress.current = false
-      setError('Não foi possível baixar, validar ou instalar a atualização. Confira a conexão e tente novamente.')
+      let message = installError(cause, stage)
+      try { rollback?.() } catch { message += ' Reabra a sessão de colaboração para continuar.' }
+      setError(message)
       setStatus('error')
     }
   }
@@ -120,17 +152,29 @@ export function DesktopUpdates({ children }: { children: ReactNode }) {
     <dialog ref={dialog} className="connection-dialog update-dialog" aria-labelledby="update-title"
       onCancel={(event) => { event.preventDefault(); if (!busy) setVisible(false) }}>
       <h2 id="update-title">Atualizações do JUJUBA</h2>
+      <small>Versão instalada neste computador · {installedVersion}</small>
+      {lastAttempt && <p>{lastAttempt}</p>}
       <div role="status">
         {status === 'checking' && <p>Verificando se há uma nova versão…</p>}
         {status === 'current' && <p>Você já está na versão mais recente.</p>}
         {status === 'available' && <p>A versão <strong>{version}</strong> está disponível. Salve seu trabalho antes de atualizar. O aplicativo será fechado para a instalação.</p>}
         {status === 'downloading' && <><p>Baixando atualização{progress === null ? '…' : ' · ' + progress + '%'}</p>
           <progress aria-label="Progresso da atualização" max={100} value={progress ?? undefined} /></>}
-        {status === 'installing' && <p>Validando e iniciando o instalador…</p>}
+        {status === 'installing' && <p>Pacote verificado. Abrindo o instalador do Windows…</p>}
       </div>
       {status === 'error' && <p role="alert">{error}</p>}
+      {(status === 'error' || lastAttempt) && <p><a href={releasePage} onClick={event => {
+        event.preventDefault()
+        void openUrl(releasePage).catch(() => setLinkError(true))
+      }}>Abrir a página oficial da atualização</a>{linkError && <small> · {releasePage}</small>}</p>}
       <div className="update-actions">
-        <button className="button" disabled={busy} onClick={() => setVisible(false)}>{version ? 'Mais tarde' : 'Fechar'}</button>
+        <button className="button" disabled={busy} onClick={() => {
+          setVisible(false)
+          if (lastAttempt) {
+            setLastAttempt('')
+            try { localStorage.removeItem(attemptKey) } catch { /* Optional local receipt. */ }
+          }
+        }}>{version ? 'Mais tarde' : 'Fechar'}</button>
         {(status === 'available' || (status === 'error' && version)) &&
           <button className="button primary" onClick={() => void install()}><Download size={15} />Atualizar agora</button>}
         {(status === 'current' || (status === 'error' && !version)) &&

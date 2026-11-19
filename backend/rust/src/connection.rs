@@ -233,6 +233,31 @@ impl Connections {
         }
     }
 
+    pub async fn monitor(&self, scope: &Scope) -> Result<crate::db_monitor::DatabaseMonitor> {
+        use crate::other_db::{monitor, mysql_monitor, Client};
+
+        let profile = self.state.read().await.session(scope)?.clone();
+        let sample = deadline(async {
+            match profile {
+                SessionProfile::SqlServer(profile) => {
+                    let mut client = profile.open(&scope.database).await?;
+                    crate::sql_server::monitor::collect(&mut client).await
+                }
+                SessionProfile::Other(session) => match session.client(&scope.database).await? {
+                    Client::Mysql(pool) => mysql_monitor::collect(&pool).await,
+                    Client::Postgres(pool) => monitor::postgres(&pool).await,
+                    Client::Sqlite(pool) => monitor::sqlite(&pool).await,
+                },
+                SessionProfile::NoSql(session) => {
+                    crate::no_sql::monitor::collect(&session, &scope.database).await
+                }
+            }
+        })
+        .await?;
+        self.state.read().await.session(scope)?;
+        Ok(sample)
+    }
+
     pub async fn dashboard(&self, scope: &Scope) -> Result<EngineDashboard> {
         let profile = self.state.read().await.session(scope)?.clone();
         deadline(async {

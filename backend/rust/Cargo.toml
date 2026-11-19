@@ -1,6 +1,6 @@
 [package]
 name = "jujubasql"
-version = "0.1.58"
+version = "0.1.59"
 description = "Explorador local de SQL Server"
 edition = "2021"
 build = "build.rs"
@@ -9,6 +9,7 @@ build = "build.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+libsqlite3-sys = { version = "0.30.1", default-features = false }
 iroh = { version = "=1.4.1", default-features = false, features = ["tls-ring"] }
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive", "rc"] }

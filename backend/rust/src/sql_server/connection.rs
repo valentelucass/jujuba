@@ -268,7 +268,7 @@ impl Profile {
         config.host(host);
         config.port(port);
         config.database(database);
-        config.application_name("JujubaSQL");
+        config.application_name("Jujuba");
         config.encryption(EncryptionLevel::Required);
         config.authentication(match &self.login {
             Login::Windows => AuthMethod::Integrated,

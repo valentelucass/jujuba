@@ -13,6 +13,7 @@ import { StatusBar } from './StatusBar'
 import { StudioLayout } from './StudioLayout'
 
 const DatabaseDashboard = lazy(() => import('./DatabaseDashboard'))
+const DatabaseMonitor = lazy(() => import('./DatabaseMonitor'))
 
 export function NoSqlStudio({ connection, disconnect, onScreen }: {
   connection: Connection; disconnect: () => Promise<void>; onScreen: (screen: string) => void
@@ -23,11 +24,11 @@ export function NoSqlStudio({ connection, disconnect, onScreen }: {
     activeDatabase(connection.engine, connection.databases) ??
     connection.databases.find((name) => !['admin', 'config', 'local'].includes(name)) ?? connection.databases[0] ?? null)
   const [collection, setCollection] = useState<string | null>(null)
-  const [dashboard, setDashboard] = useState(false)
+  const [view, setView] = useState<'explorer' | 'dashboard' | 'monitor'>('explorer')
   useEffect(() => {
-    onScreen(dashboard ? 'Dashboards · ' + engine.name : connection.engine === 'redis' ? 'Explorador de chaves · Redis' :
+    onScreen(view === 'monitor' ? 'Monitor do banco · ' + engine.name : view === 'dashboard' ? 'Dashboards · ' + engine.name : connection.engine === 'redis' ? 'Explorador de chaves · Redis' :
       collection ? 'Documentos · MongoDB' : 'Coleções · MongoDB')
-  }, [connection.engine, collection, dashboard, engine.name, onScreen])
+  }, [connection.engine, collection, view, engine.name, onScreen])
   const [disconnecting, setDisconnecting] = useState(false)
   const [refresh, setRefresh] = useState(0)
   const session = connection.session
@@ -44,7 +45,7 @@ export function NoSqlStudio({ connection, disconnect, onScreen }: {
 
   function selectCollection(name: string) {
     setCollection(name)
-    setDashboard(false)
+    setView('explorer')
   }
 
   async function close() {
@@ -71,13 +72,15 @@ export function NoSqlStudio({ connection, disconnect, onScreen }: {
   return <>
     <Header connection={connection} database={database} onDisconnect={close}
       disconnecting={disconnecting} onDatabase={selectDatabase} tools={<>
-        <DatabaseTools active={dashboard ? 'dashboard' : undefined}
-          actions={scope ? { dashboard: () => setDashboard(true) } : undefined} />
+        <DatabaseTools active={view === 'explorer' ? undefined : view}
+          actions={scope ? { dashboard: () => setView('dashboard'), monitor: () => setView('monitor') } : undefined} />
         <HeaderAction label={mongo ? 'Coleções' : 'Chaves'} hint={mongo ? 'Explore as coleções do banco.' : 'Explore as chaves do banco.'}
-          unavailable={!scope} active={!dashboard} onClick={() => setDashboard(false)}>{mongo ? <Braces /> : <KeyRound />}</HeaderAction>
+          unavailable={!scope} active={view === 'explorer'} onClick={() => setView('explorer')}>{mongo ? <Braces /> : <KeyRound />}</HeaderAction>
       </>} />
+    {view === 'monitor' && database ?
+      <Suspense fallback={<Loading />}><DatabaseMonitor key={JSON.stringify([connection.session, database])} connection={connection} database={database} /></Suspense> :
     <StudioLayout items={items} connected>
-      {scope && dashboard ? <main className="workspace">
+      {scope && view === 'dashboard' ? <main className="workspace">
         <Suspense fallback={<Loading />}><DatabaseDashboard key={database} {...scope} engine={connection.engine} /></Suspense>
       </main> : <main className="workspace nosql-workspace">
         <div className="object-heading">
@@ -111,7 +114,7 @@ export function NoSqlStudio({ connection, disconnect, onScreen }: {
           </dl>
         </div>
       </aside>
-    </StudioLayout>
+    </StudioLayout>}
     <StatusBar engine={connection.engine} endpoint={connection.endpoint} database={database} passwordSaveFailed={connection.passwordSaveFailed} />
   </>
 }

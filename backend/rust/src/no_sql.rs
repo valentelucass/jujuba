@@ -1,3 +1,5 @@
+pub(crate) mod monitor;
+
 use crate::{
     error::{AppError, Result},
     models::Engine,

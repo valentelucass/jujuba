@@ -25,6 +25,14 @@ Na tela inicial, clique em **Nova conexão** e escolha o tipo de banco no centro
 
 O login deve conseguir abrir o catálogo `master` para descobrir os bancos. Em cada banco, o SQL Server define quais objetos e registros o login pode consultar. A permissão `VIEW DEFINITION` nos objetos relevantes pode permitir classificar mais relações.
 
+## Monitorar um banco
+
+Em **Bancos de dados**, escolha a conexão e o banco e abra **Monitor do banco** na barra superior. O painel consulta o servidor em modo de leitura. A tabela de sessões mostra a aplicação, o cliente e a operação quando o motor fornece esses dados. A coluna de objeto mostra a tabela ou coleção identificada durante a coleta. Os contadores acumulados por objeto têm o período indicado.
+
+Para avaliar, por exemplo, um limite de 16 GiB no SQL Server, acompanhe a memória comprometida pela instância, o limite em vigor, a meta dinâmica, a fila de consultas aguardando memória e a RAM disponível no host. Compare também as amostras durante o horário de maior carga. Um pico construído pelo JUJUBA cobre as leituras feitas com o monitor aberto. O histórico guarda resumos locais de cinco minutos por até sete dias. [Monitorar o uso de memória no SQL Server](https://learn.microsoft.com/sql/relational-databases/performance-monitor/monitor-memory-usage)
+
+Cada motor identifica o recurso que consegue medir. No MySQL, o painel compara os dados no buffer pool do InnoDB com o tamanho configurado desse cache. No SQLite, a medição é do cache da conexão do JUJUBA com o arquivo. As leituras dependem da versão e das permissões da conta conectada.
+
 ## Monitorar processos do PM2
 
 Abra **PM2** na barra superior para acompanhar os processos gerenciados pelo PM2 da sua conta do Windows. O painel funciona sem conexão com um banco. Ele consulta a instância local em execução e respeita a pasta configurada em `PM2_HOME`. Para preparar a instalação ou iniciar seus serviços, consulte o [guia oficial do PM2](https://pm2.keymetrics.io/docs/usage/quick-start/).
@@ -140,6 +148,10 @@ MongoDB e Redis guardam a URI da última conexão bem-sucedida no mesmo gerencia
 Se fechar o aplicativo com uma sessão ativa, o JUJUBA volta a se conectar ao mesmo servidor ou arquivo na próxima abertura. Ele reabre o último banco selecionado quando esse banco ainda está acessível. Depois de clicar em **Desconectar**, use o atalho **Reconectar** para restabelecer a sessão quando quiser.
 
 ## Atualizações no Windows
+
+Se o Windows bloquear o instalador em um computador corporativo, mantenha a instalação atual e envie à TI a versão exibida no rodapé, o texto completo do aviso e o link da release. A tela de atualização distingue falha de download, falha de verificação e recusa ao iniciar o instalador. Se o Windows devolver o controle sem concluir a troca, o JUJUBA compara a versão na abertura seguinte.
+
+O JUJUBA verifica cada pacote com a chave do atualizador. A distribuição atual não possui assinatura de editor Windows (Authenticode). A TI pode conferir o SHA-256 publicado em cada release e avaliar a aprovação conforme a política da organização. Para distribuição com um editor verificado, a organização precisa assinar o executável e o instalador com uma identidade de assinatura de código reconhecida. [Reputação do SmartScreen para desenvolvedores](https://learn.microsoft.com/windows/apps/package-and-deploy/smartscreen-reputation)
 
 Instale a versão 0.1.14 ou posterior uma vez. O JUJUBA procura uma release ao abrir, ao voltar à janela e a cada cinco minutos. Quando encontra uma atualização, o rodapé exibe o número da versão disponível ao lado do estado da conexão. Abra **Atualizações**, salve seu trabalho e clique em **Atualizar agora**. O aplicativo valida a assinatura do instalador antes de iniciá-lo e reinicia após a instalação.
 

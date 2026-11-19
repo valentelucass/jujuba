@@ -4,6 +4,7 @@ mod catalog;
 mod commands;
 mod connection;
 mod credentials;
+mod db_monitor;
 mod edit;
 mod editor;
 mod engine_dashboard;
@@ -71,6 +72,7 @@ fn main() {
             commands::database_diagram,
             commands::dashboard_overview,
             commands::dashboard_engine,
+            commands::database_monitor,
             commands::dashboard_storage,
             commands::dashboard_files,
             commands::dashboard_performance,

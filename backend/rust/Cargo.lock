@@ -3109,13 +3109,14 @@ dependencies = [
 
 [[package]]
 name = "jujubasql"
-version = "0.1.58"
+version = "0.1.59"
 dependencies = [
  "base64 0.22.1",
  "bigdecimal",
  "chrono",
  "futures-util",
  "iroh",
+ "libsqlite3-sys",
  "mongodb",
  "odbc-api",
  "redis",

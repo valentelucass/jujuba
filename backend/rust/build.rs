@@ -21,6 +21,7 @@ fn main() {
             "database_diagram",
             "dashboard_overview",
             "dashboard_engine",
+            "database_monitor",
             "dashboard_storage",
             "dashboard_files",
             "dashboard_performance",

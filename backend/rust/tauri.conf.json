@@ -1,7 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "JujubaSQL",
-  "version": "0.1.58",
+  "productName": "Jujuba",
+  "mainBinaryName": "jujubasql",
+  "version": "0.1.59",
   "identifier": "br.nexosql.studio",
   "build": {
     "beforeDevCommand": { "script": "npm run dev", "cwd": "../../frontend" },
@@ -23,5 +24,5 @@
       "windows": { "installMode": "passive" }
     }
   },
-  "bundle": { "active": true, "targets": ["nsis"], "icon": ["icons/icon.ico"], "windows": { "nsis": { "installerIcon": "icons/icon.ico", "installMode": "currentUser", "languages": ["PortugueseBR", "English"] } } }
+  "bundle": { "active": true, "targets": ["nsis"], "icon": ["icons/icon.ico"], "windows": { "nsis": { "installerHooks": "windows/upgrade-brand.nsh", "installerIcon": "icons/icon.ico", "installMode": "currentUser", "languages": ["PortugueseBR", "English"] } } }
 }

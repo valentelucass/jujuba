@@ -1,5 +1,7 @@
 mod catalog;
 mod values;
+pub(crate) mod monitor;
+pub(crate) mod mysql_monitor;
 
 #[cfg(test)]
 mod tests;

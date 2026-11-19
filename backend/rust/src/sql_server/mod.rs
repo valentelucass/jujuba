@@ -1,6 +1,7 @@
 pub mod catalog;
 pub mod connection;
 pub mod dashboard;
+pub(crate) mod monitor;
 mod local;
 pub mod records;
 pub mod relationships;
