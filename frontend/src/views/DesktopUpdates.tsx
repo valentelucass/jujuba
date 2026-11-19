@@ -60,10 +60,12 @@ export function DesktopUpdates({ children }: { children: ReactNode }) {
   const prepareInstall = useRef<PrepareUpdate | undefined>(undefined)
   const lastCheck = useRef(-Infinity)
   const dialog = useRef<HTMLDialogElement>(null)
+  const showingError = useRef(false)
+  showingError.current = visible && status === 'error'
   const busy = status === 'downloading' || status === 'installing'
 
   const search = useCallback(async (manual: boolean) => {
-    if (installInProgress.current) return
+    if (installInProgress.current || (!manual && showingError.current)) return
     manualCheck.current ||= manual
     if (checkInProgress.current) return
     checkInProgress.current = true

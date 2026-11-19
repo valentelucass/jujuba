@@ -45,7 +45,7 @@ jobs:
           npm run desktop -- build --ci --target x86_64-pc-windows-msvc --config '{"bundle":{"createUpdaterArtifacts":true}}'
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: Check upgrade from JujubaSQL to Jujuba
-        if: github.ref_name == 'v0.1.59'
+        if: github.ref_name == 'v0.1.59' || github.ref_name == 'v0.1.60'
         shell: pwsh
         run: ./.github/scripts/check-brand-upgrade.ps1
       - name: Publish installer and update manifest
