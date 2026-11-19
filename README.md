@@ -33,7 +33,7 @@ O painel acompanha CPU, memória e tráfego de disco do computador. Selecione um
 
 Nos detalhes, use **Iniciar** para retomar um processo parado, **Parar** para interrompê-lo e **Reiniciar** para iniciar outro ciclo. É possível remover o registro de um processo pelo seu ID. Em modo cluster, **Recarregar** atua sobre a instância selecionada. Alterar a quantidade de instâncias atua sobre o aplicativo inteiro e exige um nome de grupo único. [Gerenciamento de processos](https://pm2.keymetrics.io/docs/usage/process-management/) e [modo cluster](https://pm2.keymetrics.io/docs/usage/cluster-mode/)
 
-Abra o PowerShell na pasta de trabalho do processo para desenvolver. Os atalhos de logs e detalhes usam o ID selecionado. O monitor interativo `pm2 monit` mostra todos os processos da instância.
+Em **Mais ações → PowerShell de desenvolvimento**, o terminal abre na pasta do processo com as ferramentas locais de Node disponíveis em `node_modules/.bin`. Se o Visual Studio ou Build Tools fornecer o Developer PowerShell, o JUJUBA carrega esse ambiente na mesma janela. Os atalhos de logs e detalhes usam o ID selecionado. O monitor interativo `pm2 monit` mostra todos os processos da instância.
 
 Para adicionar um serviço, escolha um script ou arquivo `ecosystem` no seletor do Windows e confirme o caminho. Salvar a lista grava o conjunto atual do PM2, inclusive quando está vazio. Restaurar a lista inicia os serviços salvos que estão ausentes. [Lista de processos persistente no PM2](https://pm2.keymetrics.io/docs/usage/startup/)
 

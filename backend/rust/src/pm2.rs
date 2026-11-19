@@ -222,6 +222,11 @@ enum Operation<'a> {
     Inspect(ShellView, u32),
 }
 
+fn encoded_script(script: &str) -> String {
+    let bytes: Vec<_> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
+    STANDARD.encode(bytes)
+}
+
 fn shell_command(operation: Operation<'_>) -> Result<std::process::Command> {
     let mut command = std::process::Command::new(powershell()?);
     for key in ["ACTION", "ID", "FILE", "NAME", "INSTANCES"] {
@@ -257,7 +262,12 @@ fn shell_command(operation: Operation<'_>) -> Result<std::process::Command> {
         }
         Operation::Inspect(view, id) => {
             let verb = match view {
-                ShellView::Shell => return Ok(command),
+                ShellView::Shell => {
+                    command
+                        .arg("-EncodedCommand")
+                        .arg(encoded_script(include_str!("pm2_dev_shell.ps1")));
+                    return Ok(command);
+                }
                 ShellView::Logs => "logs",
                 ShellView::Describe => "describe",
                 ShellView::Monit => "monit",
@@ -266,13 +276,9 @@ fn shell_command(operation: Operation<'_>) -> Result<std::process::Command> {
             verb
         }
     };
-    let script = include_str!("pm2_cli.ps1")
-        .encode_utf16()
-        .flat_map(u16::to_le_bytes)
-        .collect::<Vec<_>>();
     command
         .arg("-EncodedCommand")
-        .arg(STANDARD.encode(script))
+        .arg(encoded_script(include_str!("pm2_cli.ps1")))
         .env("JUJUBASQL_PM2_ACTION", verb);
     Ok(command)
 }
@@ -420,7 +426,11 @@ pub(crate) async fn pm2_open_shell(id: u32, name: String, view: Option<ShellView
                 "A pasta de trabalho registrada no PM2 não está disponível.",
             )
         })?;
-    let mut command = shell_command(Operation::Inspect(view.unwrap_or(ShellView::Shell), id))?;
+    let view = view.unwrap_or(ShellView::Shell);
+    let mut command = shell_command(Operation::Inspect(view, id))?;
+    if matches!(view, ShellView::Shell) {
+        command.env("JUJUBA_DEV_PROJECT", &path);
+    }
     command.current_dir(path);
     #[cfg(windows)]
     {

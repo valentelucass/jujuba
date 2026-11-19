@@ -21,7 +21,7 @@ const statusNames: Record<string, string> = {
 const actionLabels: Record<Pm2Action | 'scale', string> = { start: 'Iniciar', stop: 'Parar', restart: 'Reiniciar', reload: 'Recarregar', delete: 'Remover do PM2', scale: 'Ajustar instâncias' }
 const actionIcons = { start: Play, stop: Square, restart: RotateCcw, reload: RefreshCw, delete: Trash2, scale: Layers3 }
 const actionSuccess: Record<Pm2Action | 'scale', string> = { start: 'Inicialização solicitada', stop: 'Parada solicitada', restart: 'Reinício solicitado', reload: 'Recarga solicitada', delete: 'Processo removido do PM2', scale: 'Ajuste de instâncias solicitado' }
-const shellLabels: Record<Pm2ShellView, string> = { shell: 'Abrir PowerShell no projeto', logs: 'Logs em tempo real', describe: 'Descrição completa', monit: 'Monitor global no terminal' }
+const shellLabels: Record<Pm2ShellView, string> = { shell: 'PowerShell de desenvolvimento', logs: 'Logs em tempo real', describe: 'Descrição completa', monit: 'Monitor global no terminal' }
 const shellSuccess: Record<Pm2ShellView, string> = { shell: 'PowerShell aberto', logs: 'Logs abertos no PowerShell', describe: 'Descrição aberta no PowerShell', monit: 'Monitor global aberto no PowerShell' }
 const shellIcons = { shell: Terminal, logs: ScrollText, describe: ListTree, monit: Activity }
 const isShellView = (cmd: Command): cmd is Pm2ShellView => Object.hasOwn(shellLabels, cmd)
