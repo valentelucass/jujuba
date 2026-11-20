@@ -55,7 +55,7 @@
 .dbm-notes ul { display: grid; gap: 3px; margin: 8px 0 0; padding-left: 18px; }
 @media (min-width: 861px) {
   .dbm-grid { row-gap: 0; }
-  .dbm-grid > .dbm-panel { display: grid; grid-row: span 2; grid-template-rows: subgrid; }
+  .dbm-grid > .dbm-panel { display: grid; grid-row: span 2; grid-template-rows: subgrid; grid-template-columns: minmax(0, 1fr); }
   .dbm-grid .dbm-indicators { contain: size; min-height: 0; max-height: none; }
 }
 @media (max-width: 860px) { .dbm-grid { grid-template-columns: minmax(0, 1fr); } .dbm-toolbar { align-items: flex-start; } }
