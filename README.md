@@ -4,7 +4,15 @@
 
 <img src="frontend/src/assets/jujuba.png" alt="Mascote do JUJUBA" width="112" />
 
-Aplicativo para Windows que reúne um explorador de bancos de dados, um editor de fluxogramas com IA e um monitor de processos do PM2. O explorador aceita SQL Server, MySQL, PostgreSQL, SQLite, MongoDB e Redis.
+O JUJUBA reúne bancos de dados, processos do PM2 e fluxogramas com IA em um aplicativo para Windows. O explorador aceita SQL Server, MySQL, PostgreSQL, SQLite, MongoDB e Redis.
+
+## JUJUBA em ação
+
+No **Monitor do banco**, passe o mouse sobre o gráfico para ver a média e o pico de memória de cada intervalo. A animação mostra a troca de **24 horas** para **1 hora** e a busca por **Portal** para encontrar a sessão da aplicação. Todas as capturas deste guia usam dados de demonstração.
+
+![Monitor do banco Loja mostrando o histórico de memória, a troca de período e o filtro de sessões pelo nome da aplicação](docs/imagens/monitor-do-banco.gif)
+
+[Explorar bancos](#instalar-e-conectar) · [Monitorar memória](#monitorar-um-banco) · [Gerenciar o PM2](#monitorar-processos-do-pm2) · [Desenhar fluxogramas](#planejar-um-sistema-com-ia)
 
 ## Instalar e conectar
 
@@ -18,12 +26,16 @@ Na tela inicial, clique em **Nova conexão** e escolha o tipo de banco no centro
 ### SQL Server
 
 1. Execute o instalador x64 do JUJUBA. O aplicativo usa o runtime gratuito Microsoft Edge WebView2. O instalador pode baixar o runtime se ele ainda não estiver no Windows.
-2. No menu Iniciar do Windows, abra **JujubaSQL** e selecione **Conectar**. A janela usa o nome **JUJUBA**.
+2. No menu Iniciar do Windows, abra **Jujuba** e selecione **Nova conexão**.
 3. Se o SQL Server estiver no mesmo Windows, selecione **Neste computador**. Deixe **Instância local** em branco para a instância padrão. Esse modo usa a memória compartilhada do Windows e requer o Microsoft ODBC Driver 18 ou 17 para SQL Server, x64.
 4. Para outro computador, selecione **Pela rede** e informe o nome DNS e a porta TCP do servidor. Use a rede privada ou a VPN, se aplicável. O certificado precisa corresponder ao DNS e ser confiável no Windows. Nos dois modos, escolha um usuário autorizado do SQL Server ou a conta atual do Windows. O JUJUBA preenche os dados da última conexão bem-sucedida. A senha de SQL pode ser lembrada neste PC.
 5. Escolha um banco na lista pesquisável ou no explorador. Abra um esquema, a pasta **Tabelas** e uma tabela.
 
 O login deve conseguir abrir o catálogo `master` para descobrir os bancos. Em cada banco, o SQL Server define quais objetos e registros o login pode consultar. A permissão `VIEW DEFINITION` nos objetos relevantes pode permitir classificar mais relações.
+
+No **Diagrama do banco**, selecione a ligação entre duas tabelas para ver as colunas relacionadas. No exemplo, cada pedido aponta para um cliente, e um cliente pode ter vários pedidos.
+
+![Diagrama do banco Loja com a chave estrangeira entre Pedidos e Clientes selecionada e os detalhes da relação no painel direito](docs/imagens/diagrama-do-banco.png)
 
 ## Monitorar um banco
 
@@ -36,6 +48,8 @@ Cada motor identifica o recurso que consegue medir. No MySQL, o painel compara o
 ## Monitorar processos do PM2
 
 Abra **PM2** na barra superior para acompanhar os processos gerenciados pelo PM2 da sua conta do Windows. O painel funciona sem conexão com um banco. Ele consulta a instância local em execução e respeita a pasta configurada em `PM2_HOME`. Para preparar a instalação ou iniciar seus serviços, consulte o [guia oficial do PM2](https://pm2.keymetrics.io/docs/usage/quick-start/).
+
+![Monitor do PM2 com CPU, memória, GPU e disco acima da lista de processos. A API selecionada atende na porta 5010 e tem atalhos para reiniciar, parar e abrir os logs](docs/imagens/monitor-pm2.png)
 
 Os cartões mostram CPU, memória disponível e usada, GPU e tráfego de disco do Windows, inclusive quando o PM2 está desconectado. Passe o mouse ou use Tab para abrir um cartão flutuante. CPU, GPU e disco mostram os seis maiores consumidores. A memória lista todos os processos identificados pelo Windows, inclusive os que não expõem o valor medido. Clique para fixar o cartão, busque um nome ou PID e expanda um aplicativo para ver as instâncias. Os subprocessos identificados na árvore do PM2 ficam junto do aplicativo correspondente.
 
@@ -60,6 +74,8 @@ Use a estrela para favoritar um processo e o filtro **Favoritos** para ver os ma
 ## Planejar um sistema com IA
 
 O ícone do assistente no canto inferior direito abre o mesmo chat em todas as telas. Descreva o fluxo ou anexe até quatro documentos de texto, como Markdown, TXT, JSON ou CSV. O assistente reconhece a tela atual e pode propor um fluxograma de sistema. Use **Abrir fluxograma no editor** para revisar. Em **Fluxogramas**, use as formas e as ferramentas do painel direito para desenhar manualmente. Arraste as etapas, edite as conexões e use **Desfazer**, **Refazer** ou **Organizar** quando precisar. O arquivo `.jujuba.json` guarda o fluxo e as posições. Você também pode exportar Markdown com Mermaid.
+
+![Editor de fluxogramas mostrando a separação de pedidos. A decisão sobre o estoque leva à expedição ou à reposição, com a paleta de formas à direita](docs/imagens/fluxograma.png)
 
 Para usar a conta de um assistente, instale o cliente oficial no Windows e entre nele primeiro. Em seguida, selecione-o no chat e clique em **Conexão → Verificar assistente**.
 
