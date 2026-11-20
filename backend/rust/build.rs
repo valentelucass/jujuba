@@ -23,6 +23,7 @@ fn main() {
             "dashboard_engine",
             "database_monitor",
             "dashboard_storage",
+            "dashboard_column_storage",
             "dashboard_files",
             "dashboard_performance",
             "dashboard_live",

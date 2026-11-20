@@ -74,6 +74,15 @@ impl SqlClient {
     }
 
     pub async fn query(&mut self, sql: &str, parameters: &[Parameter]) -> Result<Vec<Row>> {
+        self.query_with_timeout(sql, parameters, 20).await
+    }
+
+    pub async fn query_with_timeout(
+        &mut self,
+        sql: &str,
+        parameters: &[Parameter],
+        timeout_seconds: usize,
+    ) -> Result<Vec<Row>> {
         match self {
             Self::Network(client) => {
                 let bindings: Vec<&dyn tiberius::ToSql> = parameters
@@ -92,7 +101,7 @@ impl SqlClient {
                 Ok(rows.into_iter().map(Row::Network).collect())
             }
             Self::Local(connection) => {
-                local::query(connection.clone(), sql.to_owned(), parameters.to_vec()).await
+                local::query(connection.clone(), sql.to_owned(), parameters.to_vec(), timeout_seconds).await
             }
         }
     }

@@ -20,11 +20,24 @@ export interface DashboardOverview {
 }
 
 export interface TableStorage {
+  id: number
   schema: string
   name: string
   rows: number
-  reservedMib: number
-  usedMib: number
+  reservedBytes: string
+  usedBytes: string
+}
+
+export interface ColumnStorage {
+  method: 'full' | 'sample' | 'limited' | 'unavailable'
+  measuredRows: string
+  catalogRows: string | null
+  columns: {
+    name: string
+    dataType: string
+    measuredBytes: string | null
+    reason: string | null
+  }[]
 }
 
 export interface QueryActivity {

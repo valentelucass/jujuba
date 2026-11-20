@@ -76,10 +76,11 @@ pub async fn query(
     connection: LocalConnection,
     sql: String,
     parameters: Vec<Parameter>,
+    timeout_seconds: usize,
 ) -> Result<Vec<Row>> {
     blocking(move || {
         let connection = connection.lock().map_err(|_| local_worker_error())?;
-        let mut cursor = execute(&connection, &sql, &parameters)?;
+        let mut cursor = execute(&connection, &sql, &parameters, timeout_seconds)?;
         let names: Arc<[String]> = cursor
             .column_names()
             .map_err(local_error)?
@@ -123,7 +124,7 @@ pub async fn read_editor(connection: LocalConnection, sql: String) -> Result<Que
         connection
             .execute(&super::editor_row_limit(), (), Some(20))
             .map_err(local_error)?;
-        let mut cursor = execute(&connection, &sql, &[])?;
+        let mut cursor = execute(&connection, &sql, &[], 20)?;
         let columns = cursor
             .column_names()
             .map_err(local_error)?
@@ -161,11 +162,12 @@ fn execute<'a>(
     connection: &'a Connection<'_>,
     sql: &str,
     parameters: &[Parameter],
+    timeout_seconds: usize,
 ) -> Result<impl Cursor + 'a> {
     // Bind the statement and its parameters separately. The ODBC driver generates
     // its own parameter names, so declaring @P1 in its outer batch can collide.
     let cursor = if parameters.is_empty() {
-        connection.execute(sql, (), Some(20))
+        connection.execute(sql, (), Some(timeout_seconds))
     } else {
         let mut definitions = Vec::with_capacity(parameters.len());
         let mut bindings: Vec<Box<dyn InputParameter>> = Vec::with_capacity(parameters.len() + 2);
@@ -191,7 +193,7 @@ fn execute<'a>(
         connection.execute(
             &format!("EXEC sys.sp_executesql {markers}"),
             bindings.as_slice(),
-            Some(20),
+            Some(timeout_seconds),
         )
     };
     cursor

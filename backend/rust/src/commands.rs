@@ -63,6 +63,15 @@ pub async fn dashboard_storage(
 }
 
 #[tauri::command]
+pub async fn dashboard_column_storage(
+    scope: TableScope,
+    full_scan: bool,
+    state: State<'_, Connections>,
+) -> Result<dashboard::ColumnStorage> {
+    dashboard::column_storage(&state, scope, full_scan).await
+}
+
+#[tauri::command]
 pub async fn dashboard_performance(
     scope: Scope,
     hours: i32,

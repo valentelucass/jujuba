@@ -4,7 +4,7 @@ import type { FlowCommand, FlowProject, FlowProjectEntry, FlowSession, FlowViewU
 import type { NoSqlEngine } from '../models/engines'
 import type { DatabaseMonitorSample } from '../models/databaseMonitor'
 import type { DocumentsPage, RedisEntry, RedisKeys } from '../models/noSql'
-import type { DatabaseFile, DashboardOverview, DashboardPerformance, EngineDashboardData, LiveActivity, TableStorage } from '../models/dashboard'
+import type { ColumnStorage, DatabaseFile, DashboardOverview, DashboardPerformance, EngineDashboardData, LiveActivity, TableStorage } from '../models/dashboard'
 import type {
   AppError, Connection, ConnectionInput, DatabaseDiagram, EditInput, QueryOutput, PageRequest, RecordsPage, Relationship,
   Schema, Scope, Structure, Table, TableScope,
@@ -36,6 +36,8 @@ export const sql = {
   dashboardOverview: (scope: Scope) => call<DashboardOverview>('dashboard_overview', { scope }),
   dashboardLive: (scope: Scope) => call<LiveActivity>('dashboard_live', { scope }),
   dashboardStorage: (scope: Scope) => call<TableStorage[]>('dashboard_storage', { scope }),
+  dashboardColumnStorage: (scope: TableScope, fullScan: boolean) =>
+    call<ColumnStorage>('dashboard_column_storage', { scope, fullScan }),
   dashboardFiles: (scope: Scope) => call<DatabaseFile[]>('dashboard_files', { scope }),
   dashboardPerformance: (scope: Scope, hours: number) =>
     call<DashboardPerformance>('dashboard_performance', { scope, hours }),

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Activity, ChartNoAxesCombined, Clock3, Database, HardDrive, RefreshCw } from 'lucide-react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
+import { Activity, ChartNoAxesCombined, ChevronDown, ChevronRight, Clock3, Database, HardDrive, RefreshCw } from 'lucide-react'
 import { init, use, type ComposeOption } from 'echarts/core'
 import { BarChart, LineChart, type BarSeriesOption, type LineSeriesOption } from 'echarts/charts'
 import { GridComponent, TooltipComponent, type GridComponentOption, type TooltipComponentOption } from 'echarts/components'
@@ -12,6 +12,7 @@ import { engines, type Engine } from '../models/engines'
 import type { AppError, Scope } from '../models/sql'
 import { Empty, Failure, Loading } from './States'
 import { useTheme } from './Theme'
+import { exactBytes, storageSize, StorageColumns } from './StorageColumns'
 
 use([BarChart, LineChart, GridComponent, TooltipComponent, CanvasRenderer])
 
@@ -112,7 +113,9 @@ function Overview({ data }: { data: DashboardOverview }) {
   </>
 }
 
-function Storage({ tables }: { tables: TableStorage[] }) {
+function Storage({ tables, database, session, revision }: Scope & { tables: TableStorage[]; revision: number }) {
+  const [selected, setSelected] = useState<number | null>(null)
+  const toggle = (id: number) => setSelected(current => current === id ? null : id)
   const top = tables.slice(0, 8).reverse()
   return <>
     {tables.length > 0 ? <>
@@ -126,8 +129,8 @@ function Storage({ tables }: { tables: TableStorage[] }) {
           yAxis: { type: 'category', data: top.map(({ schema, name }) => schema + '.' + name),
             axisLabel: { width: 145, overflow: 'truncate' } },
           series: [
-            { type: 'bar', name: 'Reservado (MiB)', data: top.map((table) => table.reservedMib) },
-            { type: 'bar', name: 'Usado (MiB)', data: top.map((table) => table.usedMib) },
+            { type: 'bar', name: 'Reservado (MiB)', data: top.map(table => Number(table.reservedBytes) / 1048576) },
+            { type: 'bar', name: 'Usado (MiB)', data: top.map(table => Number(table.usedBytes) / 1048576) },
           ],
         }} />
       </section>
@@ -135,10 +138,22 @@ function Storage({ tables }: { tables: TableStorage[] }) {
         <caption>Até 30 tabelas por espaço reservado</caption>
         <thead><tr><th scope="col">Tabela</th><th scope="col">Linhas estimadas</th>
           <th scope="col">Reservado</th><th scope="col">Usado</th></tr></thead>
-        <tbody>{tables.map((table) => <tr key={JSON.stringify([table.schema, table.name])}>
-          <th scope="row">{table.schema}.{table.name}</th><td>{integer.format(table.rows)}</td>
-          <td>{mib(table.reservedMib)}</td><td>{mib(table.usedMib)}</td>
-        </tr>)}</tbody>
+        <tbody>{tables.map(table => {
+          const expanded = selected === table.id
+          const Chevron = expanded ? ChevronDown : ChevronRight
+          return <Fragment key={table.id}>
+            <tr className="storage-table-row" onClick={() => toggle(table.id)}>
+              <th scope="row"><button type="button" className="storage-toggle" aria-expanded={expanded}
+                aria-controls={expanded ? 'storage-detail-' + table.id : undefined}>
+                <Chevron size={15} aria-hidden="true" />{table.schema}.{table.name}</button></th>
+              <td>{integer.format(table.rows)}</td><td title={exactBytes(table.reservedBytes)}>{storageSize(table.reservedBytes)}</td>
+              <td title={exactBytes(table.usedBytes)}>{storageSize(table.usedBytes)}</td>
+            </tr>
+            {expanded && <tr><td className="storage-detail-cell" colSpan={4}>
+              <StorageColumns key={revision} database={database} session={session} table={table} />
+            </td></tr>}
+          </Fragment>
+        })}</tbody>
       </table></div>
     </> : <Empty title="Nenhuma tabela com estatísticas disponíveis" />}
   </>
@@ -331,6 +346,7 @@ function useStorageRead<T>(load: () => Promise<T>) {
 }
 
 function StorageDashboard({ database, session }: Scope) {
+  const [revision, setRevision] = useState(0)
   const loadFiles = useCallback(() => sql.dashboardFiles({ database, session }), [database, session])
   const loadTables = useCallback(() => sql.dashboardStorage({ database, session }), [database, session])
   const files = useStorageRead(loadFiles)
@@ -344,7 +360,7 @@ function StorageDashboard({ database, session }: Scope) {
   }
   return <>
     <div className="dashboard-actions">
-      <button className="button" disabled={loading} onClick={() => { files.refresh(); tables.refresh() }}>
+      <button className="button" disabled={loading} onClick={() => { files.refresh(); tables.refresh(); setRevision(value => value + 1) }}>
         <RefreshCw size={14} /> Atualizar painel
       </button>
     </div>
@@ -353,7 +369,7 @@ function StorageDashboard({ database, session }: Scope) {
     {!sameError && files.error && <Failure error={files.error} title="Arquivos do banco" retry={files.refresh} />}
     {files.data && <FileList files={files.data} />}
     {!sameError && tables.error && <Failure error={tables.error} title="Espaço por tabela" retry={tables.refresh} />}
-    {tables.data && <Storage tables={tables.data} />}
+    {tables.data && <Storage tables={tables.data} database={database} session={session} revision={revision} />}
     {(files.error && files.data || tables.error && tables.data) &&
       <p className="dashboard-updated" role="status">Parte dos dados exibidos é da última leitura bem-sucedida.</p>}
   </>
@@ -427,7 +443,7 @@ function SqlServerDashboard({ database, session, initialTab = 'overview' }: Scop
       {summary.status === 'error' && <Failure error={summary.error} retry={refresh} />}
       {tab === 'overview' && (summary.status === 'ready' ? <Overview data={summary.data} />
         : summary.status !== 'error' && <Loading />)}
-      {tab === 'storage' && <StorageDashboard database={database} session={session} />}
+      {tab === 'storage' && <StorageDashboard key={JSON.stringify([database, session])} database={database} session={session} />}
       {tab === 'performance' && (history.status === 'ready' ? <Performance data={history.data} hours={hours} />
         : history.status === 'error' ? <Failure error={history.error} retry={refresh} /> : <Loading />)}
       {tab === 'live' && <LiveDashboard database={database} session={session} />}

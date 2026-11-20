@@ -28,11 +28,30 @@ pub struct DatabaseFile {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TableStorage {
+    id: i32,
     schema: String,
     name: String,
     rows: u64,
-    reserved_mib: f64,
-    used_mib: f64,
+    reserved_bytes: String,
+    used_bytes: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ColumnStorage {
+    method: String,
+    measured_rows: String,
+    catalog_rows: Option<String>,
+    columns: Vec<ColumnSize>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ColumnSize {
+    name: String,
+    data_type: String,
+    measured_bytes: Option<String>,
+    reason: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -240,10 +259,10 @@ pub async fn storage(connections: &Connections, scope: Scope) -> Result<Vec<Tabl
         let mut client = connections.open_database(&scope).await?;
         client.set_dashboard_lock_timeout().await?;
         client.query(
-            "SELECT TOP (30) s.name AS schema_name, t.name,
+            "SELECT TOP (30) t.object_id, s.name AS schema_name, t.name,
                 CONVERT(varchar(24), SUM(CASE WHEN p.index_id < 2 THEN p.row_count ELSE 0 END)) AS row_count,
-                CONVERT(varchar(40), CONVERT(decimal(24,3), SUM(p.reserved_page_count) / 128.0)) AS reserved_mib,
-                CONVERT(varchar(40), CONVERT(decimal(24,3), SUM(p.used_page_count) / 128.0)) AS used_mib
+                CONVERT(varchar(30), SUM(p.reserved_page_count) * 8192) AS reserved_bytes,
+                CONVERT(varchar(30), SUM(p.used_page_count) * 8192) AS used_bytes
              FROM sys.dm_db_partition_stats AS p
              JOIN sys.tables AS t ON t.object_id = p.object_id
              JOIN sys.schemas AS s ON s.schema_id = t.schema_id
@@ -252,13 +271,43 @@ pub async fn storage(connections: &Connections, scope: Scope) -> Result<Vec<Tabl
              ORDER BY SUM(p.reserved_page_count) DESC, s.name, t.name",
             &[],
         ).await?.iter().map(|row| Ok(TableStorage {
+            id: super::int(row, "object_id")?,
             schema: text(row, "schema_name")?,
             name: text(row, "name")?,
             rows: number(row, "row_count")?,
-            reserved_mib: number(row, "reserved_mib")?,
-            used_mib: number(row, "used_mib")?,
+            reserved_bytes: text(row, "reserved_bytes")?,
+            used_bytes: text(row, "used_bytes")?,
         })).collect()
     }).await
+}
+
+pub async fn column_storage(
+    connections: &Connections,
+    scope: crate::models::TableScope,
+    full_scan: bool,
+) -> Result<ColumnStorage> {
+    let mut client = deadline(connections.open_database(&scope.scope)).await?;
+    deadline(client.set_dashboard_lock_timeout()).await?;
+    let timeout = if full_scan { 120 } else { 20 };
+    let parameters = [Parameter::Int(scope.table_id), Parameter::Int(i32::from(full_scan))];
+    let rows = tokio::time::timeout(
+        std::time::Duration::from_secs(timeout as u64 + 2),
+        client.query_with_timeout(include_str!("column_storage.sql"), &parameters, timeout),
+    )
+    .await
+    .map_err(|_| AppError::new("timeout", "O SQL Server atingiu o tempo limite da medição."))??;
+    let first = rows.first().ok_or_else(AppError::denied)?;
+    Ok(ColumnStorage {
+        method: text(first, "method")?,
+        measured_rows: text(first, "measured_rows")?,
+        catalog_rows: optional_text(first, "catalog_rows")?,
+        columns: rows.iter().map(|row| Ok(ColumnSize {
+            name: text(row, "name")?,
+            data_type: text(row, "type_name")?,
+            measured_bytes: optional_text(row, "measured_bytes")?,
+            reason: optional_text(row, "reason")?,
+        })).collect::<Result<_>>()?,
+    })
 }
 
 pub async fn performance(

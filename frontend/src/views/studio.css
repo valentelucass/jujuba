@@ -555,6 +555,22 @@ dialog.connection-dialog {
 .dashboard-table :is(th, td) { padding: 8px 12px; border-top: 1px solid var(--line); white-space: nowrap; }
 .dashboard-table thead { color: var(--quiet); }
 .dashboard-table tbody th { font-weight: 500; }
+.storage-table-row { cursor: pointer; }
+.storage-table-row:hover, .storage-table-row:has([aria-expanded="true"]) { background: var(--berry-selected); }
+.storage-toggle { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; color: inherit; font: inherit; cursor: pointer; padding: 2px 0; }
+.storage-toggle svg { color: var(--berry-text); flex-shrink: 0; }
+.storage-toggle:focus-visible { outline: 2px solid var(--berry-text); outline-offset: 3px; }
+.dashboard-table .storage-detail-cell { padding: 0; white-space: normal; }
+.storage-columns { padding: 14px 18px 16px; border-left: 3px solid var(--berry-line); background: var(--surface); }
+.storage-columns h3 { margin: 0 0 5px; font-size: 14px; }
+.storage-columns p, .storage-full span { color: var(--quiet); font-size: 12px; }
+.storage-columns p { margin: 4px 0 8px; }
+.storage-columns .storage-summary { margin-top: 14px; color: var(--text); font-weight: 600; }
+.storage-column-scroll { overflow: auto; max-height: 340px; }
+.storage-column-scroll thead th { position: sticky; top: 0; background: var(--surface); }
+.storage-column-scroll small { display: block; color: var(--quiet); }
+.storage-full, .storage-progress { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.storage-full { margin-top: 12px; }
 .dashboard-series summary { cursor: pointer; }
 .dashboard-series .dashboard-table { margin: 10px 0 0; }
 .dashboard-query summary { cursor: pointer; }

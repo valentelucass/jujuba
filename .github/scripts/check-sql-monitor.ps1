@@ -24,6 +24,7 @@ try {
   $command.CommandText = 'CREATE DATABASE JujubaMonitorFixture'
   [void]$command.ExecuteNonQuery()
   $observer = Open-TestConnection JujubaMonitorFixture MonitorObserver
+  & "$PSScriptRoot/check-column-storage.ps1" -Connection $observer
   $command = $observer.CreateCommand()
   $command.CommandText = 'CREATE TABLE dbo.JujubaFixture (id int PRIMARY KEY); INSERT dbo.JujubaFixture VALUES (1)'
   [void]$command.ExecuteNonQuery()

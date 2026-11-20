@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dashboard-column-storage"
+description = "Enables the dashboard_column_storage command without any pre-configured scope."
+commands.allow = ["dashboard_column_storage"]
+
+[[permission]]
+identifier = "deny-dashboard-column-storage"
+description = "Denies the dashboard_column_storage command without any pre-configured scope."
+commands.deny = ["dashboard_column_storage"]

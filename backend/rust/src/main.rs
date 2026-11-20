@@ -74,6 +74,7 @@ fn main() {
             commands::dashboard_engine,
             commands::database_monitor,
             commands::dashboard_storage,
+            commands::dashboard_column_storage,
             commands::dashboard_files,
             commands::dashboard_performance,
             commands::dashboard_live,
