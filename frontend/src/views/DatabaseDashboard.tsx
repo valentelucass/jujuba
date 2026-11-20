@@ -396,12 +396,12 @@ function EngineDashboard({ database, session, engine }: Scope & { engine: Engine
   </>
 }
 
-export default function DatabaseDashboard(props: Scope & { engine: Engine }) {
+export default function DatabaseDashboard(props: Scope & { engine: Engine; initialTab?: Tab }) {
   return props.engine === 'sqlServer' ? <SqlServerDashboard {...props} /> : <EngineDashboard {...props} />
 }
 
-function SqlServerDashboard({ database, session }: Scope) {
-  const [tab, setTab] = useState<Tab>('overview')
+function SqlServerDashboard({ database, session, initialTab = 'overview' }: Scope & { initialTab?: Tab }) {
+  const [tab, setTab] = useState<Tab>(initialTab)
   const [hours, setHours] = useState(24)
   const [revision, setRevision] = useState(0)
   const refresh = () => setRevision((value) => value + 1)

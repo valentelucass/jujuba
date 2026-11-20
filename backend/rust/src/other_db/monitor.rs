@@ -114,6 +114,8 @@ pub(crate) async fn postgres(pool: &PgPool) -> Result<DatabaseMonitor> {
                     None => "Visibilidade restrita".into(),
                 };
                 report.activity.push(Activity {
+                    database: None,
+                    last_request_end: None,
                     id: row.try_get("id")?,
                     application: row.try_get("app")?,
                     client: row.try_get("client")?,
@@ -143,6 +145,7 @@ pub(crate) async fn postgres(pool: &PgPool) -> Result<DatabaseMonitor> {
             report.objects = rows
                 .into_iter()
                 .map(|(name, count)| ObjectActivity {
+                    usage: None,
                     name,
                     metric: "Varreduras sequenciais e por índice".into(),
                     value: count as u64,

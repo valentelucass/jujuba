@@ -8,8 +8,10 @@ export interface MemoryMetric {
   nativePeakLabel: string
 }
 
-export type MetricUnit = 'bytes' | 'count' | 'percent' | 'seconds'
+export type MetricUnit = 'bytes' | 'count' | 'percent' | 'seconds' | 'milliseconds'
 export interface DatabaseActivity {
+  database?: string | null
+  lastRequestEnd?: string | null
   id: string
   application: string | null
   client: string | null
@@ -20,9 +22,20 @@ export interface DatabaseActivity {
 }
 
 export interface DatabaseMonitorSample {
+  sqlServer?: {
+    hostMemoryLow: boolean | null
+    processMemoryLow: boolean | null
+    waitingForMemory: number | null
+    fullVisibility: boolean
+    databaseCount: number | null
+    instanceCount: number | null
+    instanceRows: DatabaseActivity[]
+    objectsAvailable: boolean
+  }
   memory: MemoryMetric
   indicators: { label: string; value: number; unit: MetricUnit; scope: string }[]
   activity: DatabaseActivity[]
-  objects: { name: string; metric: string; value: number; unit: 'count' | 'bytes'; window: string }[]
+  objects: { name: string; metric: string; value: number; unit: 'count' | 'bytes'; window: string
+    usage?: { reads: number; updates: number; lastAccess: string | null } }[]
   notes: string[]
 }

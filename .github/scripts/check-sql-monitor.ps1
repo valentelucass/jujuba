@@ -36,22 +36,37 @@ try {
 
   $queries = @(Get-ChildItem backend/rust/src/sql_server/monitor -Filter '*.sql')
   if (!$queries.Count) { throw 'The SQL monitor queries are missing.' }
-  $seenApp = $seenTable = $seenMemory = $false
+  $seenApp = $seenTable = $seenMemory = $seenOtherDatabase = $seenUsage = $false
   foreach ($file in $queries) {
     $command.CommandText = Get-Content -LiteralPath $file.FullName -Raw
     $reader = $command.ExecuteReader()
     try {
       while ($reader.Read()) {
+        if ($file.BaseName -eq 'sessions') {
+          switch ([string]$reader['program_name']) {
+            'MonitorObserver' { throw 'The observer appeared in its own sample.' }
+            'MonitorSetup' {
+              $seenOtherDatabase = ($reader['database_name'] -eq 'master' -and $reader['selected_row'] -eq '0')
+            }
+            'JujubaFixtureApp' {
+              $seenApp = ($reader['selected_row'] -eq '1' -and $reader['database_name'] -eq 'JujubaMonitorFixture' -and [long]$reader['instance_count'] -gt [long]$reader['database_count'])
+            }
+          }
+        }
+        if ($file.BaseName -eq 'table_usage' -and $reader['table_name'] -eq '[dbo].[JujubaFixture]') {
+          $seenUsage = ([long]$reader['updates'] -gt 0 -and !$reader.IsDBNull($reader.GetOrdinal('last_access')))
+        }
         for ($i = 0; $i -lt $reader.FieldCount; $i++) {
           $value = [string]$reader.GetValue($i)
-          if ($reader.GetName($i) -eq 'program_name' -and $value -eq 'JujubaFixtureApp') { $seenApp = $true }
           if ($file.BaseName -match 'lock' -and $value -eq '[dbo].[JujubaFixture]') { $seenTable = $true }
           if ($reader.GetName($i) -eq 'committed' -and [long]$value -gt 0) { $seenMemory = $true }
         }
       }
     } finally { $reader.Close() }
   }
-  if (!$seenApp -or !$seenTable -or !$seenMemory) { throw "Incomplete monitor sample. App=$seenApp Table=$seenTable Memory=$seenMemory" }
+  if (!$seenApp -or !$seenOtherDatabase -or !$seenTable -or !$seenUsage -or !$seenMemory) {
+    throw "Incomplete monitor sample. App=$seenApp OtherDatabase=$seenOtherDatabase Lock=$seenTable Usage=$seenUsage Memory=$seenMemory"
+  }
 } finally {
   if ($work) { $work.Cancel() }
   if ($worker) { $worker.Dispose() }

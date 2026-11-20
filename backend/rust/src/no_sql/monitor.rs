@@ -143,6 +143,8 @@ async fn mongo(client: &mongodb::Client, db: &str) -> Result<DatabaseMonitor> {
                     *objects.entry(name.to_owned()).or_default() += 1;
                 }
                 report.activity.push(Activity {
+                    database: None,
+                    last_request_end: None,
                     id: number(&row, "opid")
                         .map(|n| n.to_string())
                         .or_else(|| field(&row, "opid"))
@@ -165,6 +167,7 @@ async fn mongo(client: &mongodb::Client, db: &str) -> Result<DatabaseMonitor> {
             report.objects = objects
                 .into_iter()
                 .map(|(name, value)| ObjectActivity {
+                    usage: None,
                     name,
                     value,
                     metric: "Operações em execução".into(),
@@ -282,6 +285,8 @@ fn redis_clients(report: &mut DatabaseMonitor, raw: &str, db: &str, observer: Op
             break;
         }
         report.activity.push(Activity {
+            database: None,
+            last_request_end: None,
             id: id.into(),
             application: value("name")
                 .or_else(|| value("lib-name"))

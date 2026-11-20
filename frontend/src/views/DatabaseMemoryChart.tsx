@@ -11,6 +11,17 @@ export interface PlotPoint { time: number; average: number | null; peak?: number
 export const clock = new Intl.DateTimeFormat('pt-BR', { timeStyle: 'medium' })
 export const stamp = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 const quantity = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 })
+const precise = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 20 })
+export function exactSize(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value) || value < 0) return '—'
+  // SQL Server reports whole KiB. Format the fractional MiB independently of the integer part.
+  if (Number.isSafeInteger(value) && value >= 1048576 && value % 1024 === 0) {
+    const kib = value / 1024
+    const fraction = precise.format((kib % 1024) / 1024).slice(1)
+    return precise.format(Math.floor(kib / 1024)) + fraction + ' MiB'
+  }
+  return precise.format(value) + ' B'
+}
 const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB']
 export function bytes(value: number | null | undefined) {
   if (value == null || !Number.isFinite(value) || value < 0) return '—'
@@ -56,7 +67,7 @@ export function DatabaseMemoryChart({ points, live }: { points: PlotPoint[]; liv
         splitLine: { lineStyle: { color: color('--line'), type: 'dashed' } } },
       tooltip: { trigger: 'axis', renderMode: 'richText', confine: true, backgroundColor: color('--surface'),
         borderColor: color('--line-strong'), textStyle: { color: color('--text') },
-        valueFormatter: (value: unknown) => typeof value === 'number' ? bytes(value) : '—' },
+          valueFormatter: (value: unknown) => typeof value === 'number' ? exactSize(value) : '—' },
       series: [
         { name: live ? 'Uso de memória' : 'Média', type: 'line', data: data('average'), symbol: 'circle',
           symbolSize: points.length > 40 ? 2 : 5, itemStyle: { color: color('--berry') }, areaStyle: { opacity: .08 } },

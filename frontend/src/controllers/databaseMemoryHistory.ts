@@ -10,6 +10,7 @@ export interface DatabaseMemoryBucket {
   lastAt: number
   averageBytes: number
   peakBytes: number
+  peakAt?: number
   samples: number
 }
 
@@ -25,6 +26,8 @@ function recent(bucket: DatabaseMemoryBucket, now: number) {
     && bucket.firstAt >= bucket.time && bucket.firstAt <= bucket.lastAt && bucket.lastAt < bucket.time + periodMs
     && bucket.firstAt >= now - retentionMs && bucket.lastAt <= now
     && Number.isSafeInteger(bucket.samples) && bucket.samples > 0
+    && (bucket.peakAt === undefined || (Number.isSafeInteger(bucket.peakAt)
+      && bucket.peakAt >= bucket.firstAt && bucket.peakAt <= bucket.lastAt))
     && Number.isFinite(bucket.averageBytes) && Number.isFinite(bucket.peakBytes)
     && bucket.averageBytes >= 0 && bucket.peakBytes >= bucket.averageBytes
 }
@@ -48,10 +51,11 @@ export function recordDatabaseMemory(key: string, time: number, usedBytes: numbe
   if (last && last.time === start) {
     if (time <= last.lastAt) return buckets
     buckets[buckets.length - 1] = { ...last, lastAt: time, samples: last.samples + 1,
+      peakAt: usedBytes >= last.peakBytes ? time : last.peakAt,
       peakBytes: Math.max(last.peakBytes, usedBytes),
       averageBytes: last.averageBytes + (usedBytes - last.averageBytes) / (last.samples + 1) }
   } else {
-    buckets.push({ time: start, firstAt: time, lastAt: time, averageBytes: usedBytes, peakBytes: usedBytes, samples: 1 })
+    buckets.push({ time: start, firstAt: time, lastAt: time, averageBytes: usedBytes, peakBytes: usedBytes, peakAt: time, samples: 1 })
   }
   sessions.delete(key)
   sessions.set(key, buckets)

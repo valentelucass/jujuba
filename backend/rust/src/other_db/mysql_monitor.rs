@@ -173,6 +173,7 @@ pub(crate) async fn collect(pool: &MySqlPool) -> Result<DatabaseMonitor> {
         )? {
             for (name, value) in tables {
                 report.objects.push(ObjectActivity {
+                    usage: None,
                     name,
                     value,
                     metric: "Operações de tabela".into(),
@@ -201,6 +202,8 @@ pub(crate) async fn collect(pool: &MySqlPool) -> Result<DatabaseMonitor> {
             .into_iter()
             .map(
                 |(id, application, client, operation, state, object, elapsed_ms)| Activity {
+                    database: None,
+                    last_request_end: None,
                     id,
                     application,
                     client,
