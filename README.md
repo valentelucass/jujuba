@@ -39,6 +39,8 @@ No **Diagrama do banco**, selecione a ligação entre duas tabelas para ver as c
 
 ## Monitorar um banco
 
+Para interpretar o valor exato de RAM, entender as sessões visíveis e ler os tamanhos de tabelas e colunas, consulte o [guia do monitor SQL Server](docs/interpretar-monitor-sql-server.md).
+
 Em **Bancos de dados**, escolha a conexão e o banco e abra **Monitor do banco** na barra superior. O painel consulta o servidor em modo de leitura. A tabela de sessões mostra a aplicação, o cliente e a operação quando o motor fornece esses dados. A coluna de objeto mostra a tabela ou coleção identificada durante a coleta. Os contadores acumulados por objeto têm o período indicado.
 
 Para avaliar, por exemplo, um limite de 16 GiB no SQL Server, acompanhe a memória comprometida pela instância, o limite em vigor, a meta dinâmica, a fila de consultas aguardando memória e a RAM disponível no host. Compare também as amostras durante o horário de maior carga. Um pico construído pelo JUJUBA cobre as leituras feitas com o monitor aberto. O histórico guarda resumos locais de cinco minutos por até sete dias. [Monitorar o uso de memória no SQL Server](https://learn.microsoft.com/sql/relational-databases/performance-monitor/monitor-memory-usage)
