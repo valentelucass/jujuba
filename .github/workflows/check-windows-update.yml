@@ -1,0 +1,25 @@
+name: Testar atualização pelo aplicativo
+on:
+  workflow_dispatch:
+    inputs:
+      from:
+        description: Versão instalada antes do teste
+        required: true
+        default: '0.1.62'
+permissions:
+  contents: read
+jobs:
+  updater:
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Instalar, atualizar pelo botão e confirmar a versão reaberta
+        shell: pwsh
+        env:
+          START_VERSION: ${{ inputs.from }}
+          GH_TOKEN: ${{ github.token }}
+        run: ./.github/scripts/check-live-update.ps1
