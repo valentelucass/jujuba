@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-flow-source-pick"
+description = "Enables the flow_source_pick command without any pre-configured scope."
+commands.allow = ["flow_source_pick"]
+
+[[permission]]
+identifier = "deny-flow-source-pick"
+description = "Denies the flow_source_pick command without any pre-configured scope."
+commands.deny = ["flow_source_pick"]

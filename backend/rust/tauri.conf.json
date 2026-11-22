@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Jujuba",
   "mainBinaryName": "jujubasql",
-  "version": "0.1.65",
+  "version": "0.1.66",
   "identifier": "br.nexosql.studio",
   "build": {
     "beforeDevCommand": { "script": "npm run dev", "cwd": "../../frontend" },

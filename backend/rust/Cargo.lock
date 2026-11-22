@@ -2526,7 +2526,7 @@ dependencies = [
 
 [[package]]
 name = "iana-time-zone"
-version = "0.1.65"
+version = "0.1.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e31bc9ad994ba00e440a8aa5c9ef0ec67d5cb5e5cb0cc7f8b744a35b389cc470"
 dependencies = [
@@ -3109,7 +3109,7 @@ dependencies = [
 
 [[package]]
 name = "jujubasql"
-version = "0.1.65"
+version = "0.1.66"
 dependencies = [
  "base64 0.22.1",
  "bigdecimal",

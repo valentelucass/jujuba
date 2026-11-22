@@ -50,4 +50,6 @@ try {
   Wait-Flow 'Receber o pedido'
   'export const etapa = "REGRA_NOVA"' | Set-Content "$source/pedidos.js"
   Wait-Flow 'Separar o pedido'
+  powershell -NoProfile -File .github/scripts/check-flow-reader.ps1 -AppPid $app.Id
+  if ($LASTEXITCODE) { throw 'A tela do projeto instalado não abriu o fluxo da pasta.' }
 } finally { if (!$app.HasExited) { $app.Kill(); $app.WaitForExit() } }

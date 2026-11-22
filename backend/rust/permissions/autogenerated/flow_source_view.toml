@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-flow-source-view"
+description = "Enables the flow_source_view command without any pre-configured scope."
+commands.allow = ["flow_source_view"]
+
+[[permission]]
+identifier = "deny-flow-source-view"
+description = "Denies the flow_source_view command without any pre-configured scope."
+commands.deny = ["flow_source_view"]
