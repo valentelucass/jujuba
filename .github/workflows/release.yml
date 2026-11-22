@@ -32,6 +32,8 @@ jobs:
       - name: Install dependencies
         working-directory: frontend
         run: npm ci
+      - name: Check flow generation while source files change
+        run: node --test .github/scripts/check-flow-snapshot.mjs
       - name: Check database monitor on SQL Server LocalDB
         shell: powershell
         run: ./.github/scripts/check-sql-monitor.ps1

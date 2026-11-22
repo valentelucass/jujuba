@@ -8,11 +8,19 @@ const common = new Set('src main com java backend frontend pages views public pr
 const terms = (s) => new Set(words(s).filter((w) => !common.has(w)))
 const digest = (v) => createHash('sha256').update(JSON.stringify(v)).digest('hex')
 
-async function readSource(current, file, safeLines) {
-  if (!Object.hasOwn(current.files, file)) return []
+export async function snapshotText(current, file) {
+  const changed = () => Object.assign(new Error('O arquivo mudou durante a leitura.'), { code: 'ESTALE' })
+  if (!Object.hasOwn(current.files, file)) throw changed()
   const full = path.join(current.root, file)
-  if (path.relative(current.root, await fs.realpath(full)) !== path.normalize(file)) return []
-  return safeLines(await fs.readFile(full, 'utf8'))
+  try {
+    if (path.relative(current.root, await fs.realpath(full)) !== path.normalize(file)) throw changed()
+    const bytes = await fs.readFile(full)
+    if (createHash('sha256').update(bytes).digest('hex') !== current.files[file][3]) throw changed()
+    return bytes.toString('utf8')
+  } catch (e) {
+    if (e.code === 'ENOENT' || e.code === 'ENOTDIR') throw changed()
+    throw e
+  }
 }
 
 // Include implementation, branches and results from throughout long files.
@@ -35,7 +43,7 @@ async function sourcesFor(current, previousFiles, area, safeLines) {
   const anchors = [...new Set(area.files)]
   const vocabulary = terms([area.title, ...area.steps, ...anchors].join(' '))
   const anchorDirs = new Set(anchors.map((f) => path.posix.dirname(f)))
-  const primary = await Promise.all(anchors.map((f) => readSource(current, f, safeLines)))
+  const primary = await Promise.all(anchors.map(async (f) => safeLines(await snapshotText(current, f))))
   const symbols = new Set(primary.flatMap((lines) => lines.join('\n').match(/\b[A-Z][A-Za-z0-9_]{4,}\b/g) ?? []))
   const candidates = Object.keys(current.files).filter((f) => !anchors.includes(f)).map((file) => {
     const stem = path.posix.parse(file).name
@@ -47,7 +55,7 @@ async function sourcesFor(current, previousFiles, area, safeLines) {
   const files = [...anchors, ...candidates.slice(0, 16 - anchors.length).map((x) => x.file)]
   const evidence = []
   for (const [i, file] of files.entries()) {
-    const lines = primary[i] ?? await readSource(current, file, safeLines)
+    const lines = primary[i] ?? safeLines(await snapshotText(current, file))
     const trecho = excerpts(lines, i < anchors.length ? 5400 : 1600)
     if (!trecho) continue
     const before = previousFiles?.[file]?.[4]

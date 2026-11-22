@@ -4,7 +4,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { expandProcesses } from './source-processes.mjs'
+import { expandProcesses, snapshotText } from './source-processes.mjs'
 
 const fingerprint = (value) => createHash('sha256').update(value).digest('hex')
 const excluded =
@@ -197,13 +197,7 @@ async function context(current, previous) {
   let size = 0
   for (const rel of new Set([...delta.slice(0, 45), ...sample])) {
     if (size >= 85000) break
-    const file = path.join(current.root, rel)
-    if (
-      path.relative(current.root, await fs.realpath(file)) !==
-      path.normalize(rel)
-    )
-      continue
-    const body = await fs.readFile(file, 'utf8')
+    const body = await snapshotText(current, rel)
     const known = previous?.files?.[rel]?.[4]
     const blocks = sourceBlocks(body)
     const different = known
@@ -528,6 +522,7 @@ export async function sync(dir, id, generate = codex) {
   try {
     const previous = await readJson(resultFile, null)
     const current = await inventory(link.folder, previous?.files)
+    const readAt = new Date().toISOString()
     const baseline = complete(previous) ? previous : null
     if (baseline && current.hash === baseline.hash) {
       if ((await readJson(statusFile, null))?.phase !== 'ready')
@@ -574,21 +569,22 @@ export async function sync(dir, id, generate = codex) {
       generate: (prompt) => generate(temp, prompt, processSchema) })
     const latest = await inventory(link.folder, current.files)
     if ((await readJson(linkFile, null))?.key !== link.key) return
-    if (latest.hash !== current.hash) {
-      await status('pending', 'Novas alterações aguardam a próxima leitura.')
-      return
-    }
     await writeJson(resultFile, {
       format,
       signatures,
       hash: current.hash,
       files: current.files,
       answer,
-      at: new Date().toISOString(),
+      at: readAt,
     })
     await fs.rm(draftFile, { force: true })
-    await status('ready', 'Fluxograma atualizado.')
+    if (latest.hash === current.hash) await status('ready', 'Fluxograma atualizado.')
+    else await status('pending', 'Leitura concluída. Há mudanças mais recentes aguardando atualização.')
   } catch (e) {
+    if (e.code === 'ESTALE') {
+      await status('pending', 'O código mudou durante a leitura dos arquivos. Nova leitura agendada.')
+      return
+    }
     await status(
       'error',
       e.code === 'ENOENT'
