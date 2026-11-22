@@ -31,6 +31,9 @@ process.stdin.on('end', () => {
 })
 '@ | Set-Content "$stub/codex.js" -Encoding utf8NoBOM
 $env:PATH = "$fixture;$env:PATH"
+$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--force-renderer-accessibility'
+$worker = Join-Path $installDir 'resources/source-worker.mjs'
+if (!(Test-Path -LiteralPath $worker -PathType Leaf)) { throw 'The source worker was not installed.' }
 'export const etapa = "REGRA_ANTIGA"' | Set-Content "$source/pedidos.js"
 $app = Start-Process (Join-Path $installDir 'jujubasql.exe') -PassThru -WindowStyle Hidden
 function Wait-Flow($label) {
@@ -44,6 +47,10 @@ function Wait-Flow($label) {
     Start-Sleep -Seconds 1
   } while ([datetime]::UtcNow -lt $limit)
   if (Test-Path "$links/$key.status.json") { Get-Content "$links/$key.status.json" }
+  else {
+    Write-Host "Fixture $library | Roaming folder $([Environment]::GetFolderPath('ApplicationData')) | Installed worker $worker"
+    Get-ChildItem $library,$links | Select-Object Name,Length | Out-Host
+  }
   throw "Expected diagram step: $label"
 }
 try {

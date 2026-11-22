@@ -554,7 +554,10 @@ export async function sync(dir, id, generate = codex) {
 }
 if (
   process.argv[1] &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+  path.relative(
+    path.toNamespacedPath(path.resolve(process.argv[1])),
+    path.toNamespacedPath(fileURLToPath(import.meta.url)),
+  ) === ''
 ) {
   sync(process.argv[2], process.argv[3]).catch((e) => {
     console.error(e.message)
