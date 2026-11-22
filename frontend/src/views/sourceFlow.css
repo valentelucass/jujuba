@@ -1,0 +1,59 @@
+.source-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(260px, 28vw, 440px);
+}
+.source-reader {
+  overflow: auto;
+  padding: 16px;
+}
+.source-reader h2 {
+  font-size: 15px;
+}
+.source-reader p,
+.source-reader li {
+  line-height: 1.5;
+}
+.source-reader details {
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.source-reader summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+.source-reader ol {
+  padding-left: 21px;
+}
+.source-reader li + li {
+  margin-top: 6px;
+}
+.source-reader code {
+  display: block;
+  overflow-wrap: anywhere;
+  margin-top: 4px;
+  font-size: 11px;
+}
+.source-sync {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 16px;
+}
+.source-sync small,
+.source-reader small,
+.source-form small {
+  color: var(--quiet);
+}
+.source-form {
+  flex-wrap: wrap;
+}
+.source-form small {
+  flex-basis: 100%;
+}
+.flow-share-bar .button[aria-pressed='true'] {
+  background: var(--berry-selected);
+  border-color: var(--berry-line);
+}

@@ -1,4 +1,5 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
+import type { SourceView } from '../models/flowWorkspace'
 import type { AiProvider, AssistantModel, AssistantOptions, AssistantReply, AssistantRequest, DiagramProject, GeneratedProject, OpenedDiagram, SystemDiagram } from '../models/systemDiagram'
 import type { FlowCommand, FlowProject, FlowProjectEntry, FlowSession, FlowViewUpdate } from '../models/flowWorkspace'
 import type { NoSqlEngine } from '../models/engines'
@@ -74,7 +75,10 @@ export const systemDiagram = {
 export const flowProjects = {
   list: () => call<FlowProjectEntry[]>('flow_projects'),
   load: (id: string) => call<FlowProject>('flow_project_load', { id }),
-  create: (diagram: SystemDiagram, file: DiagramProject | null) => call<FlowProject>('flow_project_create', { diagram, file }),
+  create: (diagram: SystemDiagram, file: DiagramProject | null, source?: string) => call<FlowProject>('flow_project_create', { diagram, file, source }),
+  pick: () => call<string | null>('flow_source_pick'),
+  source: (id: string) => call<SourceView | null>('flow_source_view', { id }),
+  bind: (id: string, source: string | null) => call<void>('flow_source_bind', { id, source }),
   edit: (id: string, diagram: SystemDiagram) => call<void>('flow_project_edit', { id, diagram }),
   link: (id: string, file: DiagramProject, diagram: SystemDiagram) => call<void>('flow_project_link', { id, file, diagram }),
   remove: (id: string) => call<void>('flow_project_remove', { id }),

@@ -77,6 +77,7 @@ fn main() {
                 if let Ok(directory) = system_diagram::workspaces::directory(&app) {
                     app.state::<system_diagram::collaboration::FlowCollaboration>()
                         .restore_hosts(&directory);
+                    system_diagram::sources::monitor(app, directory).await;
                 }
             });
             Ok(())
@@ -133,6 +134,9 @@ fn main() {
             system_diagram::workspaces::flow_project_load,
             system_diagram::workspaces::flow_project_create,
             system_diagram::workspaces::flow_project_link,
+            system_diagram::sources::flow_source_pick,
+            system_diagram::sources::flow_source_bind,
+            system_diagram::sources::flow_source_view,
             system_diagram::collaboration::flow_project_remove,
             system_diagram::collaboration::flow_project_edit,
             system_diagram::collaboration::flow_collab_host,

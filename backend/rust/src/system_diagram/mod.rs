@@ -7,6 +7,7 @@ mod flow_access;
 mod flow_mascot;
 mod flow_merge;
 mod model;
+pub mod sources;
 pub mod workspaces;
 
 use self::{

@@ -14,6 +14,8 @@ import {
 } from '../models/systemDiagram'
 import { Header } from './Header'
 import { FlowOverview } from './FlowOverview'
+import { SourceFlow } from './SourceFlow'
+import type { SourceView } from '../models/flowWorkspace'
 import { FlowProjectPreview } from './FlowProjectPreview'
 import { SidebarDivider } from './SidebarDivider'
 import { StatusBar } from './StatusBar'
@@ -40,7 +42,7 @@ function hasElement(diagram: SystemDiagram, id: string | null) {
   return diagram.nodes.some((node) => node.id === id) || diagram.notes?.some((note) => note.id === id)
 }
 
-type Panel = 'create' | 'share' | 'join' | null
+type Panel = 'create' | 'share' | 'join' | 'source' | null
 
 export function SystemDiagramStudio({ provider, assistantOptions, unavailableOption, assistantDiagram, onDiagram, onMascotRoom, connection, upgrade }: {
   connection?: Connection | null
@@ -59,6 +61,10 @@ export function SystemDiagramStudio({ provider, assistantOptions, unavailableOpt
   const [panel, setPanel] = useState<Panel>(null)
   const [name, setName] = useState('')
   const [title, setTitle] = useState('')
+  const [sourcePath, setSourcePath] = useState('')
+  const [source, setSource] = useState<SourceView | null>(null)
+  const [manual, setManual] = useState(false)
+  const sourceVersion = useRef(0)
   const [invite, setInvite] = useState('')
   const [remember, setRemember] = useState(false)
   const [savedAccess, setSavedAccess] = useState(readSavedAccess)
@@ -101,6 +107,8 @@ export function SystemDiagramStudio({ provider, assistantOptions, unavailableOpt
   const appliedDiagram = useRef<typeof assistantDiagram>(null)
   const sessionId = session?.id
   const guest = !!session && session.projectId === null
+  const showingSource = !!workspace && !!source && !manual && !guest && (!session || ['available','ended'].includes(session.phase))
+  const visibleDiagram = showingSource ? source?.answer ?? null : diagram
   const disabled = !!busy || (!!session && !session.canEdit && (guest || session.phase !== 'ended'))
   const approval = session?.approval ?? (session?.phase === 'approval' && session.peer
     ? { id: undefined, peer: session.peer, version: session.peerVersion } : null)
@@ -118,7 +126,25 @@ export function SystemDiagramStudio({ provider, assistantOptions, unavailableOpt
     })
   }, [upgrade])
 
-  useEffect(() => { onDiagram(diagram) }, [diagram, onDiagram])
+  useEffect(() => { onDiagram(visibleDiagram) }, [visibleDiagram, onDiagram])
+
+  useEffect(() => {
+    if (!workspace) return
+    let disposed = false
+    let timer: ReturnType<typeof setTimeout>
+    async function refresh(id: string) {
+      const version = sourceVersion.current
+      try {
+        const next = await flowProjects.source(id)
+        if (!disposed && version === sourceVersion.current) setSource(prev =>
+          prev?.updatedAt === next?.updatedAt && prev?.folder === next?.folder &&
+          prev?.status.message === next?.status.message ? prev : next)
+      } catch (e) { if (!disposed) setError(appError(e).message) }
+      if (!disposed) timer = setTimeout(() => void refresh(id), 5000)
+    }
+    void refresh(workspace)
+    return () => { disposed = true; clearTimeout(timer) }
+  }, [workspace])
 
   useEffect(() => {
     if (!sessionId || session?.phase !== 'connected' || !session.peer || !session.mascotSupported) {
@@ -209,6 +235,10 @@ export function SystemDiagramStudio({ provider, assistantOptions, unavailableOpt
     if (!assistantDiagram || appliedDiagram.current === assistantDiagram) return
     appliedDiagram.current = assistantDiagram
     const { diagram: next, revisionOf, createNew, complete } = assistantDiagram
+    if (showingSource && !createNew) {
+      complete({ applied: false, message: 'Para editar, selecione Desenho manual.' })
+      return
+    }
     if (disabled || locking.current) {
       complete({ applied: false, message: 'O editor está ocupado. Aguarde a operação atual e envie o pedido novamente.' })
       return
@@ -283,6 +313,8 @@ export function SystemDiagramStudio({ provider, assistantOptions, unavailableOpt
       setActive(null)
     }
     setWorkspace(null)
+    setSource(null)
+    setSourcePath('')
     setPanel(null)
     replace(null, null, false)
   }
@@ -352,9 +384,13 @@ export function SystemDiagramStudio({ provider, assistantOptions, unavailableOpt
   }
 
   async function openWorkspace(next: FlowProject, resumeInvite = false) {
+    const linked = await flowProjects.source(next.id)
     const host = await flowCollaboration.host(next.id, undefined, resumeInvite)
     const current = host?.diagram ?? next.diagram
     setWorkspace(next.id)
+    setSource(linked)
+    setSourcePath(linked?.folder ?? '')
+    setManual(false)
     setPanel(null)
     replace(current, next.file, next.fileDirty || JSON.stringify(current) !== JSON.stringify(next.diagram))
     setActive(host)
@@ -391,7 +427,7 @@ export function SystemDiagramStudio({ provider, assistantOptions, unavailableOpt
   function create(event: FormEvent) {
     event.preventDefault()
     void perform('Criando projeto…', async () => {
-      await openWorkspace(await flowProjects.create({ ...emptyDiagram, title: title.trim() }, null))
+      await openWorkspace(await flowProjects.create({ ...emptyDiagram, title: title.trim() }, null, sourcePath.trim() || undefined))
       setTitle('')
     })
   }
@@ -532,6 +568,7 @@ export function SystemDiagramStudio({ provider, assistantOptions, unavailableOpt
   }
 
   function exportDiagram(format: 'png' | 'markdown') {
+    const diagram = visibleDiagram
     setExportOpen(false)
     if (!diagram) return
     void perform('Exportando fluxograma…', async () => {
@@ -593,11 +630,15 @@ export function SystemDiagramStudio({ provider, assistantOptions, unavailableOpt
           {hasProject ? <>
             <button className="icon-button" disabled={!!busy} onClick={library}
               aria-label="Voltar para Meus projetos" title="Voltar para Meus projetos"><ArrowLeft size={17} /></button>
-            {workspace && (!session || session.phase === 'available') && <button className="button design-accent" disabled={!!busy}
+            {workspace && !guest && <button className="button" disabled={!!busy} onClick={() => {
+              setSourcePath(source?.folder ?? ''); setPanel(panel === 'source' ? null : 'source')
+            }}><FolderOpen size={15} />{source ? 'Pasta vinculada' : 'Vincular pasta'}</button>}
+            {workspace && !showingSource && (!session || session.phase === 'available') && <button className="button design-accent" disabled={!!busy}
               onClick={() => setPanel(panel === 'share' ? null : 'share')}><Users size={15} />Compartilhar</button>}
             {guest ? <button className="icon-button" disabled={!!busy} onClick={saveCopy}
               aria-label="Salvar cópia" title="Salvar cópia"><Copy size={17} /></button> : null}
-            <button className="icon-button" disabled={!diagram || !!busy} onClick={save}
+            <button className="icon-button" disabled={!visibleDiagram || !!busy} onClick={showingSource && visibleDiagram
+              ? () => void perform('Salvando arquivo…', async () => { await systemDiagram.save(visibleDiagram, null) }) : save}
               aria-label="Salvar arquivo" title="Salvar arquivo"><Save size={17} /></button>
             <div className="flow-export" onBlur={(event) => {
               if (!event.currentTarget.contains(event.relatedTarget)) setExportOpen(false)
@@ -607,7 +648,7 @@ export function SystemDiagramStudio({ provider, assistantOptions, unavailableOpt
                 event.currentTarget.querySelector('button')?.focus()
               }
             }}>
-              <button className="icon-button" disabled={!diagram || !!busy} aria-expanded={exportOpen}
+              <button className="icon-button" disabled={!visibleDiagram || !!busy} aria-expanded={exportOpen}
                 onClick={() => setExportOpen((open) => !open)} aria-label="Exportar fluxograma"
                 title="Exportar fluxograma"><FileDown size={17} /></button>
               {exportOpen && <div className="flow-export-options" aria-label="Formato de exportação">
@@ -617,7 +658,7 @@ export function SystemDiagramStudio({ provider, assistantOptions, unavailableOpt
             </div>
           </> : <>
             <button className="button design-accent" disabled={!!busy || !!session}
-              onClick={() => setPanel(panel === 'create' ? null : 'create')}><FilePlus2 size={15} />Novo projeto</button>
+              onClick={() => { setSourcePath(''); setPanel(panel === 'create' ? null : 'create') }}><FilePlus2 size={15} />Novo projeto</button>
             <button className="button" disabled={!!busy || !!session}
               onClick={importDiagram} title="Importar um projeto .jujuba.json"><FolderOpen size={15} />Importar</button>
             <button className="button" disabled={!!busy || !!session}
@@ -625,10 +666,22 @@ export function SystemDiagramStudio({ provider, assistantOptions, unavailableOpt
           </>}
         </div>
       </header>
-      {panel === 'create' && <form className="flow-share-bar" onSubmit={create}>
-        <label>Nome do projeto <input autoFocus maxLength={60} value={title} onChange={(event) => setTitle(event.target.value)} required /></label>
-        <button className="button design-accent" disabled={!!busy || !title.trim()}>Criar projeto</button>
+      {(panel === 'create' || panel === 'source') && <form className="flow-share-bar source-form" onSubmit={panel === 'create' ? create : event => {
+        event.preventDefault()
+        if (workspace) void perform('Salvando pasta…', async () => {
+          await flowProjects.bind(workspace, sourcePath.trim() || null)
+          sourceVersion.current++
+          setSource(await flowProjects.source(workspace)); setManual(false); setPanel(null)
+        })
+      }}>
+        {panel === 'create' && <label>Nome do projeto <input autoFocus maxLength={60} value={title} onChange={(event) => setTitle(event.target.value)} required /></label>}
+        <label>Pasta do código {panel === 'create' ? '(opcional)' : ''}<input value={sourcePath} onChange={e => setSourcePath(e.target.value)} placeholder="Cole o caminho da pasta" /></label>
+        <button type="button" className="button" disabled={!!busy} onClick={() => void perform('Escolhendo pasta…', async () => {
+          const folder = await flowProjects.pick(); if (folder) setSourcePath(folder)
+        })}><FolderOpen size={15}/> Escolher pasta</button>
+        <button className="button design-accent" disabled={!!busy || (panel === 'create' ? !title.trim() : !source && !sourcePath.trim())}>{panel === 'create' ? 'Criar projeto' : sourcePath.trim() ? 'Salvar vínculo' : 'Desvincular pasta'}</button>
         <button type="button" className="button" disabled={!!busy} onClick={() => setPanel(null)}>Cancelar</button>
+        <small>Ao vincular, o Codex recebe trechos do projeto para manter o fluxo atualizado enquanto o JUJUBA estiver aberto.</small>
       </form>}
       {((panel === 'share' && !session) || panel === 'join') && <form className="flow-share-bar" onSubmit={openSession}>
         <label>Seu nome <input autoFocus maxLength={32} value={name} onChange={(event) => setName(event.target.value)} required /></label>
@@ -690,7 +743,11 @@ export function SystemDiagramStudio({ provider, assistantOptions, unavailableOpt
       {(busy || error || notice || (session?.phase === 'connected' && session.message)) && <div className={'system-message' + (error ? ' is-error' : '')} role={error ? 'alert' : 'status'}>
         {busy && <LoaderCircle size={15} className="spin" />}{error || busy || notice || session?.message}
       </div>}
-      {diagram && <FlowOverview key={fitKey} diagram={diagram} />}
+      {workspace && source && (!session || ['available','ended'].includes(session.phase)) && <nav className="flow-share-bar" aria-label="Origem do fluxograma">
+        <button className="button" aria-pressed={!manual} onClick={() => setManual(false)}>Fluxo da pasta</button>
+        <button className="button" aria-pressed={manual} onClick={() => setManual(true)}>Desenho manual</button>
+      </nav>}
+      {visibleDiagram && <FlowOverview key={fitKey} diagram={visibleDiagram} />}
       {!hasProject ? <section className="flow-project-library" aria-label="Projetos de fluxograma">
         {entries.length ? <ul>
           {entries.map((entry) => <li key={entry.id}>
@@ -714,7 +771,7 @@ export function SystemDiagramStudio({ provider, assistantOptions, unavailableOpt
               title="Esquecer acesso" onClick={() => forgetAccess(access.code)}><Trash2 size={15} /></button>
           </li>)}</ul>
         </section>}
-      </section> : <div className={'system-design-body' + (inspectorSizing ? ' resizing' : '')}
+      </section> : showingSource && source ? <SourceFlow key={workspace} source={source}/> : <div className={'system-design-body' + (inspectorSizing ? ' resizing' : '')}
         style={{ '--flow-inspector-width': panelWidth + 'px' } as CSSProperties}>
         <SystemFlowCanvas key={fitKey} diagram={diagram} selected={selected}
           choose={(id) => { setSelected(id); if (id) setTab('flow') }} connect={addEdge}

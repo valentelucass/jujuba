@@ -11,6 +11,13 @@ export interface FlowProject {
   returningGuest?: boolean
 }
 
+export interface SourceView {
+  folder: string
+  status: { phase: string; message: string }
+  updatedAt: string | null
+  answer: (SystemDiagram & { areas: { title: string; steps: string[]; files: string[] }[] }) | null
+}
+
 export interface FlowSession {
   id: string
   projectId: string | null

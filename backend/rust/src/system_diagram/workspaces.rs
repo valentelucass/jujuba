@@ -108,13 +108,15 @@ pub fn flow_projects(app: AppHandle) -> Result<Vec<WorkspaceEntry>> {
             .is_some_and(|extension| extension == "json")
         {
             let workspace = load(path.parent().ok_or_else(catalog_error)?, id)?;
+            let preview = super::sources::preview(path.parent().ok_or_else(catalog_error)?, id)
+                .unwrap_or_else(|| workspace.diagram.clone());
             entries.push(WorkspaceEntry {
                 id,
                 title: workspace.diagram.title,
                 preview: Preview {
-                    nodes: workspace.diagram.nodes,
-                    edges: workspace.diagram.edges,
-                    notes: workspace.diagram.notes,
+                    nodes: preview.nodes,
+                    edges: preview.edges,
+                    notes: preview.notes,
                 },
             });
         }
@@ -141,6 +143,7 @@ pub fn flow_project_create(
     app: AppHandle,
     diagram: Diagram,
     file: Option<ProjectRef>,
+    source: Option<String>,
 ) -> Result<Workspace> {
     if diagram.title.trim().is_empty() {
         return Err(invalid("Dê um nome ao projeto."));
@@ -152,7 +155,15 @@ pub fn flow_project_create(
         diagram,
         file,
     };
-    persist(&directory(&app)?, &workspace)?;
+    let directory = directory(&app)?;
+    let _guard = CATALOG.lock().map_err(|_| catalog_error())?;
+    if let Some(source) = source {
+        super::sources::bind(&directory, workspace.id, &workspace.diagram.title, &source)?;
+    }
+    if let Err(failure) = persist(&directory, &workspace) {
+        let _ = super::sources::detach(&directory, workspace.id);
+        return Err(failure);
+    }
     Ok(workspace)
 }
 
@@ -176,6 +187,7 @@ pub fn flow_project_link(
 pub(super) fn remove(directory: &Path, id: Uuid) -> Result<()> {
     let _guard = CATALOG.lock().map_err(|_| catalog_error())?;
     flow_access::remove(directory, id)?;
+    super::sources::detach(directory, id)?;
     match fs::remove_file(path(directory, id)) {
         Err(error) if error.kind() != ErrorKind::NotFound => Err(catalog_error()),
         _ => Ok(()),

@@ -48,6 +48,9 @@ jobs:
         if: github.ref_name == 'v0.1.59' || github.ref_name == 'v0.1.60'
         shell: pwsh
         run: ./.github/scripts/check-brand-upgrade.ps1
+      - name: Verify automatic flow updates in the installed application
+        shell: pwsh
+        run: ./.github/scripts/check-flow-source.ps1
       - name: Publish installer and update manifest
         shell: pwsh
         env:
