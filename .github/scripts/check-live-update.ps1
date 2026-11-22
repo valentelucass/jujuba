@@ -33,6 +33,8 @@ do {
   $installed = Get-ItemProperty $key -ErrorAction SilentlyContinue
   $new = Get-Process -Name jujubasql -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne $app.Id -and $_.Path -eq $exe }
   if ($app.HasExited -and $installed.DisplayVersion -eq $to -and $new -and (Get-Item $exe).VersionInfo.ProductVersion -eq $to) {
+    powershell -NoProfile -File .github/scripts/click-update.ps1 -AppPid $new.Id -ToVersion $to -VerifyOnly
+    if ($LASTEXITCODE) { throw 'A janela da nova versão não ficou pronta.' }
     Write-Host "Botão confirmado: $from → $to no mesmo executável. A nova versão abriu com PID $($new.Id)."
     exit 0
   }

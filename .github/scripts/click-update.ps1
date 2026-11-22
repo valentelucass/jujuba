@@ -1,4 +1,4 @@
-﻿param([int]$AppPid, [string]$FromVersion, [string]$ToVersion)
+﻿param([int]$AppPid, [string]$FromVersion, [string]$ToVersion, [switch]$VerifyOnly)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient,UIAutomationTypes
 $app = Get-Process -Id $AppPid
@@ -28,6 +28,19 @@ function Click-Button($button) {
   $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
 }
 Click-Button (Wait-Button '^(Atualizações|Versão .* disponível)$')
+if ($VerifyOnly) {
+  $end = [datetime]::UtcNow.AddSeconds(30)
+  do {
+    $root = [System.Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle)
+    $text = ($root.FindAll($tree, $all) | ForEach-Object { $_.Current.Name }) -join ' '
+    if ($text -match ('Versão instalada neste computador\s*·\s*' + [regex]::Escape($ToVersion) + '\b')) {
+      Write-Host "A janela reaberta informa a versão instalada $ToVersion."
+      return
+    }
+    Start-Sleep -Milliseconds 250
+  } while ([datetime]::UtcNow -lt $end)
+  throw "A interface reaberta não confirmou a versão $ToVersion."
+}
 $install = Wait-Button '^Atualizar agora$'
 $root = [System.Windows.Automation.AutomationElement]::FromHandle($app.MainWindowHandle)
 $names = ($root.FindAll($tree, $all) | ForEach-Object { $_.Current.Name }) -join ' '
