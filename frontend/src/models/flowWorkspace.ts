@@ -15,6 +15,8 @@ export interface SourceView {
   folder: string
   status: { phase: string; message: string }
   updatedAt: string | null
+  checkedAt: string | null
+  nextCheckAt: string | null
   answer: (SystemDiagram & { areas: SourceArea[] }) | null
 }
 

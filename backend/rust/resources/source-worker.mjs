@@ -27,7 +27,7 @@ const safe = (rel) =>
     /(?:^|\/)(?:readme\.md|package\.json)$/i.test(rel) ||
     /(?:^|\/)(?:business|regras)\/.*\.md$/i.test(rel))
 
-async function readJson(file, fallback) {
+export async function readJson(file, fallback) {
   try {
     return JSON.parse(await fs.readFile(file, 'utf8'))
   } catch (e) {
@@ -281,7 +281,7 @@ function validatePlan(answer, files) {
   const count = Object.keys(files).length
   check(answer.areas.length >= (count >= 500 ? 6 : count >= 80 ? 4 : 1), 'separe os processos funcionais distintos encontrados no inventário')
 }
-function complete(result) {
+export function complete(result) {
   if (result?.format !== format) return false
   try {
     validatePlan(result.answer, result.files)
@@ -392,7 +392,8 @@ export function validate(answer, files) {
     'detalhes ou referências aos arquivos',
   )
 }
-async function codex(dir, prompt, outputSchema = schema) {
+async function codex(dir, prompt, outputSchema = schema, signal) {
+  signal?.throwIfAborted()
   const cliCandidates = (process.env.PATH ?? '')
     .split(path.delimiter)
     .concat(path.join(process.env.APPDATA ?? '', 'npm'))
@@ -476,6 +477,7 @@ async function codex(dir, prompt, outputSchema = schema) {
   await new Promise((resolve, reject) => {
     const proc = spawn(exe, args, {
       cwd: dir,
+      signal,
       env,
       windowsHide: true,
       stdio: ['pipe', 'ignore', 'pipe'],
@@ -508,7 +510,7 @@ async function codex(dir, prompt, outputSchema = schema) {
   })
   return JSON.parse(await fs.readFile(path.join(dir, 'answer.json'), 'utf8'))
 }
-export async function sync(dir, id, generate = codex) {
+export async function sync(dir, id, generate = codex, signal) {
   if (!uuid.test(id)) throw Error('Projeto inválido')
   const linkFile = path.join(dir, id + '.link.json'),
     link = await readJson(linkFile, null)
@@ -516,8 +518,10 @@ export async function sync(dir, id, generate = codex) {
   const base = path.join(dir, link.key),
     resultFile = base + '.result.json',
     statusFile = base + '.status.json'
-  const status = (phase, message) =>
-    writeJson(statusFile, { phase, message, at: new Date().toISOString() })
+  const status = (phase, message) => {
+    signal?.throwIfAborted()
+    return writeJson(statusFile, { phase, message, at: new Date().toISOString() })
+  }
   let temp
   try {
     const previous = await readJson(resultFile, null)
@@ -554,7 +558,7 @@ export async function sync(dir, id, generate = codex) {
       })
       let correction = ''
       for (let attempt = 0; attempt < 2; attempt++) {
-        answer = await generate(temp, prompt + correction, schema)
+        answer = await generate(temp, prompt + correction, schema, signal)
         try { validatePlan(answer, current.files); break }
         catch (e) {
           if (attempt) throw e
@@ -563,11 +567,15 @@ export async function sync(dir, id, generate = codex) {
       }
     }
     const plan = { ...answer, areas: answer.areas.map(({ flow, ...area }) => area) }
-    const save = () => writeJson(draftFile, { format, hash: current.hash, plan, cache })
+    const save = () => {
+      signal?.throwIfAborted()
+      return writeJson(draftFile, { format, hash: current.hash, plan, cache })
+    }
     await save()
     const signatures = await expandProcesses({ current, previousFiles: baseline?.files, answer, cache, safeLines, validateGraph: (graph) => validateGraph(graph, true), status, save,
-      generate: (prompt) => generate(temp, prompt, processSchema) })
+      generate: (prompt) => generate(temp, prompt, processSchema, signal) })
     const latest = await inventory(link.folder, current.files)
+    signal?.throwIfAborted()
     if ((await readJson(linkFile, null))?.key !== link.key) return
     await writeJson(resultFile, {
       format,
@@ -581,6 +589,7 @@ export async function sync(dir, id, generate = codex) {
     if (latest.hash === current.hash) await status('ready', 'Fluxograma atualizado.')
     else await status('pending', 'Leitura concluída. Há mudanças mais recentes aguardando atualização.')
   } catch (e) {
+    if (signal?.aborted) return
     if (e.code === 'ESTALE') {
       await status('pending', 'O código mudou durante a leitura dos arquivos. Nova leitura agendada.')
       return

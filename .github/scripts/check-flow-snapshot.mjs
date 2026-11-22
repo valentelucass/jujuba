@@ -5,6 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
 import { sync } from '../../backend/rust/resources/source-worker.mjs'
+import { createMonitor, interval } from '../../backend/rust/resources/source-monitor.mjs'
 
 test('cada diagrama publicado identifica uma única leitura, mesmo com o projeto em edição', async (t) => {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'jujuba-snapshot-'))
@@ -43,4 +44,55 @@ test('cada diagrama publicado identifica uma única leitura, mesmo com o projeto
   assert.notEqual(last.hash, first.hash)
   assert.equal(last.answer.areas[0].flow.nodes[1].label, 'Terceira regra')
   assert.equal((await read('.status.json')).phase, 'ready')
+})
+
+test('verifica todas as pastas ao abrir e a cada cinco minutos, inclusive durante uma geração longa', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'jujuba-monitor-'))
+  t.after(() => fs.rm(root, { recursive: true, force: true }))
+  const links = path.join(root, 'sources')
+  await fs.mkdir(links)
+  const projects = []
+  for (const title of ['Avaliação', 'ETL', 'Dashboard']) {
+    const id = randomUUID(), key = randomUUID(), folder = path.join(root, title)
+    await fs.mkdir(folder)
+    await fs.writeFile(path.join(folder, 'entrada.js'), 'export const etapa = 1')
+    await fs.writeFile(path.join(root, id + '.json'), '{}')
+    await fs.writeFile(path.join(links, id + '.link.json'), JSON.stringify({ title, key, folder }))
+    projects.push({ id, key })
+  }
+  const readCheck = ({ key }) => fs.readFile(path.join(links, key + '.check.json'), 'utf8').then(JSON.parse)
+  const focus = id => fs.writeFile(path.join(links, 'focus.json'), JSON.stringify(id))
+  const started = [], release = []
+  const generate = async (_dir, id) => {
+    started.push(id)
+    await new Promise(done => release.push(done))
+  }
+  let time = Date.now()
+  const monitor = createMonitor(links, { now: () => time, generate })
+  await monitor.tick()
+  assert.equal(started.length, 1)
+  const initial = await Promise.all(projects.map(readCheck))
+  for (const check of initial) {
+    assert.equal(Date.parse(check.checkedAt), time)
+    assert.equal(Date.parse(check.nextCheckAt) - time, 300_000)
+  }
+  const chosen = projects.find(project => project.id !== started[0])
+  await focus(chosen.id)
+  time += interval - 1
+  await monitor.tick()
+  assert.deepEqual(started, [started[0], chosen.id])
+  assert.deepEqual(await Promise.all(projects.map(readCheck)), initial)
+  time++
+  await monitor.tick()
+  assert.equal(started.length, 2)
+  for (const project of projects) assert.equal(Date.parse((await readCheck(project)).checkedAt), time)
+  release.forEach(done => done())
+  await monitor.settled()
+  time += 1000
+  const afterRestart = createMonitor(links, { now: () => time, generate })
+  await afterRestart.tick()
+  assert.equal(started[2], chosen.id)
+  for (const project of projects) assert.equal(Date.parse((await readCheck(project)).checkedAt), time)
+  release.forEach(done => done())
+  await afterRestart.settled()
 })

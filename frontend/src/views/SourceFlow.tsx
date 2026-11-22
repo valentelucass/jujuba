@@ -34,7 +34,9 @@ export function SourceFlow({ source }: { source: SourceView }) {
   return <>
     <div className="source-sync" role="status">
       <span>{source.status.message}</span>
-      {source.updatedAt && <small>Última leitura em {new Date(source.updatedAt).toLocaleString('pt-BR')}</small>}
+      {source.checkedAt && <small>Pasta verificada em {new Date(source.checkedAt).toLocaleString('pt-BR')}</small>}
+      {source.nextCheckAt && <small>Próxima verificação às {new Date(source.nextCheckAt).toLocaleTimeString('pt-BR')}</small>}
+      {source.updatedAt && <small>Diagrama da leitura de {new Date(source.updatedAt).toLocaleString('pt-BR')}</small>}
     </div>
     {overview && diagram && <>
       {!!total && <nav className="source-breadcrumb" aria-label="Navegação do fluxograma">

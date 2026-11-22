@@ -138,6 +138,7 @@ export function SystemDiagramStudio({ provider, assistantOptions, unavailableOpt
         const next = await flowProjects.source(id)
         if (!disposed && version === sourceVersion.current) setSource(prev =>
           prev?.updatedAt === next?.updatedAt && prev?.folder === next?.folder &&
+          prev?.checkedAt === next?.checkedAt && prev?.nextCheckAt === next?.nextCheckAt &&
           prev?.status.message === next?.status.message ? prev : next)
       } catch (e) { if (!disposed) setError(appError(e).message) }
       if (!disposed) timer = setTimeout(() => void refresh(id), 5000)
