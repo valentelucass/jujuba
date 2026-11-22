@@ -469,7 +469,8 @@ code { font-family: var(--mono); }
 .statusbar .update-button.available svg { color: var(--berry); }
 .status-version { font-variant-numeric: tabular-nums; color: var(--quiet); }
 .update-dialog progress { width: 100%; margin-top: 10px; accent-color: var(--berry); }
-.update-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.update-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.update-dialog small { overflow-wrap: anywhere; }
 .status-links a:focus-visible { outline: 2px solid var(--berry); outline-offset: 3px; }
 .status-error {
   position: absolute; inset-inline-end: 12px; bottom: calc(100% + 6px);

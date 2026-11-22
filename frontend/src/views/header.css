@@ -1,11 +1,4 @@
-@font-face {
-  font-family: "Rubik Variable"; font-style: normal; font-weight: 300 900; font-display: swap;
-  src: url("@fontsource-variable/rubik/files/rubik-latin-wght-normal.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Nunito Variable"; font-style: normal; font-weight: 200 1000; font-display: swap;
-  src: url("@fontsource-variable/nunito/files/nunito-latin-wght-normal.woff2") format("woff2");
-}
+@import './brandFonts.css';
 #root { grid-template-columns: minmax(0, 1fr); }
 .topbar .wordmark {
   display: inline-flex; align-items: center; flex: none; gap: 8px; padding-right: 12px;

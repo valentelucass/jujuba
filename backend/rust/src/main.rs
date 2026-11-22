@@ -23,18 +23,48 @@ mod records;
 mod relationships;
 mod sql_server;
 mod system_diagram;
+mod startup;
 
-use tauri::Manager;
+use std::sync::atomic::{AtomicBool, Ordering};
+use tauri::{webview::PageLoadEvent, Manager};
 
 fn main() {
+    let first_main_load = AtomicBool::new(true);
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
-            if let Some(window) = app.get_webview_window("main") {
+            let active = app
+                .get_webview_window("startup")
+                .or_else(|| app.get_webview_window("main"));
+            if let Some(window) = active {
                 let _ = window.show();
                 let _ = window.unminimize();
                 let _ = window.set_focus();
             }
         }))
+        .on_page_load(move |webview, page| {
+            if webview.label() == "main"
+                && page.event() == PageLoadEvent::Finished
+                && first_main_load.swap(false, Ordering::AcqRel)
+            {
+                let main = webview.window();
+                let _ = startup::fit_main_window(&main);
+                let startup = webview.get_webview_window("startup");
+                let had_focus = startup.as_ref().is_some_and(|w| w.is_focused().unwrap_or(false));
+                if main.show().is_ok() {
+                    if let Some(startup) = startup {
+                        let _ = startup.destroy();
+                    }
+                    if had_focus {
+                        let _ = main.set_focus();
+                    }
+                }
+            }
+        })
+        .on_window_event(|window, event| {
+            if window.label() == "startup" && matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+                window.app_handle().exit(0);
+            }
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())

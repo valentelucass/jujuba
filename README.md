@@ -2,7 +2,7 @@
 
 ## ⬇️ [Baixar o instalador para Windows (64 bits)](https://github.com/valentelucass/jujuba/releases/latest)
 
-<img src="frontend/src/assets/jujuba.png" alt="Mascote do JUJUBA" width="112" />
+<picture><source media="(prefers-reduced-motion: reduce)" srcset="docs/imagens/abertura.png" /><img src="docs/imagens/abertura.gif" alt="Abertura do JUJUBA com a mascote pulando ao lado do nome do aplicativo" width="420" /></picture>
 
 O JUJUBA reúne bancos de dados, processos do PM2 e fluxogramas com IA em um aplicativo para Windows. O explorador aceita SQL Server, MySQL, PostgreSQL, SQLite, MongoDB e Redis.
 
@@ -166,6 +166,8 @@ MongoDB e Redis guardam a URI da última conexão bem-sucedida no mesmo gerencia
 Se fechar o aplicativo com uma sessão ativa, o JUJUBA volta a se conectar ao mesmo servidor ou arquivo na próxima abertura. Ele reabre o último banco selecionado quando esse banco ainda está acessível. Depois de clicar em **Desconectar**, use o atalho **Reconectar** para restabelecer a sessão quando quiser.
 
 ## Atualizações no Windows
+
+Clique em **Atualizações** no rodapé para instalar a nova versão. Se o JUJUBA reabrir na versão anterior, a partir da 0.1.64 o botão **Baixar instalador oficial** abre o download daquela versão no GitHub. Salve seu trabalho, feche o aplicativo e execute o instalador. Em versões anteriores, use o link de download no topo deste guia.
 
 Se o Windows bloquear o instalador em um computador corporativo, mantenha a instalação atual e envie à TI a versão exibida no rodapé, o texto completo do aviso e o link da release. A tela de atualização distingue falha de download, falha de verificação e recusa ao iniciar o instalador. Se o Windows devolver o controle sem concluir a troca, o JUJUBA compara a versão na abertura seguinte.
 
