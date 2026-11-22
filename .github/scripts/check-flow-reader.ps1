@@ -21,7 +21,16 @@ function Find-Element([string]$name, [bool]$button) {
 }
 foreach ($name in 'Fluxogramas','Pedidos') {
   $button = Find-Element $name $true
-  $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+  $action = $null
+  if ($button.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$action)) {
+    $action.Toggle()
+  } elseif ($button.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$action)) {
+    $action.Invoke()
+  } else {
+    $patterns = ($button.GetSupportedPatterns() | ForEach-Object ProgrammaticName) -join ', '
+    throw "O controle $name não oferece uma ação compatível. Padrões disponíveis: $patterns"
+  }
+  Write-Host "Controle acionado: $name"
 }
 $null = Find-Element 'Telas e processos' $false
 $null = Find-Element 'Pasta vinculada' $true
