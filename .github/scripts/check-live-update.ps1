@@ -13,16 +13,21 @@ $installer = Join-Path $env:RUNNER_TEMP 'jujuba-inicial.exe'
 Invoke-WebRequest $asset[0].browser_download_url -OutFile $installer
 $hash = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant()
 if ("sha256:$hash" -ne $asset[0].digest) { throw 'Hash do instalador diverge da release.' }
+$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-address=127.0.0.1 --remote-debugging-port=9613 --force-renderer-accessibility'
 $process = Start-Process $installer -ArgumentList '/S' -Wait -PassThru -WindowStyle Hidden
 if ($process.ExitCode) { throw "Falha ao instalar $from ($($process.ExitCode))." }
 $key = 'HKCU:/Software/Microsoft/Windows/CurrentVersion/Uninstall/Jujuba'
 $initial = Get-ItemProperty $key
 if ($initial.DisplayVersion -ne $from) { throw 'Versão inicial incorreta.' }
 $exe = Join-Path $initial.InstallLocation.Trim('"') 'jujubasql.exe'
-$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-address=127.0.0.1 --remote-debugging-port=9613'
 $app = Start-Process $exe -PassThru
 node .github/scripts/click-update.mjs $from $to
-if ($LASTEXITCODE) { throw 'O botão de atualização não concluiu a solicitação.' }
+if ($LASTEXITCODE) {
+  Get-Process -Name jujubasql,msedgewebview2 -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,MainWindowTitle,SessionId | Out-Host
+  Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=(Get-Date).AddMinutes(-4); Level=2} -ErrorAction SilentlyContinue |
+    Select-Object -First 5 -ExpandProperty Message | Out-Host
+  throw "O teste perdeu acesso à interface. Processo inicial encerrado: $($app.HasExited), código: $($app.ExitCode)."
+}
 $end = [datetime]::UtcNow.AddMinutes(2)
 do {
   $installed = Get-ItemProperty $key -ErrorAction SilentlyContinue

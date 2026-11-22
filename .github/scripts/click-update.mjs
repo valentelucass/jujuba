@@ -12,10 +12,16 @@ const until = async read => {
   throw new Error('Tempo esgotado aguardando a janela do aplicativo.')
 }
 
+const pagesSeen = new Set()
 const tab = await until(async () => {
   try {
     const response = await fetch('http://127.0.0.1:9613/json/list')
-    return (await response.json()).find(page => page.type === 'page' && /tauri\.localhost/.test(page.url) && !page.url.includes('splash.html'))
+    const pages = await response.json()
+    for (const page of pages) {
+      const key = page.type + ' ' + page.url.split('?')[0]
+      if (!pagesSeen.has(key)) { console.log(key); pagesSeen.add(key) }
+    }
+    return pages.find(page => (page.type === 'page' || page.type === 'webview') && /tauri\.localhost/.test(page.url) && !page.url.includes('splash.html'))
   } catch { return null }
 })
 const socket = new WebSocket(tab.webSocketDebuggerUrl)
