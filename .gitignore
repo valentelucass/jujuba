@@ -3,3 +3,10 @@ frontend/dist/
 backend/rust/target/
 backend/rust/gen/
 *.local
+
+# Saídas e configuração local das ferramentas MCP.
+graphify-out/
+.graphify/
+.codex/
+AGENTS.md.bak-*
+*.mcp-tools.tmp
