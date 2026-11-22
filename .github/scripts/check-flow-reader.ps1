@@ -34,3 +34,8 @@ foreach ($name in 'Fluxogramas','Pedidos') {
 }
 $null = Find-Element 'Telas e processos' $false
 $null = Find-Element 'Pasta vinculada' $true
+$process = Find-Element 'Abrir processo Pedidos' $true
+$action = $null
+if ($process.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern,[ref]$action)) { $action.Toggle() }
+else { $process.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke() }
+$null = Find-Element 'Etapas do processo' $false

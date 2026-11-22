@@ -10,7 +10,22 @@ use uuid::Uuid;
 struct Link { key: Uuid, folder: String, title: String }
 
 #[derive(Serialize, Deserialize)]
-pub struct SourceArea { title: String, steps: Vec<String>, files: Vec<String> }
+pub struct SourceArea {
+    title: String,
+    steps: Vec<String>,
+    files: Vec<String>,
+    #[serde(default)]
+    entry: Option<String>,
+    #[serde(default)]
+    flow: Option<ProcessFlow>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ProcessFlow {
+    nodes: Vec<super::model::Node>,
+    edges: Vec<super::model::Edge>,
+    references: std::collections::HashMap<String, String>,
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct Answer {
@@ -20,7 +35,7 @@ pub struct Answer {
 }
 
 #[derive(Deserialize)]
-struct Generation { answer: Answer, at: String }
+struct Generation { answer: Answer, at: String, #[serde(default)] format: u32 }
 
 #[derive(Serialize, Deserialize)]
 struct Status { phase: String, message: String }
@@ -58,7 +73,7 @@ pub(super) fn detach(dir: &Path,id: Uuid) -> Result<()> {
     let target=link_path(dir,id);
     if let Some(link)=read::<Link>(&target)? {
         fs::remove_file(target).map_err(|_|error())?;
-        for ext in ["result","status"] { let _=fs::remove_file(folder(dir).join(format!("{}.{ext}.json",link.key))); }
+        for ext in ["result","status","draft"] { let _=fs::remove_file(folder(dir).join(format!("{}.{ext}.json",link.key))); }
     }
     Ok(())
 }
@@ -75,7 +90,7 @@ pub(super) fn bind(dir: &Path,id: Uuid,title: &str,source: &str) -> Result<()> {
     if old.as_ref().is_some_and(|l|l.folder.eq_ignore_ascii_case(&label)) { return Ok(()) }
     let link=Link{key:Uuid::new_v4(),folder:label,title:title.to_owned()};
     save(&target,&link)?;
-    if let Some(old)=old { for ext in ["result","status"] { let _=fs::remove_file(folder(dir).join(format!("{}.{ext}.json",old.key))); } }
+    if let Some(old)=old { for ext in ["result","status","draft"] { let _=fs::remove_file(folder(dir).join(format!("{}.{ext}.json",old.key))); } }
     Ok(())
 }
 
@@ -101,9 +116,12 @@ pub(super) fn preview(dir:&Path,id:Uuid) -> Option<Diagram> {
 pub fn flow_source_view(app: AppHandle,id: Uuid) -> Result<Option<SourceView>> {
     let dir=workspaces::directory(&app)?;
     let Some(link)=read::<Link>(&link_path(&dir,id))? else {return Ok(None)};
-    let status=read(&folder(&dir).join(format!("{}.status.json",link.key)))?
+    let mut status=read(&folder(&dir).join(format!("{}.status.json",link.key)))?
         .unwrap_or(Status{phase:"pending".into(),message:"Atualização agendada.".into()});
     let generation=generation(&dir,&link)?;
+    if status.phase == "ready" && generation.as_ref().is_some_and(|g| g.format < 2) {
+        status = Status { phase: "pending".into(), message: "Detalhamento dos processos agendado.".into() };
+    }
     let (updated_at,answer)=generation.map(|g|(Some(g.at),Some(g.answer))).unwrap_or_default();
     Ok(Some(SourceView{folder:link.folder,status,updated_at,answer}))
 }

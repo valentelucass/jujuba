@@ -15,7 +15,15 @@ export interface SourceView {
   folder: string
   status: { phase: string; message: string }
   updatedAt: string | null
-  answer: (SystemDiagram & { areas: { title: string; steps: string[]; files: string[] }[] }) | null
+  answer: (SystemDiagram & { areas: SourceArea[] }) | null
+}
+
+export interface SourceArea {
+  title: string
+  steps: string[]
+  files: string[]
+  entry?: string | null
+  flow?: (Pick<SystemDiagram, 'nodes' | 'edges'> & { references: Record<string, string> }) | null
 }
 
 export interface FlowSession {

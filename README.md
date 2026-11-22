@@ -99,7 +99,7 @@ Use o ícone do sol ou da lua na barra superior para trocar entre fundo branco e
 
 ## Compartilhar um fluxograma
 
-Em **Fluxogramas → Novo projeto**, informe a **Pasta do código** ou use **Vincular pasta** em um projeto existente. Com Node.js 22 ou superior e o Codex CLI conectado, o JUJUBA verifica as pastas enquanto está aberto e recupera mudanças feitas durante sua ausência na próxima abertura. O Codex recebe o inventário e uma seleção de trechos de código. A aba **Fluxo da pasta** mostra a visão geral, as telas e os processos com referências aos arquivos. O desenho manual e suas notas ficam disponíveis na aba ao lado.
+Em **Fluxogramas → Novo projeto**, informe a **Pasta do código** ou use **Vincular pasta** em um projeto existente. Com Node.js 22 ou superior e o Codex CLI conectado, o JUJUBA verifica as pastas enquanto está aberto e recupera mudanças feitas durante sua ausência na próxima abertura. O Codex recebe o inventário e uma seleção de trechos de código. A aba **Fluxo da pasta** abre a visão geral. Em **Telas e processos**, escolha um processo para ver seu diagrama de operações e decisões. Clique em uma etapa para ler a regra e consultar o arquivo de origem. O JUJUBA atualiza automaticamente os projetos que ainda usam o formato resumido. A última leitura concluída permanece disponível durante a geração. O desenho manual e suas notas ficam disponíveis na aba ao lado.
 
 Em **Fluxogramas → Meus projetos**, crie um projeto ou importe um arquivo `.jujuba.json`. As edições ficam salvas no projeto, e **Salvar arquivo** permite manter uma cópia em arquivo.
 

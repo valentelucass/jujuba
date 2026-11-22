@@ -26,8 +26,12 @@ process.stdin.on('end', () => {
   const graph = {title:'Pedidos',summary:label,behaviorChanged:true,nodes:[
     {id:'inicio',kind:'start',label,detail:label},{id:'fim',kind:'end',label:'Concluir',detail:'Concluir o pedido.'}
   ],edges:[{from:'inicio',to:'fim',label:''}],requirements:[],openQuestions:[],
-    areas:[{title:'Pedidos',steps:[label],files:['pedidos.js']}]}
-  fs.writeFileSync(process.argv[process.argv.indexOf('-o')+1],JSON.stringify(graph))
+    areas:[{title:'Pedidos',entry:'inicio',steps:[label],files:['pedidos.js']}]}
+  const schema = JSON.parse(fs.readFileSync('schema.json','utf8'))
+  const response = schema.properties.processes ? {processes:[{index:0,steps:[
+    {label,detail:'A regra determina a próxima atividade do pedido.',source:1,choices:[]}
+  ]}]} : graph
+  fs.writeFileSync(process.argv[process.argv.indexOf('-o')+1],JSON.stringify(response))
 })
 '@ | Set-Content "$stub/codex.js" -Encoding utf8NoBOM
 $env:PATH = "$fixture;$env:PATH"
@@ -42,7 +46,9 @@ function Wait-Flow($label) {
     if ($app.HasExited) { throw 'The installed JUJUBA exited.' }
     if (Test-Path "$links/$key.result.json") {
       $result = Get-Content "$links/$key.result.json" -Raw | ConvertFrom-Json
-      if ($result.answer.summary -eq $label) { return }
+      if ($result.format -eq 2 -and $result.answer.summary -eq $label -and
+          $result.answer.areas[0].flow.nodes[1].label -eq $label -and
+          $result.answer.areas[0].flow.references.p1 -eq 'pedidos.js') { return }
     }
     Start-Sleep -Seconds 1
   } while ([datetime]::UtcNow -lt $limit)
@@ -54,6 +60,15 @@ function Wait-Flow($label) {
   throw "Expected diagram step: $label"
 }
 try {
+  Wait-Flow 'Receber o pedido'
+  # A project saved by 0.1.69 has the same source hash and only an overview.
+  $resultPath = Join-Path $links "$key.result.json"
+  $legacy = Get-Content -LiteralPath $resultPath -Raw | ConvertFrom-Json -AsHashtable
+  $legacy.Remove('format')
+  $legacy.Remove('signatures')
+  $legacy.answer.areas[0].Remove('flow')
+  $legacy | ConvertTo-Json -Depth 32 -Compress | Set-Content -LiteralPath "$resultPath.tmp" -Encoding utf8NoBOM
+  [IO.File]::Move("$resultPath.tmp",$resultPath,$true)
   Wait-Flow 'Receber o pedido'
   'export const etapa = "REGRA_NOVA"' | Set-Content "$source/pedidos.js"
   Wait-Flow 'Separar o pedido'

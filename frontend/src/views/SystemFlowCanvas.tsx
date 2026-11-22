@@ -86,23 +86,26 @@ function arrange(diagram: SystemDiagram, rename: FlowNode['data']['rename']): Fl
   return [...stages, ...notes]
 }
 
-function FitNewStages({ nodeIds }: { nodeIds: string }) {
+function FitNewStages({ nodeIds, focus }: { nodeIds: string; focus?: string | null }) {
   const ready = useNodesInitialized()
   const flow = useReactFlow()
   const fitted = useRef('')
 
   useEffect(() => {
-    if (ready && nodeIds && fitted.current !== nodeIds) {
-      fitted.current = nodeIds
-      void flow.fitView({ padding: .18, maxZoom: 1.25 })
+    const target = nodeIds + ':' + (focus ?? '')
+    if (ready && nodeIds && fitted.current !== target) {
+      fitted.current = target
+      if (focus) void flow.fitView({ nodes: [{ id: focus }], minZoom: .85, maxZoom: 1.1, duration: 160 })
+      else void flow.fitView({ padding: .18, maxZoom: 1.25 })
     }
-  }, [flow, nodeIds, ready])
+  }, [flow, nodeIds, ready, focus])
   return null
 }
 
-export function SystemFlowCanvas({ diagram, selected, choose, connect, move, rename, disabled, peerCursors, sendCursor }: {
+export function SystemFlowCanvas({ diagram, selected, choose, connect, move, rename, disabled, peerCursors, sendCursor, focusSelection }: {
   diagram: SystemDiagram | null
   selected: string | null
+  focusSelection?: boolean
   choose: (id: string | null) => void
   connect: (edge: SystemEdge) => void
   move: (id: string, position: StagePosition) => void
@@ -194,7 +197,7 @@ export function SystemFlowCanvas({ diagram, selected, choose, connect, move, ren
       multiSelectionKeyCode={null} nodeExtent={[[-100_000, -100_000], [100_000, 100_000]]}
       onNodeDragStop={(_, node) => move(node.id, node.position)}
       onNodeClick={(_, node) => choose(node.id)} onPaneClick={() => choose(null)} onConnect={add}>
-      <FitNewStages nodeIds={elementIds} />
+      <FitNewStages nodeIds={elementIds} focus={focusSelection ? selected : null} />
       <Background id="system-flow-dots" gap={20} size={1.4} color="var(--canvas-dot)" />
       {peerCursors.length > 0 && <ViewportPortal>
         {peerCursors.map((peerCursor) => <div key={peerCursor.id} className="flow-peer-cursor" style={{ left: peerCursor.x, top: peerCursor.y }}
