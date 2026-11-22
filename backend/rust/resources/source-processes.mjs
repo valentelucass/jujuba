@@ -75,14 +75,13 @@ function processGraph(scope, steps, validateGraph) {
       fail('use nomes de etapas distintos')
     labels.add(label.trim().toLowerCase())
     if (!Number.isInteger(source) || !scope.evidence[source - 1]) fail('a fonte de "' + label + '" precisa existir no seu processo')
-    if (!Array.isArray(choices) || choices.length > 8) fail('saídas inválidas')
+    if (!Array.isArray(choices)) fail('informe as saídas como uma lista de alternativas')
     const id = 'p' + (i + 1)
     references[id] = scope.evidence[source - 1].arquivo
     nodes.push({ id, kind: choices.length > 1 ? 'decision' : 'action', label, detail })
     const outgoing = choices.length ? choices : [{ to: i + 1 === steps.length ? 0 : i + 2, label: '' }]
     for (const choice of outgoing) {
       if (!Number.isInteger(choice.to) || choice.to < 0 || choice.to > steps.length) fail('destino fora do processo')
-      if (choice.to === i + 1) fail('a etapa ' + (i + 1) + ' aponta para si mesma; represente a tentativa e sua verificação em etapas distintas')
       if (typeof choice.label !== 'string' || Buffer.byteLength(choice.label) > 120) fail('use um rótulo curto em cada saída')
       edges.push({ from: id, to: choice.to ? 'p' + choice.to : 'fim', label: choice.label })
     }

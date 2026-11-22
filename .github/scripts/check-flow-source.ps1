@@ -28,8 +28,10 @@ process.stdin.on('end', () => {
   ],edges:[{from:'inicio',to:'fim',label:''}],requirements:[],openQuestions:[],
     areas:[{title:'Pedidos',entry:'inicio',steps:[label],files:['pedidos.js']}]}
   const schema = JSON.parse(fs.readFileSync('schema.json','utf8'))
+  const options = Array.from({length:8}, (_, i) => ({label:'Opção '+(i+1),to:i+2}))
   const response = schema.properties.processes ? {processes:[{index:0,steps:[
-    {label,detail:'A regra determina a próxima atividade do pedido.',source:1,choices:[]}
+    {label,detail:'Escolher a próxima atividade do pedido.',source:1,choices:[{label:'Tentar novamente',to:1},...options]},
+    ...options.map((item) => ({label:item.label,detail:'Concluir a atividade selecionada.',source:1,choices:[{label:'',to:0}]}))
   ]}]} : graph
   fs.writeFileSync(process.argv[process.argv.indexOf('-o')+1],JSON.stringify(response))
 })

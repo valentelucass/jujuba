@@ -138,6 +138,16 @@ export function routeFlowEdges(edges: SystemEdge[], boxes: FlowBox[]): FlowRoute
     const fromSide = anchor(source, toward)
     const toSide = anchor(target, opposite)
     const candidates: { points: StagePosition[]; preference: number }[] = []
+    if (source.id === target.id) {
+      for (const side of ['left', 'right'] as const) {
+        const from = anchor(source, side)
+        for (const lane of [30, 48, 66]) {
+          const x = from.x + (side === 'left' ? -lane : lane)
+          const y = top.y - lane
+          candidates.push({ points: [from, { x, y: from.y }, { x, y }, { x: top.x, y }, top], preference: 0 })
+        }
+      }
+    }
 
     if (!entry.returning && top.y > bottom.y + clearance) {
       for (const fraction of [.5, .32, .68]) {
@@ -154,7 +164,7 @@ export function routeFlowEdges(edges: SystemEdge[], boxes: FlowBox[]): FlowRoute
         candidates.push({ points: [fromSide, { x, y: fromSide.y }, { x, y }, { x: top.x, y }, top], preference: 0 })
       }
     }
-    for (const side of ['left', 'right'] as const) {
+    for (const side of source.id === target.id ? [] : ['left', 'right'] as const) {
       const from = anchor(source, side)
       const to = anchor(target, side)
       const band = boxes.filter(({ y, height }) => y <= Math.max(from.y, to.y) && y + height >= Math.min(from.y, to.y))

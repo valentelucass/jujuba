@@ -39,3 +39,4 @@ $action = $null
 if ($process.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern,[ref]$action)) { $action.Toggle() }
 else { $process.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke() }
 $null = Find-Element 'Etapas do processo' $false
+$null = Find-Element 'Seguir caminho Tentar novamente' $true

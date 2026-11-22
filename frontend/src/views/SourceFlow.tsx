@@ -23,6 +23,7 @@ export function SourceFlow({ source }: { source: SourceView }) {
     : overview, [overview, area])
   const step = diagram?.nodes.find((n) => n.id === selected)
   const reference = step && area?.flow?.references[step.id]
+  const alternatives = area && step?.kind === 'decision' ? area.flow?.edges.filter((e) => e.from === step.id) ?? [] : []
   const related = step && !area ? overview?.areas.filter((a) => a.flow && a.entry === step.id) ?? [] : []
   const total = overview?.areas.reduce((count, a) => count + operations(a).length, 0) ?? 0
   function navigate(title: string | null) {
@@ -46,6 +47,11 @@ export function SourceFlow({ source }: { source: SourceView }) {
           disabled focusSelection={!!area} connect={() => {}} move={() => {}} rename={() => {}} peerCursors={[]} />
         <aside className="system-design-panel source-reader" key={'reader-' + (area?.title ?? '')}>
           {step && <section className="source-step"><h2>{step.label}</h2><p>{step.detail}</p>
+            {alternatives.length > 0 && <ul className="source-choices" aria-label="Caminhos desta decisão">
+              {alternatives.map((e, i) => <li key={i}><button type="button" aria-label={'Seguir caminho ' + e.label} onClick={() => select(e.to)}>
+                <strong>{e.label}</strong><span>{e.to === step.id ? 'Repetir esta etapa' : diagram.nodes.find((n) => n.id === e.to)?.label}</span>
+              </button></li>)}
+            </ul>}
             {reference && <><small>Arquivo desta etapa</small><code>{reference}</code></>}
             {related.map((a) => <button key={a.title} type="button" className="button" onClick={() => navigate(a.title)}>Abrir {a.title}<ChevronRight size={14}/></button>)}
           </section>}

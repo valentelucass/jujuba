@@ -292,7 +292,7 @@ function complete(result) {
   try {
     validatePlan(result.answer, result.files)
     return result.answer.areas.every(({ flow }) => {
-      validateGraph(flow)
+      validateGraph(flow, true)
       return flow.nodes.every((n) => n.kind === 'start' || n.kind === 'end' ||
         Object.hasOwn(result.files, flow.references?.[n.id]))
     })
@@ -302,7 +302,7 @@ const check = (ok, msg) => {
   if (!ok) throw Error('Fluxograma inválido: ' + msg)
 }
 const txt = (v, n) => typeof v === 'string' && !!v.trim() && Buffer.byteLength(v) <= n
-function validateGraph({ nodes, edges }) {
+function validateGraph({ nodes, edges }, allowRetry = false) {
   check(
     Array.isArray(nodes) && nodes.length >= 2 && nodes.length <= 24,
     'número de etapas',
@@ -326,7 +326,7 @@ function validateGraph({ nodes, edges }) {
         (e) =>
           ids.has(e.from) &&
           ids.has(e.to) &&
-          e.from !== e.to &&
+          (e.from !== e.to || allowRetry) &&
           typeof e.label === 'string' &&
           Buffer.byteLength(e.label) <= 120,
       ),
@@ -570,7 +570,7 @@ export async function sync(dir, id, generate = codex) {
     const plan = { ...answer, areas: answer.areas.map(({ flow, ...area }) => area) }
     const save = () => writeJson(draftFile, { format, hash: current.hash, plan, cache })
     await save()
-    const signatures = await expandProcesses({ current, previousFiles: baseline?.files, answer, cache, safeLines, validateGraph, status, save,
+    const signatures = await expandProcesses({ current, previousFiles: baseline?.files, answer, cache, safeLines, validateGraph: (graph) => validateGraph(graph, true), status, save,
       generate: (prompt) => generate(temp, prompt, processSchema) })
     const latest = await inventory(link.folder, current.files)
     if ((await readJson(linkFile, null))?.key !== link.key) return
