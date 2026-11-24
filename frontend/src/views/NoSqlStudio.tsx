@@ -36,6 +36,7 @@ export function NoSqlStudio({ connection, disconnect, onScreen }: {
   const collections = useRemote(mongo && database ? load : null)
   const names = collections.status === 'ready' ? collections.data : []
   const scope = database ? { session, database } : null
+  const showingMonitor = view === 'monitor' && database !== null
 
   function selectDatabase(name: string) {
     setDatabase(name)
@@ -77,10 +78,10 @@ export function NoSqlStudio({ connection, disconnect, onScreen }: {
         <HeaderAction label={mongo ? 'Coleções' : 'Chaves'} hint={mongo ? 'Explore as coleções do banco.' : 'Explore as chaves do banco.'}
           unavailable={!scope} active={view === 'explorer'} onClick={() => setView('explorer')}>{mongo ? <Braces /> : <KeyRound />}</HeaderAction>
       </>} />
-    {view === 'monitor' && database ?
-      <Suspense fallback={<Loading />}><DatabaseMonitor key={JSON.stringify([connection.session, database])} connection={connection} database={database} /></Suspense> :
     <StudioLayout items={items} connected>
-      {scope && view === 'dashboard' ? <main className="workspace">
+      {showingMonitor ?
+        <Suspense fallback={<Loading />}><DatabaseMonitor key={database} connection={connection} database={database} /></Suspense>
+        : scope && view === 'dashboard' ? <main className="workspace">
         <Suspense fallback={<Loading />}><DatabaseDashboard key={database} {...scope} engine={connection.engine} /></Suspense>
       </main> : <main className="workspace nosql-workspace">
         <div className="object-heading">
@@ -102,7 +103,7 @@ export function NoSqlStudio({ connection, disconnect, onScreen }: {
                 : <Empty title="Nenhuma coleção acessível" />)}
           </> : <RedisBrowser key={database} scope={scope} />}
       </main>}
-      <aside className="details">
+      {!showingMonitor && <aside className="details">
         <div className="panel-title"><PanelRight size={15} /><h2>Detalhes</h2></div>
         <div className="details-body">
           <div className="details-heading"><span className="engine-icon"><img src={engine.icon} alt="" /></span>
@@ -113,8 +114,8 @@ export function NoSqlStudio({ connection, disconnect, onScreen }: {
             <dt>Modo</dt><dd>Consulta</dd>
           </dl>
         </div>
-      </aside>
-    </StudioLayout>}
+      </aside>}
+    </StudioLayout>
     <StatusBar engine={connection.engine} endpoint={connection.endpoint} database={database} passwordSaveFailed={connection.passwordSaveFailed} />
   </>
 }

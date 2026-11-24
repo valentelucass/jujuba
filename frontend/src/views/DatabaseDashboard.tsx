@@ -446,7 +446,7 @@ function SqlServerDashboard({ database, session, initialTab = 'overview' }: Scop
       {tab === 'storage' && <StorageDashboard key={JSON.stringify([database, session])} database={database} session={session} />}
       {tab === 'performance' && (history.status === 'ready' ? <Performance data={history.data} hours={hours} />
         : history.status === 'error' ? <Failure error={history.error} retry={refresh} /> : <Loading />)}
-      {tab === 'live' && <LiveDashboard database={database} session={session} />}
+      {tab === 'live' && <LiveDashboard key={JSON.stringify([database, session])} database={database} session={session} />}
     </div>
   </>
 }

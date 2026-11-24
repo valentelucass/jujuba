@@ -215,7 +215,6 @@ function ConnectedStudio({ connection, disconnect, onScreen }: {
   const explorer = useExplorer(connection, database, table, (db) => {
     setDatabase(db)
     setTable(null)
-    setWorkspaceView(view => view === 'monitor' ? view : 'objects')
     rememberActiveDatabase(connection.engine, db)
   }, (db, entry) => {
     setDatabase(db); setTable(entry); setWorkspaceView('objects')
@@ -236,12 +235,12 @@ function ConnectedStudio({ connection, disconnect, onScreen }: {
         {table && workspaceView === 'objects' && <HeaderAction label="Atualizar tabela" hint="Busque novamente os registros."
           onClick={() => setRefreshKey((value) => value + 1)}><RefreshCw /></HeaderAction>}
       </>} />
-    {workspaceView === 'monitor' && database ?
-      <Suspense fallback={<Loading />}><DatabaseMonitor key={JSON.stringify([connection.session, database])} connection={connection} database={database}
-        onQueryHistory={() => openDashboard('performance')} /></Suspense> :
     <StudioLayout items={explorer.items} connected>
-      {database && workspaceView === 'dashboard' ? <><main className="workspace">
-        <Suspense fallback={<Loading />}><DatabaseDashboard key={database} database={database} session={connection.session} engine={connection.engine} initialTab={dashboardTab} /></Suspense>
+      {database && workspaceView === 'monitor' ?
+        <Suspense fallback={<Loading />}><DatabaseMonitor key={database} connection={connection} database={database}
+          onQueryHistory={() => openDashboard('performance')} /></Suspense>
+        : database && workspaceView === 'dashboard' ? <><main className="workspace">
+        <Suspense fallback={<Loading />}><DatabaseDashboard database={database} session={connection.session} engine={connection.engine} initialTab={dashboardTab} /></Suspense>
         </main><ConnectionDetails connection={connection} database={database} /></>
         : database && workspaceView === 'sql' ? <><main className="workspace"><div className="object-heading"><h1>{database}</h1></div>
         <Suspense fallback={<Loading />}><SqlEditor key={database} engine={connection.engine} scope={{ session: connection.session, database }} /></Suspense></main>
@@ -252,7 +251,7 @@ function ConnectedStudio({ connection, disconnect, onScreen }: {
         ? <DatabaseWorkspace key={database} scope={{ session: connection.session, database }} connection={connection}
             onTable={(entry) => explorer.chooseRelatedTable(database, entry)} />
         : <><DatabaseList connection={connection} choose={explorer.chooseDatabase} /><ConnectionDetails connection={connection} /></>}
-    </StudioLayout>}
+    </StudioLayout>
     <StatusBar engine={connection.engine} endpoint={connection.endpoint} database={database} passwordSaveFailed={connection.passwordSaveFailed} />
   </>
 }
