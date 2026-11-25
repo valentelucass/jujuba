@@ -57,7 +57,7 @@ try {
     Invoke-LabSql $db "INSERT #testes VALUES (N'Concorrência de duas conexões e retomada da rodada');"
 
     $proof = [ordered]@{
-        motor = Invoke-LabSql $db "SELECT CONCAT(SERVERPROPERTY('Edition'),' ',SERVERPROPERTY('ProductVersion'))" -Scalar
+        motor = Invoke-LabSql $db "SELECT CONCAT(CONVERT(nvarchar(128),SERVERPROPERTY('Edition')),' ',CONVERT(nvarchar(128),SERVERPROPERTY('ProductVersion')))" -Scalar
         instanciaDescartavel = $true
         datas = (Invoke-LabSql $db 'SELECT (SELECT * FROM #rodadas ORDER BY hoje FOR JSON PATH)' -Scalar | ConvertFrom-Json)
         testes = @((Invoke-LabSql $db 'SELECT (SELECT nome FROM #testes ORDER BY nome FOR JSON PATH)' -Scalar | ConvertFrom-Json) | ForEach-Object nome)
