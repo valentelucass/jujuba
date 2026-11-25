@@ -1,0 +1,22 @@
+name: Laboratório de retenção por entidade
+on:
+  push:
+    branches: ['lab/retencao-por-entidade']
+    paths: ['lab/retencao/**', '.github/workflows/lab-retencao.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  janela-movel:
+    runs-on: windows-2025
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Exercitar retenção em uma instância exclusiva de LocalDB
+        shell: powershell
+        run: ./lab/retencao/testar.ps1 -Resultado "$env:RUNNER_TEMP/resultado-retencao.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: resultado-retencao
+          path: ${{ runner.temp }}/resultado-retencao.json
+          if-no-files-found: error
