@@ -59,7 +59,7 @@ try {
     $proof = [ordered]@{
         motor = Invoke-LabSql $db "SELECT CONCAT(CONVERT(nvarchar(128),SERVERPROPERTY('Edition')),' ',CONVERT(nvarchar(128),SERVERPROPERTY('ProductVersion')))" -Scalar
         instanciaDescartavel = $true
-        datas = (Invoke-LabSql $db 'SELECT (SELECT * FROM #rodadas ORDER BY hoje FOR JSON PATH)' -Scalar | ConvertFrom-Json)
+        datas = @((Invoke-LabSql $db 'SELECT (SELECT * FROM #rodadas ORDER BY hoje FOR JSON PATH)' -Scalar | ConvertFrom-Json) | Select-Object hoje,primeiroDia,diasApagados,registrosApagados,registrosAtivos)
         testes = @((Invoke-LabSql $db 'SELECT (SELECT nome FROM #testes ORDER BY nome FOR JSON PATH)' -Scalar | ConvertFrom-Json) | ForEach-Object nome)
         revisao = $env:GITHUB_SHA
     }

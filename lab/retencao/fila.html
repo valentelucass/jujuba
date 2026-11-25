@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fila de retenção · Laboratório do JUJUBA</title>
+<style>
+:root {
+  color-scheme:light dark;
+  --font-size-base:1rem;
+  --background:#faf9fa; --foreground:#211b20; --muted-foreground:#60565c;
+  --muted:#eeebee; --border:#b4acb1; --viz-series-1:#00796c; --viz-series-2:#ad7400;
+  --acao:#64214e; --sobre-acao:#fff;
+  font:16px/1.5 Inter,"Segoe UI",system-ui,sans-serif; color:var(--foreground); background:var(--background);
+}
+@media(prefers-color-scheme:dark) { :root {
+  --background:#151315; --foreground:#f6f1f4; --muted-foreground:#c5b9c1;
+  --muted:#312b30; --border:#665a63; --viz-series-1:#7dcdb8; --viz-series-2:#ecc460;
+  --acao:#efb3da; --sobre-acao:#35152c;
+} }
+* { box-sizing:border-box; }
+body { max-width:68rem; margin:0 auto; padding:clamp(.75rem,3vw,2.5rem); }
+h2,h3 { margin:0; font-weight:600; } h3 { font-size:1.12rem; }
+.form-label { display:grid; gap:.25rem; align-content:start; }
+.btn,.form-select,.form-control { max-width:100%; min-width:0; font:inherit; border:1px solid var(--border); border-radius:.4rem; padding:.4rem .65rem; color:var(--foreground); background:var(--background); }
+.btn,.form-select,summary { cursor:pointer; }
+.btn-primary { border-color:var(--acao); background:var(--acao); color:var(--sobre-acao); }
+.btn:disabled { opacity:.55; cursor:default; }
+.viz-row,.viz-controls { display:flex; flex-wrap:wrap; align-items:center; gap:.75rem; }
+.text-small { font-size:.85rem; } .text-muted { color:var(--muted-foreground); }
+.text-destructive { font-weight:600; } .tabular-nums { font-variant-numeric:tabular-nums; }
+i[data-lucide] { display:none; }
+</style>
+</head>
+<body>
+<section id="jujuba-fila-por-dia" lang="pt-BR" aria-label="Simulador de retenção por entidade">
+  <header>
+    <h2>Fila de retenção</h2>
+    <span class="text-small text-muted">Laboratório do JUJUBA · datas de negócio em Brasília</span>
+  </header>
+  <div class="fila-topo">
+    <label class="form-label">Entidade
+      <select class="form-select" id="fila-entidade">
+        <option value="0">Ocorrências</option><option value="1">Fretes de leitura</option>
+        <option value="2">Coletas</option><option value="3">Performance</option>
+      </select>
+    </label>
+    <div class="fila-data">
+      <span class="text-small text-muted">Dia do ensaio</span>
+      <time id="fila-hoje" class="tabular-nums"></time>
+    </div>
+    <button type="button" class="btn btn-primary" id="fila-avancar">Avançar um dia <i data-lucide="arrow-right" aria-hidden="true"></i></button>
+  </div>
+  <div class="fila-resumo" aria-live="polite" aria-atomic="true">
+    <div><h3 id="fila-janela"></h3><span id="fila-saldo" class="text-muted tabular-nums"></span></div>
+    <div class="fila-movimento"><i data-lucide="log-out" aria-hidden="true"></i><span id="fila-saida"></span></div>
+  </div>
+  <div>
+    <div id="fila-meses" class="fila-meses" role="group" aria-label="Calendário do histórico da entidade"></div>
+    <div id="fila-navegacao" class="viz-row" hidden>
+      <button type="button" class="btn btn-ghost" id="fila-anteriores">Meses anteriores</button>
+      <button type="button" class="btn btn-ghost" id="fila-seguintes">Meses seguintes</button>
+    </div>
+    <div class="fila-legenda text-small" aria-label="Legenda do calendário">
+      <span><i class="fila-amostra" data-estado="mantido"></i>Na fila</span>
+      <span><i class="fila-amostra" data-estado="apagado"></i>Apagado no ensaio</span>
+      <span id="fila-lpendente" hidden><i class="fila-amostra" data-estado="pendente"></i>Aguarda limpeza</span>
+      <span><i class="fila-amostra" data-estado="vazio"></i>Sem registros</span>
+      <span><i class="fila-amostra fila-marca-hoje"></i>Dia do ensaio</span>
+    </div>
+  </div>
+  <details id="fila-regras">
+    <summary class="cursor-interaction">Alterar o prazo de retenção</summary>
+    <div class="fila-controles">
+      <div class="viz-controls">
+        <label class="form-label">Regra da entidade
+          <select class="form-select" id="fila-modo">
+            <option value="propria">Prazo próprio</option>
+            <option value="herdar">Usar o padrão do banco</option>
+            <option value="conservar">Conservar todo o histórico</option>
+          </select>
+        </label>
+        <label id="fila-grupo-dias" class="form-label">Prazo da entidade em dias
+          <input class="form-control" type="number" min="1" max="2147483647" step="1" id="fila-dias">
+        </label>
+      </div>
+      <div class="viz-controls">
+        <label class="form-label">Prazo padrão do banco em dias
+          <input class="form-control" type="number" min="1" max="2147483647" step="1" placeholder="Sem prazo" id="fila-banco">
+        </label>
+      </div>
+      <span class="text-destructive text-small" id="fila-erro" role="alert" hidden></span>
+    </div>
+  </details>
+  <div class="viz-row" id="fila-previa" hidden>
+    <span id="fila-vencidos" aria-live="polite"></span>
+    <button type="button" class="btn" id="fila-limpar">Simular limpeza desta entidade</button>
+  </div>
+  <details id="fila-atraso">
+    <summary class="cursor-interaction">Ver o destino de um registro atrasado</summary>
+    <div class="fila-controles">
+      <div class="viz-controls">
+        <label class="form-label">Data do evento recebido no dia do ensaio
+          <input class="form-control" type="date" id="fila-evento" min="0001-01-01" max="9999-12-31">
+        </label>
+      </div>
+      <output id="fila-destino" aria-live="polite"></output>
+    </div>
+  </details>
+</section>
+<style>
+#jujuba-fila-por-dia { --fila-espaco:var(--font-size-base); display:grid; gap:var(--fila-espaco); color:var(--foreground); }
+#jujuba-fila-por-dia [hidden] { display:none !important; }
+#jujuba-fila-por-dia header { padding-inline-end:5.8rem; }
+#jujuba-fila-por-dia .fila-topo { display:flex; flex-wrap:wrap; gap:calc(var(--fila-espaco) * .85) calc(var(--fila-espaco) * 1.5); align-items:end; }
+#jujuba-fila-por-dia .fila-data { display:grid; gap:calc(var(--fila-espaco) * .25); align-self:center; }
+#jujuba-fila-por-dia .fila-data time, #jujuba-fila-por-dia .fila-mes-titulo { font-weight:500; }
+#jujuba-fila-por-dia .fila-resumo { display:grid; gap:calc(var(--fila-espaco) * .55); }
+#jujuba-fila-por-dia .fila-movimento { display:flex; gap:calc(var(--fila-espaco) * .4); align-items:baseline; }
+#jujuba-fila-por-dia .fila-movimento svg { flex:none; align-self:center; }
+#jujuba-fila-por-dia .fila-meses { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:calc(var(--fila-espaco) * 1.1); }
+#jujuba-fila-por-dia .fila-mes-titulo { margin-bottom:calc(var(--fila-espaco) * .4); }
+#jujuba-fila-por-dia .fila-grade { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:2px; }
+#jujuba-fila-por-dia .fila-grade > * { display:grid; place-items:center; }
+#jujuba-fila-por-dia .fila-semana { padding-block:calc(var(--fila-espaco) * .22); }
+#jujuba-fila-por-dia .fila-dia { min-height:calc(var(--fila-espaco) * 1.8); position:relative; border-radius:2px; }
+#jujuba-fila-por-dia [data-estado="mantido"] { background:color-mix(in srgb,var(--viz-series-1) 23%,transparent); }
+#jujuba-fila-por-dia [data-estado="apagado"] { background:repeating-linear-gradient(135deg,transparent 0 3px,color-mix(in srgb,var(--muted-foreground) 20%,transparent) 3px 4px),var(--muted); }
+#jujuba-fila-por-dia [data-estado="pendente"] { background:radial-gradient(circle at 2px 2px,color-mix(in srgb,var(--viz-series-2) 60%,transparent) 1px,transparent 1.2px) 0 0/5px 5px; }
+#jujuba-fila-por-dia [data-estado="vazio"] { color:var(--muted-foreground); }
+#jujuba-fila-por-dia .fila-dia[data-hoje="sim"]::after, #jujuba-fila-por-dia .fila-marca-hoje::after { content:""; position:absolute; bottom:1px; left:18%; right:18%; height:3px; border-radius:2px; background:var(--foreground); }
+#jujuba-fila-por-dia .fila-legenda { display:flex; flex-wrap:wrap; gap:calc(var(--fila-espaco) * .4) var(--fila-espaco); margin-top:calc(var(--fila-espaco) * .8); }
+#jujuba-fila-por-dia .fila-legenda > span { display:inline-flex; gap:calc(var(--fila-espaco) * .35); align-items:center; }
+#jujuba-fila-por-dia .fila-amostra { display:inline-block; position:relative; width:var(--fila-espaco); height:var(--fila-espaco); border-radius:2px; }
+#jujuba-fila-por-dia .fila-amostra[data-estado="apagado"]::before { content:""; position:absolute; inset:48% 8% auto; height:1px; background:var(--foreground); }
+#jujuba-fila-por-dia .fila-amostra[data-estado="vazio"] { box-shadow:inset 0 0 0 1px var(--border); }
+#jujuba-fila-por-dia .fila-controles { display:grid; gap:calc(var(--fila-espaco) * .6); margin-top:calc(var(--fila-espaco) * .7); }
+@media(max-width:740px) { #jujuba-fila-por-dia .fila-meses { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:420px) { #jujuba-fila-por-dia .fila-meses { gap:var(--fila-espaco) calc(var(--fila-espaco) * .55); } }
+@media(max-width:255px) { #jujuba-fila-por-dia .fila-meses { grid-template-columns:minmax(0,1fr); } }
+</style>
+<script>
+(() => {
+  const root = document.getElementById('jujuba-fila-por-dia');
+  const el = name => root.querySelector('#fila-' + name);
+  const entities = ['Ocorrências', 'Fretes de leitura', 'Coletas', 'Performance'];
+  const oneDay = 86400000;
+  const origin = Date.UTC(2026, 7, 24);
+  const initialDay = 93;
+  const lastDay = (Date.UTC(9999, 11, 31) - origin) / oneDay;
+  const maxDays = 2147483647;
+  const dateAt = d => new Date(origin + d * oneDay);
+  const iso = d => dateAt(d).toISOString().slice(0, 10);
+  const dateFmt = opts => new Intl.DateTimeFormat('pt-BR', { ...opts, timeZone:'UTC' });
+  const numeric = dateFmt({ day:'2-digit', month:'2-digit' });
+  const full = dateFmt({ day:'2-digit', month:'2-digit', year:'numeric' });
+  const monthFmt = dateFmt({ month:'long', year:'numeric' });
+  const countFmt = new Intl.NumberFormat('pt-BR');
+  const ddmm = d => numeric.format(dateAt(d));
+  const fullDay = d => full.format(dateAt(d));
+  const asCount = (n, s, p) => countFmt.format(n) + ' ' + (n === 1 ? s : p);
+  const records = n => asCount(n, 'registro', 'registros');
+  const days = n => asCount(n, 'dia', 'dias');
+  const within = (v, a, b) => Number.isInteger(v) && v >= a && v <= b;
+  const monthAt = (i, day = 1) => new Date(Date.UTC(2026, 7 + i, day));
+  const monthIndex = d => (d.getUTCFullYear() - 2026) * 12 + d.getUTCMonth() - 7;
+  const firstUpper = s => s.charAt(0).toUpperCase() + s.slice(1);
+  function initial() {
+    return { version:1, day:initialDay, entity:0, bank:null, page:null, late:'2026-08-27',
+      rules:['propria', 'herdar', 'conservar', 'herdar'].map((mode,i) => ({
+        mode, days:i === 0 ? 90 : 30, removed:i === 0 ? 3 : -1, before:-1, round:initialDay
+      })) };
+  }
+  function restore(saved) {
+    const raw = saved && saved.privateContent;
+    const s = initial();
+    if (!raw || raw.version !== 1 || !within(raw.day,initialDay,lastDay) ||
+        !within(raw.entity,0,3) || !Array.isArray(raw.rules) || raw.rules.length !== 4 ||
+        !(raw.bank === null || within(raw.bank,1,maxDays))) return s;
+    const valid = raw.rules.every((r,i) => r &&
+      ['propria','herdar','conservar'].includes(r.mode) && within(r.days,1,maxDays) &&
+      within(r.round,initialDay,raw.day) && within(r.removed,-1,i === 0 ? r.round : initialDay) &&
+      within(r.before,-1,r.removed));
+    if (!valid) return s;
+    s.day = raw.day; s.entity = raw.entity; s.bank = raw.bank;
+    s.rules = raw.rules.map(r => ({mode:r.mode,days:r.days,removed:r.removed,before:r.before,round:r.round}));
+    if (within(raw.page,0,monthIndex(dateAt(s.day)))) s.page = raw.page;
+    if (raw.late === '' || (typeof raw.late === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.late) && Number.isFinite(Date.parse(raw.late)))) s.late = raw.late;
+    return s;
+  }
+  let state = restore(window.openai && window.openai.widgetState);
+  const policy = rule => rule.mode === 'herdar' ? state.bank : rule.mode === 'propria' ? rule.days : null;
+  const tail = i => i === 0 ? state.day : initialDay;
+  function until(i) {
+    const horizon = policy(state.rules[i]);
+    return horizon === null ? -1 : Math.min(tail(i), Math.max(-1, state.day - horizon));
+  }
+  const rowCount = (i, d) => d >= 0 && d <= tail(i) ? 1 + (d + i) % 4 : 0;
+  function rows(i, from, to) {
+    const lo = Math.max(0, from), hi = Math.min(tail(i), to);
+    const size = Math.max(0, hi - lo + 1);
+    let n = Math.floor(size / 4) * 10;
+    for (let k = 0; k < size % 4; k++) n += rowCount(i, lo + k);
+    return n;
+  }
+  function save() {
+    const r = state.rules[state.entity];
+    if (window.openai && typeof window.openai.setWidgetState === 'function') {
+      const modelContent = { entidade:entities[state.entity], dataDoEnsaio:iso(state.day),
+        diasDaRegra:policy(r), diasApagadosNoEnsaio:r.removed + 1, registrosAtivos:rows(state.entity,r.removed + 1,tail(state.entity)) };
+      Promise.resolve(window.openai.setWidgetState({ modelContent, privateContent:JSON.parse(JSON.stringify(state)) })).catch(() => {});
+    }
+  }
+  function runCycle(i) {
+    const rule = state.rules[i];
+    rule.before = rule.removed;
+    rule.removed = Math.max(rule.removed, until(i));
+    rule.round = state.day;
+  }
+  const labels = { mantido:'Na fila', apagado:'Apagado no ensaio', pendente:'Aguarda limpeza', vazio:'Sem registros no ensaio' };
+  function status(i,d) {
+    if (d < 0 || d > tail(i)) return 'vazio';
+    if (d <= state.rules[i].removed) return 'apagado';
+    return d <= until(i) ? 'pendente' : 'mantido';
+  }
+  function makeMonth(index, i) {
+    const first = monthAt(index);
+    const name = firstUpper(monthFmt.format(first).replace(' de ', ' '));
+    const box = document.createElement('section');
+    box.setAttribute('aria-label', name);
+    const heading = document.createElement('div');
+    heading.className = 'fila-mes-titulo'; heading.textContent = name;
+    box.append(heading);
+    const grid = document.createElement('div');
+    grid.className = 'fila-grade tabular-nums';
+    for (const text of ['D','S','T','Q','Q','S','S']) {
+      const wd = document.createElement('span');
+      wd.className = 'fila-semana text-small text-muted'; wd.textContent = text;
+      wd.setAttribute('aria-hidden','true'); grid.append(wd);
+    }
+    for (let p = 0; p < first.getUTCDay(); p++) grid.append(document.createElement('span'));
+    const length = monthAt(index + 1,0).getUTCDate();
+    const start = (first.getTime() - origin) / oneDay;
+    for (let n = 1; n <= length; n++) {
+      const d = start + n - 1;
+      const st = status(i,d), today = d === state.day;
+      const cell = document.createElement('time');
+      cell.className = 'fila-dia'; cell.dateTime = iso(d);
+      cell.dataset.estado = st;
+      if (today) { cell.dataset.hoje = 'sim'; cell.setAttribute('aria-current','date'); }
+      let text = fullDay(d) + ' · ' + labels[st];
+      if (st !== 'vazio') text += ' · ' + records(rowCount(i,d));
+      if (today) text += ' · Dia do ensaio';
+      cell.setAttribute('aria-label',text); cell.dataset.tooltip = text;
+      const value = document.createElement(st === 'apagado' ? 'del' : 'span');
+      value.textContent = String(n); cell.append(value); grid.append(cell);
+    }
+    box.append(grid); return box;
+  }
+  function calendar() {
+    const end = monthIndex(dateAt(state.day));
+    const maxPage = Math.max(0,end - 3);
+    const page = state.page === null ? maxPage : Math.min(state.page,maxPage);
+    const months = [];
+    for (let i = page; i <= Math.min(end,page + 3); i++) months.push(makeMonth(i,state.entity));
+    el('meses').replaceChildren(...months);
+    el('navegacao').hidden = maxPage === 0;
+    el('anteriores').disabled = page === 0; el('seguintes').disabled = page === maxPage;
+  }
+  function direction() {
+    const v = el('evento').value;
+    let text;
+    if (!v) text = 'Em revisão. Falta a data de negócio.';
+    else {
+      const d = (Date.parse(v + 'T00:00:00Z') - origin) / oneDay;
+      const r = state.rules[state.entity];
+      const period = policy(r);
+      if (!Number.isFinite(d) || d > state.day) text = 'Em revisão. A data é inválida ou está no futuro.';
+      else if (d >= 0 && d <= r.removed) text = 'Em revisão. Esta data já saiu da fila.';
+      else if (period !== null && d <= state.day - period) text = 'Em revisão. A data do evento ficou fora do prazo.';
+      else text = 'Aceito na fila. A data do evento está dentro do período permitido.';
+    }
+    el('destino').textContent = text;
+  }
+  function span(a,b, withYear = false) {
+    const end = withYear || dateAt(a).getUTCFullYear() !== dateAt(b).getUTCFullYear() ? fullDay(b) : ddmm(b);
+    if (a === b) return end;
+    const start = dateAt(a).getUTCFullYear() === dateAt(b).getUTCFullYear() ? ddmm(a) : fullDay(a);
+    return start + ' a ' + end;
+  }
+  function render() {
+    const i = state.entity, r = state.rules[i], horizon = policy(r);
+    el('entidade').value = String(i); el('modo').value = r.mode;
+    el('grupo-dias').hidden = r.mode !== 'propria';
+    el('dias').value = r.days; el('banco').value = state.bank === null ? '' : state.bank;
+    el('erro').hidden = true;
+    el('avancar').disabled = state.day === lastDay;
+    el('hoje').textContent = fullDay(state.day); el('hoje').dateTime = iso(state.day);
+    el('janela').textContent = horizon === null ? 'Histórico sem prazo de limpeza'
+      : 'Janela de ' + days(horizon) + (r.mode === 'herdar' ? ' · padrão do banco' : '');
+    const totalDays = tail(i) - r.removed;
+    el('saldo').textContent = totalDays > 0
+      ? span(r.removed + 1,tail(i),true) + ' · ' + days(totalDays) + ' com dados · ' + records(rows(i,r.removed + 1,tail(i))) + ' na fila'
+      : 'Fila vazia · 0 registros ativos';
+    const removedNow = r.removed > r.before;
+    const movement = removedNow
+      ? 'Saída de ' + span(r.before + 1,r.removed) + ' (' + records(rows(i,r.before + 1,r.removed)) + ').'
+      : 'Nenhum dia saiu.';
+    const newCount = rowCount(i,state.day);
+    el('saida').textContent = 'Rodada de ' + ddmm(r.round) + ' · ' + movement + ' ' +
+      (newCount ? 'Entrada de ' + ddmm(state.day) + ' (' + records(newCount) + ').' : 'Sem entrada em ' + ddmm(state.day) + '.');
+    const pending = Math.max(0,until(i) - r.removed);
+    el('previa').hidden = !pending; el('lpendente').hidden = !pending;
+    el('limpar').disabled = !pending;
+    el('vencidos').textContent = pending ? days(pending) + (pending === 1 ? ' aguarda' : ' aguardam') + ' limpeza · ' + records(rows(i,r.removed + 1,until(i))) : '';
+    el('evento').value = state.late;
+    calendar(); direction();
+  }
+  function commit() { render(); save(); }
+  function readDays() {
+    const bank = el('banco'), own = el('dias');
+    const bankEmpty = bank.value === '' && !bank.validity.badInput;
+    const bankOK = bankEmpty || (within(bank.valueAsNumber,1,maxDays) && bank.validity.valid);
+    const ownOK = state.rules[state.entity].mode !== 'propria' || (within(own.valueAsNumber,1,maxDays) && own.validity.valid);
+    if (!bankOK || !ownOK) {
+      el('erro').hidden = false; el('erro').textContent = 'Informe um número inteiro de 1 a 2.147.483.647 dias.';
+      el('avancar').disabled = true; el('limpar').disabled = true;
+      return false;
+    }
+    state.bank = bankEmpty ? null : bank.valueAsNumber;
+    if (state.rules[state.entity].mode === 'propria') state.rules[state.entity].days = own.valueAsNumber;
+    return true;
+  }
+  el('entidade').addEventListener('change', () => { state.entity = Number(el('entidade').value); commit(); });
+  el('modo').addEventListener('change', () => { state.rules[state.entity].mode = el('modo').value; commit(); });
+  for (const id of ['dias','banco']) {
+    el(id).addEventListener('input', () => { if (readDays()) render(); });
+    el(id).addEventListener('change', () => { if (readDays()) save(); });
+  }
+  el('avancar').addEventListener('click', () => {
+    if (!readDays() || state.day >= lastDay) return;
+    state.day++;
+    state.rules.forEach((_,i) => runCycle(i));
+    commit();
+  });
+  el('limpar').addEventListener('click', () => { if (readDays()) { runCycle(state.entity); commit(); } });
+  for (const [id,delta] of [['anteriores',-4],['seguintes',4]]) {
+    el(id).addEventListener('click', () => {
+      const maxPage = Math.max(0,monthIndex(dateAt(state.day)) - 3);
+      const page = Math.max(0, Math.min(maxPage,(state.page === null ? maxPage : state.page) + delta));
+      state.page = page === maxPage ? null : page; calendar(); save();
+    });
+  }
+  el('evento').addEventListener('change', () => { state.late = el('evento').value; direction(); save(); });
+  window.addEventListener('openai:set_globals', e => {
+    const globals = e.detail && e.detail.globals;
+    if (globals && Object.prototype.hasOwnProperty.call(globals,'widgetState')) { state = restore(globals.widgetState); render(); }
+  });
+  render();
+})();
+</script>
+</body>
+</html>
