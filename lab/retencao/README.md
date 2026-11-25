@@ -6,7 +6,7 @@ Cada entidade do catálogo aceita um prazo próprio, herança do prazo do banco 
 
 ## Reproduzir
 
-Abra [o calendário do ensaio](fila.html) no navegador e clique em **Avançar um dia**. Em 26/11, o dia 28/08 fica riscado e entram três registros de 26/11. A legenda diferencia um dia já apagado, um dia que aguarda limpeza e um dia sem registros. Use a lista de entidades para comparar as filas e **Alterar o prazo de retenção** para experimentar outros períodos. O calendário funciona offline com dados fictícios. Ao reabrir o arquivo, o ensaio começa em 25/11.
+Abra [a linha do tempo do ensaio](fila.html). Leia da esquerda para a direita. O trecho hachurado reúne os dias apagados e o trecho contínuo mostra os dias guardados. Ao clicar em **Avançar um dia** na passagem para 26/11, sai um registro de 28/08 e entram três de 26/11. Em **Entidade e prazo**, você pode comparar filas, simular outra regra e consultar um dia específico. A linha funciona offline com dados fictícios e começa em 25/11 ao reabrir o arquivo.
 
 Em um computador de testes com SQL Server LocalDB, execute `./lab/retencao/testar.ps1 -Resultado resultado-retencao.json`. O script cria uma instância com nome aleatório, confirma o motor, prepara uma base sintética, executa os cenários e encerra a instância. A evidência contém as datas de corte, contagens e verificações concluídas. O fluxo de CI desta branch roda em um Windows descartável.
 

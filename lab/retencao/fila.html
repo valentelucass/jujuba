@@ -33,46 +33,48 @@ i[data-lucide] { display:none; }
 </style>
 </head>
 <body>
-<section id="jujuba-fila-por-dia" lang="pt-BR" aria-label="Simulador de retenção por entidade">
-  <header>
-    <h2>Fila de retenção</h2>
-    <span class="text-small text-muted">Laboratório do JUJUBA · datas de negócio em Brasília</span>
+<section id="jujuba-linha-do-tempo" lang="pt-BR" aria-label="Linha do tempo da retenção em laboratório">
+  <header class="tl-cabecalho">
+    <h2 id="fila-titulo"></h2>
+    <span class="text-muted"><span id="fila-janela"></span> · Ensaio de <time id="fila-hoje" class="tabular-nums"></time></span>
   </header>
-  <div class="fila-topo">
-    <label class="form-label">Entidade
-      <select class="form-select" id="fila-entidade">
-        <option value="0">Ocorrências</option><option value="1">Fretes de leitura</option>
-        <option value="2">Coletas</option><option value="3">Performance</option>
-      </select>
-    </label>
-    <div class="fila-data">
-      <span class="text-small text-muted">Dia do ensaio</span>
-      <time id="fila-hoje" class="tabular-nums"></time>
+
+  <figure class="tl-figura" aria-label="Histórico da entidade, do mais antigo à esquerda até hoje à direita">
+    <div class="tl-extremos text-small" aria-hidden="true">
+      <span class="text-muted">Passado</span>
+      <span id="fila-marco-antigo" class="tl-marco text-muted"></span>
+      <span id="fila-marco-recente" class="tl-marco text-muted"></span>
+      <span>Hoje</span>
     </div>
-    <button type="button" class="btn btn-primary" id="fila-avancar">Avançar um dia <i data-lucide="arrow-right" aria-hidden="true"></i></button>
+    <div class="tl-eixo" aria-hidden="true">
+      <div class="tl-trilho" id="fila-faixas">
+        <i class="tl-faixa" data-estado="apagado"></i><i class="tl-faixa" data-estado="pendente"></i>
+        <i class="tl-faixa" data-estado="mantido"></i><i class="tl-faixa" data-estado="vazio"></i>
+      </div>
+      <i id="fila-corte" class="tl-corte" hidden></i>
+      <i class="tl-hoje"></i>
+    </div>
+    <figcaption id="fila-periodos" class="tl-periodos"></figcaption>
+  </figure>
+
+  <div class="tl-rodada">
+    <button class="btn btn-primary" type="button" id="fila-avancar">Avançar um dia <i data-lucide="arrow-right" aria-hidden="true"></i></button>
+    <output id="fila-saida" aria-live="polite" aria-atomic="true"></output>
   </div>
-  <div class="fila-resumo" aria-live="polite" aria-atomic="true">
-    <div><h3 id="fila-janela"></h3><span id="fila-saldo" class="text-muted tabular-nums"></span></div>
-    <div class="fila-movimento"><i data-lucide="log-out" aria-hidden="true"></i><span id="fila-saida"></span></div>
-  </div>
-  <div>
-    <div id="fila-meses" class="fila-meses" role="group" aria-label="Calendário do histórico da entidade"></div>
-    <div id="fila-navegacao" class="viz-row" hidden>
-      <button type="button" class="btn btn-ghost" id="fila-anteriores">Meses anteriores</button>
-      <button type="button" class="btn btn-ghost" id="fila-seguintes">Meses seguintes</button>
-    </div>
-    <div class="fila-legenda text-small" aria-label="Legenda do calendário">
-      <span><i class="fila-amostra" data-estado="mantido"></i>Na fila</span>
-      <span><i class="fila-amostra" data-estado="apagado"></i>Apagado no ensaio</span>
-      <span id="fila-lpendente" hidden><i class="fila-amostra" data-estado="pendente"></i>Aguarda limpeza</span>
-      <span><i class="fila-amostra" data-estado="vazio"></i>Sem registros</span>
-      <span><i class="fila-amostra fila-marca-hoje"></i>Dia do ensaio</span>
-    </div>
+  <div class="viz-row" id="fila-previa" hidden>
+    <span id="fila-vencidos" aria-live="polite"></span>
+    <button type="button" class="btn" id="fila-limpar">Simular limpeza desta entidade</button>
   </div>
   <details id="fila-regras">
-    <summary class="cursor-interaction">Alterar o prazo de retenção</summary>
-    <div class="fila-controles">
+    <summary class="cursor-interaction">Entidade e prazo</summary>
+    <div class="tl-opcoes">
       <div class="viz-controls">
+        <label class="form-label">Entidade
+          <select class="form-select" id="fila-entidade">
+            <option value="0">Ocorrências</option><option value="1">Fretes de leitura</option>
+            <option value="2">Coletas</option><option value="3">Performance</option>
+          </select>
+        </label>
         <label class="form-label">Regra da entidade
           <select class="form-select" id="fila-modo">
             <option value="propria">Prazo próprio</option>
@@ -80,68 +82,64 @@ i[data-lucide] { display:none; }
             <option value="conservar">Conservar todo o histórico</option>
           </select>
         </label>
+      </div>
+      <div class="viz-controls">
         <label id="fila-grupo-dias" class="form-label">Prazo da entidade em dias
           <input class="form-control" type="number" min="1" max="2147483647" step="1" id="fila-dias">
         </label>
-      </div>
-      <div class="viz-controls">
         <label class="form-label">Prazo padrão do banco em dias
           <input class="form-control" type="number" min="1" max="2147483647" step="1" placeholder="Sem prazo" id="fila-banco">
         </label>
       </div>
       <span class="text-destructive text-small" id="fila-erro" role="alert" hidden></span>
-    </div>
-  </details>
-  <div class="viz-row" id="fila-previa" hidden>
-    <span id="fila-vencidos" aria-live="polite"></span>
-    <button type="button" class="btn" id="fila-limpar">Simular limpeza desta entidade</button>
-  </div>
-  <details id="fila-atraso">
-    <summary class="cursor-interaction">Ver o destino de um registro atrasado</summary>
-    <div class="fila-controles">
-      <div class="viz-controls">
-        <label class="form-label">Data do evento recebido no dia do ensaio
-          <input class="form-control" type="date" id="fila-evento" min="0001-01-01" max="9999-12-31">
-        </label>
-      </div>
-      <output id="fila-destino" aria-live="polite"></output>
+      <details id="fila-atraso">
+        <summary class="cursor-interaction">Consultar um dia da fila</summary>
+        <div class="tl-opcoes">
+          <div class="viz-controls">
+            <label class="form-label">Data do evento
+              <input class="form-control" type="date" id="fila-evento" min="0001-01-01" max="9999-12-31">
+            </label>
+          </div>
+          <output id="fila-destino" aria-live="polite"></output>
+          <span id="fila-saldo" class="text-small text-muted"></span>
+        </div>
+      </details>
     </div>
   </details>
 </section>
 <style>
-#jujuba-fila-por-dia { --fila-espaco:var(--font-size-base); display:grid; gap:var(--fila-espaco); color:var(--foreground); }
-#jujuba-fila-por-dia [hidden] { display:none !important; }
-#jujuba-fila-por-dia header { padding-inline-end:5.8rem; }
-#jujuba-fila-por-dia .fila-topo { display:flex; flex-wrap:wrap; gap:calc(var(--fila-espaco) * .85) calc(var(--fila-espaco) * 1.5); align-items:end; }
-#jujuba-fila-por-dia .fila-data { display:grid; gap:calc(var(--fila-espaco) * .25); align-self:center; }
-#jujuba-fila-por-dia .fila-data time, #jujuba-fila-por-dia .fila-mes-titulo { font-weight:500; }
-#jujuba-fila-por-dia .fila-resumo { display:grid; gap:calc(var(--fila-espaco) * .55); }
-#jujuba-fila-por-dia .fila-movimento { display:flex; gap:calc(var(--fila-espaco) * .4); align-items:baseline; }
-#jujuba-fila-por-dia .fila-movimento svg { flex:none; align-self:center; }
-#jujuba-fila-por-dia .fila-meses { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:calc(var(--fila-espaco) * 1.1); }
-#jujuba-fila-por-dia .fila-mes-titulo { margin-bottom:calc(var(--fila-espaco) * .4); }
-#jujuba-fila-por-dia .fila-grade { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:2px; }
-#jujuba-fila-por-dia .fila-grade > * { display:grid; place-items:center; }
-#jujuba-fila-por-dia .fila-semana { padding-block:calc(var(--fila-espaco) * .22); }
-#jujuba-fila-por-dia .fila-dia { min-height:calc(var(--fila-espaco) * 1.8); position:relative; border-radius:2px; }
-#jujuba-fila-por-dia [data-estado="mantido"] { background:color-mix(in srgb,var(--viz-series-1) 23%,transparent); }
-#jujuba-fila-por-dia [data-estado="apagado"] { background:repeating-linear-gradient(135deg,transparent 0 3px,color-mix(in srgb,var(--muted-foreground) 20%,transparent) 3px 4px),var(--muted); }
-#jujuba-fila-por-dia [data-estado="pendente"] { background:radial-gradient(circle at 2px 2px,color-mix(in srgb,var(--viz-series-2) 60%,transparent) 1px,transparent 1.2px) 0 0/5px 5px; }
-#jujuba-fila-por-dia [data-estado="vazio"] { color:var(--muted-foreground); }
-#jujuba-fila-por-dia .fila-dia[data-hoje="sim"]::after, #jujuba-fila-por-dia .fila-marca-hoje::after { content:""; position:absolute; bottom:1px; left:18%; right:18%; height:3px; border-radius:2px; background:var(--foreground); }
-#jujuba-fila-por-dia .fila-legenda { display:flex; flex-wrap:wrap; gap:calc(var(--fila-espaco) * .4) var(--fila-espaco); margin-top:calc(var(--fila-espaco) * .8); }
-#jujuba-fila-por-dia .fila-legenda > span { display:inline-flex; gap:calc(var(--fila-espaco) * .35); align-items:center; }
-#jujuba-fila-por-dia .fila-amostra { display:inline-block; position:relative; width:var(--fila-espaco); height:var(--fila-espaco); border-radius:2px; }
-#jujuba-fila-por-dia .fila-amostra[data-estado="apagado"]::before { content:""; position:absolute; inset:48% 8% auto; height:1px; background:var(--foreground); }
-#jujuba-fila-por-dia .fila-amostra[data-estado="vazio"] { box-shadow:inset 0 0 0 1px var(--border); }
-#jujuba-fila-por-dia .fila-controles { display:grid; gap:calc(var(--fila-espaco) * .6); margin-top:calc(var(--fila-espaco) * .7); }
-@media(max-width:740px) { #jujuba-fila-por-dia .fila-meses { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-@media(max-width:420px) { #jujuba-fila-por-dia .fila-meses { gap:var(--fila-espaco) calc(var(--fila-espaco) * .55); } }
-@media(max-width:255px) { #jujuba-fila-por-dia .fila-meses { grid-template-columns:minmax(0,1fr); } }
+#jujuba-linha-do-tempo { --tl-gap:var(--font-size-base); display:grid; gap:calc(var(--tl-gap)*1.2); color:var(--foreground); }
+#jujuba-linha-do-tempo [hidden] { display:none !important; }
+#jujuba-linha-do-tempo .tl-cabecalho { display:grid; gap:calc(var(--tl-gap)*.2); }
+#jujuba-linha-do-tempo .tl-cabecalho h2 { padding-inline-end:5.8rem; }
+#jujuba-linha-do-tempo .tl-figura { margin:0; }
+#jujuba-linha-do-tempo .tl-extremos { position:relative; display:flex; justify-content:space-between; align-items:baseline; gap:var(--tl-gap); }
+#jujuba-linha-do-tempo .tl-marco { position:absolute; top:0; transform:translateX(-50%); white-space:nowrap; }
+#jujuba-linha-do-tempo .tl-marco::after { content:""; position:absolute; left:50%; top:100%; margin-top:calc(var(--tl-gap)*.26); height:calc(var(--tl-gap)*.45); width:1px; background:var(--muted-foreground); }
+#jujuba-linha-do-tempo .tl-eixo { position:relative; height:calc(var(--tl-gap)*2.3); display:grid; align-items:center; }
+#jujuba-linha-do-tempo .tl-trilho { position:relative; overflow:hidden; height:calc(var(--tl-gap)*.55); border-radius:999px; isolation:isolate; background:var(--muted); }
+#jujuba-linha-do-tempo .tl-faixa { position:absolute; inset-block:0; left:0; width:0; }
+#jujuba-linha-do-tempo [data-estado="apagado"] { background:repeating-linear-gradient(125deg,transparent 0 3px,var(--muted-foreground) 3px 4.5px),var(--muted); }
+#jujuba-linha-do-tempo [data-estado="pendente"] { background:repeating-linear-gradient(90deg,var(--viz-series-2) 0 4px,transparent 4px 7px),var(--muted); }
+#jujuba-linha-do-tempo [data-estado="mantido"] { background:var(--viz-series-1); }
+#jujuba-linha-do-tempo [data-estado="vazio"] { background:radial-gradient(circle,var(--muted-foreground) 1px,transparent 1.5px) left center/6px 6px repeat-x,var(--muted); }
+#jujuba-linha-do-tempo .tl-corte { position:absolute; top:50%; height:calc(var(--tl-gap)*1.4); width:2px; transform:translate(-50%,-50%); background:var(--foreground); }
+#jujuba-linha-do-tempo .tl-hoje { position:absolute; inset-inline-end:0; top:50%; transform:translateY(-50%); height:calc(var(--tl-gap)*.86); aspect-ratio:1; border-radius:50%; background:var(--foreground); }
+#jujuba-linha-do-tempo .tl-periodos { display:flex; gap:calc(var(--tl-gap)*.7) calc(var(--tl-gap)*1.7); flex-wrap:wrap; }
+#jujuba-linha-do-tempo .tl-periodo { display:grid; grid-template-columns:var(--tl-gap) auto; gap:0 calc(var(--tl-gap)*.45); align-items:baseline; }
+#jujuba-linha-do-tempo .tl-periodo > i { width:var(--tl-gap); height:calc(var(--tl-gap)*.45); border-radius:999px; align-self:center; }
+#jujuba-linha-do-tempo .tl-periodo > span { grid-column:2; }
+#jujuba-linha-do-tempo .tl-periodo strong { font-weight:500; }
+#jujuba-linha-do-tempo .tl-rodada { display:flex; align-items:center; gap:calc(var(--tl-gap)*.60) var(--tl-gap); flex-wrap:wrap; }
+#jujuba-linha-do-tempo .tl-opcoes { display:grid; gap:calc(var(--tl-gap)*.7); margin-top:calc(var(--tl-gap)*.75); }
+@media(prefers-reduced-motion:no-preference) {
+  #jujuba-linha-do-tempo.tl-mover .tl-faixa { transition:width 220ms ease,left 220ms ease; }
+  #jujuba-linha-do-tempo.tl-mover .tl-corte { transition:left 220ms ease; }
+}
 </style>
 <script>
 (() => {
-  const root = document.getElementById('jujuba-fila-por-dia');
+  const root = document.getElementById('jujuba-linha-do-tempo');
   const el = name => root.querySelector('#fila-' + name);
   const entities = ['Ocorrências', 'Fretes de leitura', 'Coletas', 'Performance'];
   const oneDay = 86400000;
@@ -152,21 +150,22 @@ i[data-lucide] { display:none; }
   const dateAt = d => new Date(origin + d * oneDay);
   const iso = d => dateAt(d).toISOString().slice(0, 10);
   const dateFmt = opts => new Intl.DateTimeFormat('pt-BR', { ...opts, timeZone:'UTC' });
-  const numeric = dateFmt({ day:'2-digit', month:'2-digit' });
+  const shortMonth = dateFmt({ month:'short' });
   const full = dateFmt({ day:'2-digit', month:'2-digit', year:'numeric' });
-  const monthFmt = dateFmt({ month:'long', year:'numeric' });
   const countFmt = new Intl.NumberFormat('pt-BR');
-  const ddmm = d => numeric.format(dateAt(d));
+  const compact = new Intl.NumberFormat('pt-BR', { notation:'compact', maximumFractionDigits:1 });
+  function shortDay(d, showYear = false) {
+    const date = dateAt(d);
+    const month = shortMonth.format(date).replace('.', '');
+    return date.getUTCDate() + ' ' + month + (showYear ? ' ' + date.getUTCFullYear() : '');
+  }
   const fullDay = d => full.format(dateAt(d));
   const asCount = (n, s, p) => countFmt.format(n) + ' ' + (n === 1 ? s : p);
   const records = n => asCount(n, 'registro', 'registros');
   const days = n => asCount(n, 'dia', 'dias');
   const within = (v, a, b) => Number.isInteger(v) && v >= a && v <= b;
-  const monthAt = (i, day = 1) => new Date(Date.UTC(2026, 7 + i, day));
-  const monthIndex = d => (d.getUTCFullYear() - 2026) * 12 + d.getUTCMonth() - 7;
-  const firstUpper = s => s.charAt(0).toUpperCase() + s.slice(1);
   function initial() {
-    return { version:1, day:initialDay, entity:0, bank:null, page:null, late:'2026-08-27',
+    return { version:1, day:initialDay, entity:0, bank:null, late:'2026-08-27',
       rules:['propria', 'herdar', 'conservar', 'herdar'].map((mode,i) => ({
         mode, days:i === 0 ? 90 : 30, removed:i === 0 ? 3 : -1, before:-1, round:initialDay
       })) };
@@ -184,7 +183,6 @@ i[data-lucide] { display:none; }
     if (!valid) return s;
     s.day = raw.day; s.entity = raw.entity; s.bank = raw.bank;
     s.rules = raw.rules.map(r => ({mode:r.mode,days:r.days,removed:r.removed,before:r.before,round:r.round}));
-    if (within(raw.page,0,monthIndex(dateAt(s.day)))) s.page = raw.page;
     if (raw.late === '' || (typeof raw.late === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.late) && Number.isFinite(Date.parse(raw.late)))) s.late = raw.late;
     return s;
   }
@@ -217,55 +215,62 @@ i[data-lucide] { display:none; }
     rule.removed = Math.max(rule.removed, until(i));
     rule.round = state.day;
   }
-  const labels = { mantido:'Na fila', apagado:'Apagado no ensaio', pendente:'Aguarda limpeza', vazio:'Sem registros no ensaio' };
+  const labels = { apagado:'Apagado', pendente:'Aguarda limpeza', mantido:'Guardado', vazio:'Sem registros no ensaio' };
   function status(i,d) {
     if (d < 0 || d > tail(i)) return 'vazio';
     if (d <= state.rules[i].removed) return 'apagado';
     return d <= until(i) ? 'pendente' : 'mantido';
   }
-  function makeMonth(index, i) {
-    const first = monthAt(index);
-    const name = firstUpper(monthFmt.format(first).replace(' de ', ' '));
-    const box = document.createElement('section');
-    box.setAttribute('aria-label', name);
-    const heading = document.createElement('div');
-    heading.className = 'fila-mes-titulo'; heading.textContent = name;
-    box.append(heading);
-    const grid = document.createElement('div');
-    grid.className = 'fila-grade tabular-nums';
-    for (const text of ['D','S','T','Q','Q','S','S']) {
-      const wd = document.createElement('span');
-      wd.className = 'fila-semana text-small text-muted'; wd.textContent = text;
-      wd.setAttribute('aria-hidden','true'); grid.append(wd);
-    }
-    for (let p = 0; p < first.getUTCDay(); p++) grid.append(document.createElement('span'));
-    const length = monthAt(index + 1,0).getUTCDate();
-    const start = (first.getTime() - origin) / oneDay;
-    for (let n = 1; n <= length; n++) {
-      const d = start + n - 1;
-      const st = status(i,d), today = d === state.day;
-      const cell = document.createElement('time');
-      cell.className = 'fila-dia'; cell.dateTime = iso(d);
-      cell.dataset.estado = st;
-      if (today) { cell.dataset.hoje = 'sim'; cell.setAttribute('aria-current','date'); }
-      let text = fullDay(d) + ' · ' + labels[st];
-      if (st !== 'vazio') text += ' · ' + records(rowCount(i,d));
-      if (today) text += ' · Dia do ensaio';
-      cell.setAttribute('aria-label',text); cell.dataset.tooltip = text;
-      const value = document.createElement(st === 'apagado' ? 'del' : 'span');
-      value.textContent = String(n); cell.append(value); grid.append(cell);
-    }
-    box.append(grid); return box;
+  function dateRange(first, last) {
+    const a = dateAt(first), b = dateAt(last);
+    const crossYear = a.getUTCFullYear() !== b.getUTCFullYear();
+    const showYear = crossYear || b.getUTCFullYear() !== dateAt(state.day).getUTCFullYear();
+    if (first === last) return shortDay(first,showYear);
+    if (!crossYear && a.getUTCMonth() === b.getUTCMonth()) return a.getUTCDate() + '–' + shortDay(last,showYear);
+    return shortDay(first,crossYear) + ' – ' + shortDay(last,showYear);
   }
-  function calendar() {
-    const end = monthIndex(dateAt(state.day));
-    const maxPage = Math.max(0,end - 3);
-    const page = state.page === null ? maxPage : Math.min(state.page,maxPage);
-    const months = [];
-    for (let i = page; i <= Math.min(end,page + 3); i++) months.push(makeMonth(i,state.entity));
-    el('meses').replaceChildren(...months);
-    el('navegacao').hidden = maxPage === 0;
-    el('anteriores').disabled = page === 0; el('seguintes').disabled = page === maxPage;
+  function timeline(i, rule) {
+    const end = tail(i);
+    const due = Math.max(rule.removed, until(i));
+    const total = state.day + 1;
+    const magnitude = 10 ** Math.floor(Math.log10(total / 3));
+    const step = Math.round(total / (3 * magnitude)) * magnitude;
+    for (const [id,age] of [['marco-antigo',2 * step],['marco-recente',step]]) {
+      const position = 100 * (state.day - age + .5) / total;
+      const mark = el(id);
+      mark.hidden = position < 20 || position > 82;
+      mark.style.left = position + '%';
+      mark.textContent = 'Há ' + (age < 1000 ? days(age) : compact.format(age) + ' dias');
+    }
+    const ranges = [
+      ['apagado', 0, rule.removed, 'apagado', 'apagados'],
+      ['pendente', rule.removed + 1, due, 'aguarda limpeza', 'aguardam limpeza'],
+      ['mantido', due + 1, end, 'guardado', 'guardados'],
+      ['vazio', end + 1, state.day, 'sem entrada', 'sem entrada']
+    ];
+    const periods = [];
+    for (const [type, from, to, singular, plural] of ranges) {
+      const count = Math.max(0,to - from + 1);
+      const band = el('faixas').querySelector('[data-estado="' + type + '"]');
+      band.style.left = 100 * from / total + '%';
+      band.style.width = 100 * count / total + '%';
+      if (!count) continue;
+      const group = document.createElement('div');
+      group.className = 'tl-periodo'; group.dataset.periodo = type;
+      const sample = document.createElement('i');
+      sample.dataset.estado = type; sample.setAttribute('aria-hidden','true');
+      const label = document.createElement('strong');
+      label.textContent = days(count) + ' ' + (count === 1 ? singular : plural);
+      const when = document.createElement('span');
+      when.className = 'text-small text-muted tabular-nums';
+      when.textContent = dateRange(from,to);
+      group.append(sample,label,when);
+      periods.push(group);
+    }
+    el('periodos').replaceChildren(...periods);
+    const firstKept = due + 1;
+    el('corte').hidden = firstKept === 0 || firstKept > end;
+    el('corte').style.left = 100 * firstKept / total + '%';
   }
   function direction() {
     const v = el('evento').value;
@@ -275,18 +280,16 @@ i[data-lucide] { display:none; }
       const d = (Date.parse(v + 'T00:00:00Z') - origin) / oneDay;
       const r = state.rules[state.entity];
       const period = policy(r);
-      if (!Number.isFinite(d) || d > state.day) text = 'Em revisão. A data é inválida ou está no futuro.';
-      else if (d >= 0 && d <= r.removed) text = 'Em revisão. Esta data já saiu da fila.';
-      else if (period !== null && d <= state.day - period) text = 'Em revisão. A data do evento ficou fora do prazo.';
-      else text = 'Aceito na fila. A data do evento está dentro do período permitido.';
+      if (!Number.isFinite(d) || d > state.day) text = 'Data futura ou inválida. A chegada ficaria em revisão.';
+      else {
+        const kind = status(state.entity,d);
+        const amount = rowCount(state.entity,d);
+        const observed = labels[kind] + (amount ? ' · ' + records(amount) : '');
+        const review = kind === 'apagado' || (period !== null && d <= state.day - period);
+        text = observed + '. ' + (review ? 'Uma chegada para esse dia ficaria em revisão.' : 'Uma chegada para esse dia entraria na fila.');
+      }
     }
     el('destino').textContent = text;
-  }
-  function span(a,b, withYear = false) {
-    const end = withYear || dateAt(a).getUTCFullYear() !== dateAt(b).getUTCFullYear() ? fullDay(b) : ddmm(b);
-    if (a === b) return end;
-    const start = dateAt(a).getUTCFullYear() === dateAt(b).getUTCFullYear() ? ddmm(a) : fullDay(a);
-    return start + ' a ' + end;
   }
   function render() {
     const i = state.entity, r = state.rules[i], horizon = policy(r);
@@ -295,28 +298,33 @@ i[data-lucide] { display:none; }
     el('dias').value = r.days; el('banco').value = state.bank === null ? '' : state.bank;
     el('erro').hidden = true;
     el('avancar').disabled = state.day === lastDay;
-    el('hoje').textContent = fullDay(state.day); el('hoje').dateTime = iso(state.day);
+    el('titulo').textContent = 'Retenção de ' + entities[i];
+    el('hoje').textContent = shortDay(state.day,true); el('hoje').dateTime = iso(state.day);
     el('janela').textContent = horizon === null ? 'Histórico sem prazo de limpeza'
-      : 'Janela de ' + days(horizon) + (r.mode === 'herdar' ? ' · padrão do banco' : '');
-    const totalDays = tail(i) - r.removed;
-    el('saldo').textContent = totalDays > 0
-      ? span(r.removed + 1,tail(i),true) + ' · ' + days(totalDays) + ' com dados · ' + records(rows(i,r.removed + 1,tail(i))) + ' na fila'
-      : 'Fila vazia · 0 registros ativos';
-    const removedNow = r.removed > r.before;
-    const movement = removedNow
-      ? 'Saída de ' + span(r.before + 1,r.removed) + ' (' + records(rows(i,r.before + 1,r.removed)) + ').'
-      : 'Nenhum dia saiu.';
+      : 'Últimos ' + days(horizon) + (r.mode === 'herdar' ? ' · padrão do banco' : '');
+    if (horizon === 1) el('janela').textContent = 'Somente o dia atual' + (r.mode === 'herdar' ? ' · padrão do banco' : '');
+    const balance = rows(i,r.removed + 1,tail(i));
+    el('saldo').textContent = 'Total na fila em ' + fullDay(state.day) + ' · ' + records(balance);
+    const removedCount = r.removed - r.before;
+    let departed = 'Nenhum dia saiu.';
+    if (removedCount > 0) {
+      const amount = rows(i,r.before + 1,r.removed);
+      const source = (removedCount === 1 ? ' de ' : ' do período ') + dateRange(r.before + 1,r.removed);
+      departed = (amount === 1 ? 'Saiu ' : 'Saíram ') + records(amount) + source + '.';
+    }
     const newCount = rowCount(i,state.day);
-    el('saida').textContent = 'Rodada de ' + ddmm(r.round) + ' · ' + movement + ' ' +
-      (newCount ? 'Entrada de ' + ddmm(state.day) + ' (' + records(newCount) + ').' : 'Sem entrada em ' + ddmm(state.day) + '.');
+    const arrived = newCount ? (newCount === 1 ? 'Entrou ' : 'Entraram ') + records(newCount) + '.' : 'Nenhum registro entrou.';
+    el('saida').textContent = departed + ' ' + arrived;
     const pending = Math.max(0,until(i) - r.removed);
-    el('previa').hidden = !pending; el('lpendente').hidden = !pending;
-    el('limpar').disabled = !pending;
-    el('vencidos').textContent = pending ? days(pending) + (pending === 1 ? ' aguarda' : ' aguardam') + ' limpeza · ' + records(rows(i,r.removed + 1,until(i))) : '';
+    el('previa').hidden = !pending; el('limpar').disabled = !pending;
+    el('vencidos').textContent = pending ? records(rows(i,r.removed + 1,until(i))) + ' na prévia de limpeza.' : '';
     el('evento').value = state.late;
-    calendar(); direction();
+    timeline(i,r); direction();
   }
-  function commit() { render(); save(); }
+  function commit() {
+    root.classList.add('tl-mover');
+    render(); save();
+  }
   function readDays() {
     const bank = el('banco'), own = el('dias');
     const bankEmpty = bank.value === '' && !bank.validity.badInput;
@@ -344,13 +352,6 @@ i[data-lucide] { display:none; }
     commit();
   });
   el('limpar').addEventListener('click', () => { if (readDays()) { runCycle(state.entity); commit(); } });
-  for (const [id,delta] of [['anteriores',-4],['seguintes',4]]) {
-    el(id).addEventListener('click', () => {
-      const maxPage = Math.max(0,monthIndex(dateAt(state.day)) - 3);
-      const page = Math.max(0, Math.min(maxPage,(state.page === null ? maxPage : state.page) + delta));
-      state.page = page === maxPage ? null : page; calendar(); save();
-    });
-  }
   el('evento').addEventListener('change', () => { state.late = el('evento').value; direction(); save(); });
   window.addEventListener('openai:set_globals', e => {
     const globals = e.detail && e.detail.globals;
