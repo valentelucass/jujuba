@@ -524,16 +524,19 @@ dialog.connection-dialog {
   .studio { grid-template-columns: min(var(--explorer-width, 274px), 40vw) 6px minmax(0, 1fr); }
   .details { display: none; }
 }
-.dashboard-nav {
-  display: flex; flex-wrap: wrap; gap: 7px; padding: 0 16px 12px; border-bottom: 1px solid var(--line);
+.dashboard-toolbar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px;
+  padding: 0 16px 12px; border-bottom: 1px solid var(--line);
 }
+.dashboard-nav { display: flex; flex-wrap: wrap; gap: 7px; }
+.dashboard-toolbar-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px 12px; margin-inline-start: auto; }
 .dashboard-body { flex: 1; min-height: 0; overflow: auto; padding: 14px 16px 20px; }
 .dashboard-actions, .dashboard-panel-heading {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
 }
 .dashboard-actions { justify-content: flex-end; margin-bottom: 14px; }
-.dashboard-body label { display: inline-flex; align-items: center; gap: 8px; color: var(--quiet); }
-.dashboard-body select {
+.dashboard-body label, .dashboard-toolbar-actions label { display: inline-flex; align-items: center; gap: 8px; color: var(--quiet); }
+.dashboard-body select, .dashboard-toolbar-actions select {
   padding: 6px 8px; border: 1px solid var(--line-strong); border-radius: 7px; color: inherit; background: var(--surface);
 }
 .dashboard-metrics {

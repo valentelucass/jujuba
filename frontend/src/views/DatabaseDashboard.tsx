@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Activity, ChartNoAxesCombined, ChevronDown, ChevronRight, Clock3, Database, HardDrive, RefreshCw } from 'lucide-react'
 import { init, use, type ComposeOption } from 'echarts/core'
 import { BarChart, LineChart, type BarSeriesOption, type LineSeriesOption } from 'echarts/charts'
@@ -230,7 +231,9 @@ function Performance({ data, hours }: { data: DashboardPerformance; hours: numbe
   </>
 }
 
-function LiveDashboard({ database, session }: Scope) {
+type DashboardWithToolbar = Scope & { toolbar: HTMLDivElement | null }
+
+function LiveDashboard({ database, session, toolbar }: DashboardWithToolbar) {
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [revision, setRevision] = useState(0)
   const [blockedOnly, setBlockedOnly] = useState(false)
@@ -273,12 +276,12 @@ function LiveDashboard({ database, session }: Scope) {
   const requests = data?.requests.filter((request) => !blockedOnly || request.blocker > 0) ?? []
   const files = data?.files.slice().sort((a, b) => (b.readMib + b.writtenMib) - (a.readMib + a.writtenMib)).slice(0, 8) ?? []
   return <>
-    <div className="dashboard-actions">
+    {toolbar && createPortal(<>
       {snapshot && <span className="dashboard-updated">Última leitura {snapshot.time.toLocaleTimeString('pt-BR')}</span>}
       <label><input type="checkbox" checked={autoRefresh} disabled={pending}
         onChange={(event) => setAutoRefresh(event.target.checked)} /> Atualizar a cada 15 s</label>
       <button className="button" disabled={pending} onClick={() => reload.current?.()}><RefreshCw size={14} /> Atualizar painel</button>
-    </div>
+    </>, toolbar)}
     {error && <Failure error={error} retry={() => setRevision((value) => value + 1)} />}
     {pending && !data && <Loading />}
     {data && <>
@@ -346,7 +349,7 @@ function useStorageRead<T>(load: () => Promise<T>) {
   }
 }
 
-function StorageDashboard({ database, session }: Scope) {
+function StorageDashboard({ database, session, toolbar }: DashboardWithToolbar) {
   const [revision, setRevision] = useState(0)
   const loadFiles = useCallback(() => sql.dashboardFiles({ database, session }), [database, session])
   const loadTables = useCallback(() => sql.dashboardStorage({ database, session }), [database, session])
@@ -360,11 +363,10 @@ function StorageDashboard({ database, session }: Scope) {
     if (tables.error) tables.refresh()
   }
   return <>
-    <div className="dashboard-actions">
+    {toolbar && createPortal(
       <button className="button" disabled={loading} onClick={() => { files.refresh(); tables.refresh(); setRevision(value => value + 1) }}>
         <RefreshCw size={14} /> Atualizar painel
-      </button>
-    </div>
+      </button>, toolbar)}
     {loading && <Loading />}
     <RetentionPanel key={JSON.stringify([session, database])} database={database} session={session} />
     {sameError && files.error && <Failure error={files.error} retry={refreshFailed} />}
@@ -420,6 +422,7 @@ export default function DatabaseDashboard(props: Scope & { engine: Engine; initi
 
 function SqlServerDashboard({ database, session, initialTab = 'overview' }: Scope & { initialTab?: Tab }) {
   const [tab, setTab] = useState<Tab>(initialTab)
+  const [toolbar, setToolbar] = useState<HTMLDivElement | null>(null)
   const [hours, setHours] = useState(24)
   const [revision, setRevision] = useState(0)
   const refresh = () => setRevision((value) => value + 1)
@@ -430,25 +433,29 @@ function SqlServerDashboard({ database, session, initialTab = 'overview' }: Scop
   return <>
     <div className="object-heading"><div className="breadcrumbs"><Database size={14} />{database}</div>
       <h1><ChartNoAxesCombined size={24} />Dashboards</h1></div>
-    <nav className="dashboard-nav" aria-label="Painéis do banco">
-      {tabs.map(({ id, title, icon: Icon }) => <button key={id} className="button" aria-pressed={tab === id}
-        onClick={() => setTab(id)}><Icon size={15} />{title}</button>)}
-    </nav>
+    <div className="dashboard-toolbar">
+      <nav className="dashboard-nav" aria-label="Painéis do banco">
+        {tabs.map(({ id, title, icon: Icon }) => <button key={id} className="button" aria-pressed={tab === id}
+          onClick={() => setTab(id)}><Icon size={15} />{title}</button>)}
+      </nav>
+      <div className="dashboard-toolbar-actions" ref={setToolbar}>
+        {(tab === 'overview' || tab === 'performance') && <>
+          {tab === 'performance' && <label>Período <select value={hours} onChange={(event) => setHours(Number(event.target.value))}>
+            <option value={24}>Últimas 24 horas</option><option value={168}>Últimos 7 dias</option>
+            <option value={720}>Últimos 30 dias</option>
+          </select></label>}
+          <button className="button" onClick={refresh}><RefreshCw size={14} /> Atualizar painel</button>
+        </>}
+      </div>
+    </div>
     <div className="dashboard-body">
-      {(tab === 'overview' || tab === 'performance') && <div className="dashboard-actions">
-        {tab === 'performance' && <label>Período <select value={hours} onChange={(event) => setHours(Number(event.target.value))}>
-          <option value={24}>Últimas 24 horas</option><option value={168}>Últimos 7 dias</option>
-          <option value={720}>Últimos 30 dias</option>
-        </select></label>}
-        <button className="button" onClick={refresh}><RefreshCw size={14} /> Atualizar painel</button>
-      </div>}
       {summary.status === 'error' && <Failure error={summary.error} retry={refresh} />}
       {tab === 'overview' && (summary.status === 'ready' ? <Overview data={summary.data} />
         : summary.status !== 'error' && <Loading />)}
-      {tab === 'storage' && <StorageDashboard key={JSON.stringify([database, session])} database={database} session={session} />}
+      {tab === 'storage' && <StorageDashboard key={JSON.stringify([database, session])} database={database} session={session} toolbar={toolbar} />}
       {tab === 'performance' && (history.status === 'ready' ? <Performance data={history.data} hours={hours} />
         : history.status === 'error' ? <Failure error={history.error} retry={refresh} /> : <Loading />)}
-      {tab === 'live' && <LiveDashboard key={JSON.stringify([database, session])} database={database} session={session} />}
+      {tab === 'live' && <LiveDashboard key={JSON.stringify([database, session])} database={database} session={session} toolbar={toolbar} />}
     </div>
   </>
 }

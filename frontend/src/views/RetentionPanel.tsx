@@ -47,7 +47,9 @@ function Timeline({ data }: { data: Preview }) {
   </figure>
 }
 
-function Rule({ scope, catalog, selected, refresh, onSaved }: {scope: Scope; catalog: Catalog; selected: string; refresh: () => void; onSaved: () => void}) {
+function Rule({ scope, catalog, selected, refresh, onSaved }: {
+  scope: Scope; catalog: Catalog; selected: string; refresh: () => void; onSaved: () => void
+}) {
   const isDefault = selected === '*'
   const entity = catalog.entities.find(x => x.name === selected)
   const currentMode = isDefault ? (catalog.defaultDays ? 'own' : 'keep') : entity?.mode ?? 'inherit'
@@ -81,28 +83,29 @@ function Rule({ scope, catalog, selected, refresh, onSaved }: {scope: Scope; cat
     finally { setSaving(false) }
   }
   return <>
-    <div className="retention-fields"><label>Regra <select value={mode} disabled={saving} onChange={e=>{setMode(e.target.value as RetentionMode);setReview(false)}}>
+    <label>Regra <select value={mode} disabled={saving} onChange={e=>{setMode(e.target.value as RetentionMode);setReview(false)}}>
       {!isDefault && <option value="inherit">Usar padrão do banco</option>}<option value="own">Prazo próprio</option><option value="keep">Conservar histórico</option>
     </select></label>
-      {mode === 'own' && <label>Prazo em dias <input type="number" min="1" max="2147483647" step="1" value={days} disabled={saving}
-        onChange={e=>{setDays(e.target.value);setReview(false)}} /></label>}
-      <button className="button" disabled={!valid || saving} onClick={()=>{setError(null);setReview(false);setQuery(q=>({key:q.key+1,days:effective,mode}))}}>Ver prévia</button>
+    {mode === 'own' && <label>Prazo em dias <input type="number" min="1" max="2147483647" step="1" value={days} disabled={saving}
+      onChange={e=>{setDays(e.target.value);setReview(false)}} /></label>}
+    <button className="button" disabled={!valid || saving} onClick={()=>{setError(null);setReview(false);setQuery(q=>({key:q.key+1,days:effective,mode}))}}>Ver prévia</button>
+    <div className="retention-result">
+      {isDefault && <p>O padrão vale para as entidades habilitadas que usam a regra do banco.</p>}
+      {!isDefault && !entity?.supported && <p>Prévia disponível. A limpeza desta entidade depende da integração das tabelas que a utilizam.</p>}
+      {preview.status === 'loading' && <Loading />}
+      {preview.status === 'error' && <Failure error={preview.error} retry={refresh} />}
+      {data && <><Timeline data={data} />
+        <p aria-live="polite">{!fresh ? 'Atualize a prévia antes de salvar.' :
+          data.cutoff ? 'Corte em '+date(data.cutoff)+'. '+count.format(latest)+' registros vigentes e '+count.format(pending)+' registros de origem, contando as versões anteriores, aguardam limpeza.' :
+            'A regra conserva o histórico.'}</p></>}
+      {canEdit && dirty && fresh && !review && <button className="button" onClick={()=>setReview(true)}>Revisar alteração</button>}
+      {review && fresh && <div className="retention-confirm" role="group" aria-label="Confirmar regra de retenção">
+        <p>{database} · {isDefault ? 'Padrão do banco' : entityName(selected)} · {effective ? effective+' dias. As próximas rodadas arquivam e removem os dados vencidos.' : 'Conservar o histórico disponível.'}</p>
+        <button className="button" disabled={saving} onClick={apply}>Confirmar regra</button>
+        <button className="button" disabled={saving} onClick={()=>setReview(false)}>Cancelar</button>
+      </div>}
+      {error && <Failure error={error} retry={refresh} />}
     </div>
-    {isDefault && <p>O padrão vale para as entidades habilitadas que usam a regra do banco.</p>}
-    {!isDefault && !entity?.supported && <p>Prévia disponível. A limpeza desta entidade depende da integração das tabelas que a utilizam.</p>}
-    {preview.status === 'loading' && <Loading />}
-    {preview.status === 'error' && <Failure error={preview.error} retry={refresh} />}
-    {data && <><Timeline data={data} />
-      <p aria-live="polite">{!fresh ? 'Atualize a prévia antes de salvar.' :
-        data.cutoff ? 'Corte em '+date(data.cutoff)+'. '+count.format(latest)+' registros vigentes e '+count.format(pending)+' registros de origem, contando as versões anteriores, aguardam limpeza.' :
-          'A regra conserva o histórico.'}</p></>}
-    {canEdit && dirty && fresh && !review && <button className="button" onClick={()=>setReview(true)}>Revisar alteração</button>}
-    {review && fresh && <div className="retention-confirm" role="group" aria-label="Confirmar regra de retenção">
-      <p>{database} · {isDefault ? 'Padrão do banco' : entityName(selected)} · {effective ? effective+' dias. As próximas rodadas arquivam e removem os dados vencidos.' : 'Conservar o histórico disponível.'}</p>
-      <button className="button" disabled={saving} onClick={apply}>Confirmar regra</button>
-      <button className="button" disabled={saving} onClick={()=>setReview(false)}>Cancelar</button>
-    </div>}
-    {error && <Failure error={error} retry={refresh} />}
   </>
 }
 
@@ -123,12 +126,15 @@ export function RetentionPanel({database,session}: Scope) {
       {catalog.status === 'loading' && <Loading />}
       {catalog.status === 'error' && <Failure error={catalog.error} retry={refresh} />}
       {catalog.status === 'ready' && !catalog.data.available && <p>O banco selecionado ainda não disponibiliza o serviço de retenção para esta conexão.</p>}
-      {data && <><div className="retention-fields"><label>Entidade <select value={name} onChange={e=>{setSelected(e.target.value);setSaved(false)}}>
-        {data.entities.map(x=><option key={x.name} value={x.name}>{entityName(x.name)}</option>)}<option value="*">Padrão do banco</option>
-      </select></label><button className="button" onClick={refresh}>Atualizar leitura</button></div>
-      {saved && <p role="status">Regra salva no banco.</p>}
-      <Rule key={name+'/'+data.revision+'/'+revision} scope={{database,session}} catalog={data} selected={name}
-        refresh={refresh} onSaved={()=>{setSaved(true);refresh()}} /></>}
+      {data && <div className="retention-fields">
+        <label>Entidade <select value={name} onChange={e=>{setSelected(e.target.value);setSaved(false)}}>
+          {data.entities.map(x=><option key={x.name} value={x.name}>{entityName(x.name)}</option>)}<option value="*">Padrão do banco</option>
+        </select></label>
+        <button className="button" onClick={refresh}>Atualizar leitura</button>
+        <Rule key={name+'/'+data.revision+'/'+revision} scope={{database,session}} catalog={data} selected={name}
+          refresh={refresh} onSaved={()=>{setSaved(true);refresh()}} />
+      </div>}
+      {data && saved && <p role="status">Regra salva no banco.</p>}
     </div>}
   </details>
 }
