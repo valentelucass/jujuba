@@ -6,6 +6,7 @@ import type { NoSqlEngine } from '../models/engines'
 import type { DatabaseMonitorSample } from '../models/databaseMonitor'
 import type { DocumentsPage, RedisEntry, RedisKeys } from '../models/noSql'
 import type { ColumnStorage, DatabaseFile, DashboardOverview, DashboardPerformance, EngineDashboardData, LiveActivity, TableStorage } from '../models/dashboard'
+import type { RetentionCatalog, RetentionMode, RetentionPreview } from '../models/retention'
 import type {
   AppError, Connection, ConnectionInput, DatabaseDiagram, EditInput, QueryOutput, PageRequest, RecordsPage, Relationship,
   Schema, Scope, Structure, Table, TableScope,
@@ -37,6 +38,11 @@ export const sql = {
   dashboardOverview: (scope: Scope) => call<DashboardOverview>('dashboard_overview', { scope }),
   dashboardLive: (scope: Scope) => call<LiveActivity>('dashboard_live', { scope }),
   dashboardStorage: (scope: Scope) => call<TableStorage[]>('dashboard_storage', { scope }),
+  retentionCatalog: (scope: Scope) => call<RetentionCatalog>('retention_catalog', { scope }),
+  retentionPreview: (scope: Scope, entity: string, days: number) =>
+    call<RetentionPreview>('retention_preview', { scope, entity, days }),
+  retentionConfigure: (scope: Scope, entity: string, mode: RetentionMode, days: number, revision: string) =>
+    call<{ available: boolean }>('retention_configure', { scope, entity, mode, days, revision }),
   dashboardColumnStorage: (scope: TableScope, fullScan: boolean) =>
     call<ColumnStorage>('dashboard_column_storage', { scope, fullScan }),
   dashboardFiles: (scope: Scope) => call<DatabaseFile[]>('dashboard_files', { scope }),

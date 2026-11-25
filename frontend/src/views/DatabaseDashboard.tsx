@@ -13,6 +13,7 @@ import type { AppError, Scope } from '../models/sql'
 import { Empty, Failure, Loading } from './States'
 import { useTheme } from './Theme'
 import { exactBytes, storageSize, StorageColumns } from './StorageColumns'
+import { RetentionPanel } from './RetentionPanel'
 
 use([BarChart, LineChart, GridComponent, TooltipComponent, CanvasRenderer])
 
@@ -365,6 +366,7 @@ function StorageDashboard({ database, session }: Scope) {
       </button>
     </div>
     {loading && <Loading />}
+    <RetentionPanel key={JSON.stringify([session, database])} database={database} session={session} />
     {sameError && files.error && <Failure error={files.error} retry={refreshFailed} />}
     {!sameError && files.error && <Failure error={files.error} title="Arquivos do banco" retry={files.refresh} />}
     {files.data && <FileList files={files.data} />}

@@ -4,6 +4,7 @@ pub mod dashboard;
 pub(crate) mod monitor;
 mod local;
 pub mod records;
+pub mod retention;
 pub mod relationships;
 
 use crate::error::{AppError, Result};
