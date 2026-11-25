@@ -17,6 +17,7 @@ export interface RetentionDay {
   currentRows: number
   sourceRows: number
   removedRows: number
+  removedBytes?: string | null
   removed: boolean
   held: boolean
 }

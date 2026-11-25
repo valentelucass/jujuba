@@ -3,7 +3,11 @@
 .retention-content p { margin: 0; }
 .retention-content .button { justify-self: start; }
 .retention-fields, .retention-timeline figcaption { display: flex; align-items: end; flex-wrap: wrap; gap: 8px 16px; }
-.retention-fields label { display: grid; min-width: 0; max-width: 100%; gap: 4px; font-size: 12px; }
+.retention-field { position: relative; display: grid; min-width: 0; max-width: 100%; gap: 4px; }
+.retention-field label { font-size: 12px; }
+.retention-field > .toolbar-tip { width: var(--help-width, 240px); left: var(--help-left, 0); transform: none; }
+.retention-field[data-above="true"] > .toolbar-tip { top: auto; bottom: calc(100% + 7px); }
+.retention-field[data-above="true"] > .toolbar-tip::before { inset: 100% 0 -8px; }
 .retention-fields :is(select, input, .button) { min-height: 33px; }
 .retention-result { display: grid; flex: 1 0 100%; min-width: 0; gap: 8px; }
 .retention-fields input { width: 105px; }

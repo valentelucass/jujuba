@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useId, useState, type ReactNode } from 'react'
 import { appError, sql } from '../controllers/api'
 import { useRemote } from '../controllers/useRemote'
 import type { RetentionCatalog, RetentionMode, RetentionPreview } from '../models/retention'
@@ -14,6 +14,43 @@ type Kind = keyof typeof names
 type Catalog = Extract<RetentionCatalog, {available:true}>
 type Preview = Extract<RetentionPreview, {available:true}>
 const entityName = (name: string) => name === 'OCORRENCIAS' ? 'Ocorrências' : name.replaceAll('_', ' ')
+
+function RetentionField({ label, help, children }: {
+  label: string; help: string; children: (attributes: {id: string; 'aria-describedby': string}) => ReactNode
+}) {
+  const id = useId()
+  const hint = id + '-ajuda'
+  const [dismissed, setDismissed] = useState(false)
+  function position(field: HTMLElement) {
+    setDismissed(false)
+    const area = field.closest('.dashboard-body')?.getBoundingClientRect()
+    if (!area) return
+    const box = field.getBoundingClientRect()
+    const width = Math.min(240, area.width - 24)
+    const left = Math.max(area.left + 6, Math.min(box.left, area.right - width - 12))
+    field.style.setProperty('--help-width', width + 'px')
+    field.style.setProperty('--help-left', (left - box.left) + 'px')
+    field.dataset.above = String(area.bottom - box.bottom < 100 && box.top - area.top > 100)
+  }
+  return <div className="toolbar-item retention-field" data-dismissed={dismissed || undefined}
+    onPointerEnter={e=>position(e.currentTarget)} onFocus={e=>position(e.currentTarget)}
+    onKeyDown={e=>{if (e.key === 'Escape') setDismissed(true)}}>
+    <label htmlFor={id}>{label}</label>
+    {children({id, 'aria-describedby':hint})}
+    <span className="toolbar-tip" role="tooltip" id={hint}><strong>{label}</strong>{help}</span>
+  </div>
+}
+
+function removedVolume(days: Preview['days']) {
+  let total = 0n
+  for (const day of days) {
+    if (!day.removed && day.removedRows === 0) continue
+    if (typeof day.removedBytes !== 'string' || !/^\d+$/.test(day.removedBytes)) return null
+    total += BigInt(day.removedBytes)
+  }
+  if (total > 0n && total < 10_000_000n) return '< 0,01 GB'
+  return (Number(total) / 1_000_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' GB'
+}
 
 function Timeline({ data }: { data: Preview }) {
   if (!data.days.length) return <p>Nenhuma captura registrada para esta entidade.</p>
@@ -38,12 +75,15 @@ function Timeline({ data }: { data: Preview }) {
     next = d+1
   }
   append('empty',next,last-next+1)
+  const volume = totals.removed ? removedVolume(data.days) : null
   return <figure className="retention-timeline">
     <div className="retention-scale"><span>Passado · {date(data.days[0].day)}</span><span>Hoje · {date(data.today)}</span></div>
     <div className="retention-rail" aria-hidden="true">{segments.map(s => <i key={s.start}
       data-kind={s.kind} style={{ width: (100*s.length/(last-first+1))+'%' }} />)}</div>
     <figcaption>{(Object.keys(totals) as Kind[]).map(kind => <span key={kind}><i data-kind={kind} />
-      {names[kind]} · {count.format(totals[kind]!)} {totals[kind] === 1 ? 'dia' : 'dias'}</span>)}</figcaption>
+      {names[kind]} · {count.format(totals[kind]!)} {totals[kind] === 1 ? 'dia' : 'dias'}
+      {kind === 'removed' && <span title="Soma dos valores das linhas apagadas na origem, no Performance e no controle das capturas. Cada GB corresponde a 1 bilhão de bytes."> · {volume ?? 'Volume ainda não medido'}</span>}
+    </span>)}</figcaption>
   </figure>
 }
 
@@ -83,11 +123,15 @@ function Rule({ scope, catalog, selected, refresh, onSaved }: {
     finally { setSaving(false) }
   }
   return <>
-    <label>Regra <select value={mode} disabled={saving} onChange={e=>{setMode(e.target.value as RetentionMode);setReview(false)}}>
-      {!isDefault && <option value="inherit">Usar padrão do banco</option>}<option value="own">Prazo próprio</option><option value="keep">Conservar histórico</option>
-    </select></label>
-    {mode === 'own' && <label>Prazo em dias <input type="number" min="1" max="2147483647" step="1" value={days} disabled={saving}
-      onChange={e=>{setDays(e.target.value);setReview(false)}} /></label>}
+    <RetentionField label="Regra" help={isDefault ? 'Escolha se o banco conserva todo o histórico ou utiliza um prazo para as entidades que seguem o padrão.' : 'Escolha se a entidade segue o padrão do banco, usa um prazo próprio ou conserva todo o histórico.'}>
+      {attrs=><select {...attrs} value={mode} disabled={saving} onChange={e=>{setMode(e.target.value as RetentionMode);setReview(false)}}>
+        {!isDefault && <option value="inherit">Usar padrão do banco</option>}<option value="own">Prazo próprio</option><option value="keep">Conservar histórico</option>
+      </select>}
+    </RetentionField>
+    {mode === 'own' && <RetentionField label="Prazo em dias" help="Quantidade de dias corridos que ficam guardados, contando hoje. Com 90 dias, ficam hoje e os 89 dias anteriores.">
+      {attrs=><input {...attrs} type="number" min="1" max="2147483647" step="1" value={days} disabled={saving}
+        onChange={e=>{setDays(e.target.value);setReview(false)}} />}
+    </RetentionField>}
     <button className="button" disabled={!valid || saving} onClick={()=>{setError(null);setReview(false);setQuery(q=>({key:q.key+1,days:effective,mode}))}}>Ver prévia</button>
     <div className="retention-result">
       {isDefault && <p>O padrão vale para as entidades habilitadas que usam a regra do banco.</p>}
@@ -127,9 +171,11 @@ export function RetentionPanel({database,session}: Scope) {
       {catalog.status === 'error' && <Failure error={catalog.error} retry={refresh} />}
       {catalog.status === 'ready' && !catalog.data.available && <p>O banco selecionado ainda não disponibiliza o serviço de retenção para esta conexão.</p>}
       {data && <div className="retention-fields">
-        <label>Entidade <select value={name} onChange={e=>{setSelected(e.target.value);setSaved(false)}}>
-          {data.entities.map(x=><option key={x.name} value={x.name}>{entityName(x.name)}</option>)}<option value="*">Padrão do banco</option>
-        </select></label>
+        <RetentionField label="Entidade" help="Grupo de dados que você quer consultar, como Ocorrências ou Coletas. A linha do tempo mostra o histórico do grupo escolhido.">
+          {attrs=><select {...attrs} value={name} onChange={e=>{setSelected(e.target.value);setSaved(false)}}>
+            {data.entities.map(x=><option key={x.name} value={x.name}>{entityName(x.name)}</option>)}<option value="*">Padrão do banco</option>
+          </select>}
+        </RetentionField>
         <button className="button" onClick={refresh}>Atualizar leitura</button>
         <Rule key={name+'/'+data.revision+'/'+revision} scope={{database,session}} catalog={data} selected={name}
           refresh={refresh} onSaved={()=>{setSaved(true);refresh()}} />
